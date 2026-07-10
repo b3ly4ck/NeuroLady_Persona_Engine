@@ -2,7 +2,11 @@
 
 ## Recent changes
 
-- Added `Audience.md` at the repo root — the product's target-audience definition. Structured
+- Moved `Audience.md` into `developer files/` (was briefly at the repo root). All future
+  project documentation (concept, audience, research/planning notes) is now stored in
+  `developer files/` — the intended single place for developer context — with `CLAUDE.md`
+  as the sole exception, staying at the repo root so Claude Code auto-loads it.
+- Added `Audience.md` — the product's target-audience definition. Structured
   into three macro-groups (A: B2C end users, B: B2B operators/businesses using NeuroLady as an
   engine, C: academic/scientific community) with ~16 segments profiled across geography, age,
   gender, income, tech-savviness, psychographics, pain points/JTBD, willingness to pay,
@@ -50,14 +54,15 @@
 
 ## Product / concept documentation
 
-- `Audience.md` (repo root) — target audience definition (see Recent changes).
-- `Project Concept.md` — **not yet written**; planned as the next documentation step to
-  describe the core product concept (Telegram-based hyper-realistic AI companion, personality
-  engine, consistent appearance + auto-updating biography, media/photo/video incl. adult
-  content, extended real-world Turing test as the north-star goal).
+- `developer files/Audience.md` — target audience definition (see Recent changes).
+- `developer files/Project Concept.md` — **not yet written**; planned as the next
+  documentation step to describe the core product concept (Telegram-based hyper-realistic AI
+  companion, personality engine, consistent appearance + auto-updating biography,
+  media/photo/video incl. adult content, extended real-world Turing test as the north-star
+  goal).
 
 ## Current state of the codebase
 
-- No application code yet — the repository contains `CLAUDE.md` and `Audience.md` at the root,
-  plus a `developer files/` folder with `VERSION` and this `PROJECT_STATUS.md`. No NeuroLady
-  persona engine code has been added so far.
+- No application code yet — the repository contains `CLAUDE.md` at the root, plus a
+  `developer files/` folder with `VERSION`, `Audience.md`, and this `PROJECT_STATUS.md`. No
+  NeuroLady persona engine code has been added so far.

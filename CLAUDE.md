@@ -72,9 +72,21 @@ Rules:
 
 All `.md` files in this project (this file included) must be written in English.
 
+## Developer files folder
+
+All working/context documentation created for the project (product concept, audience,
+research notes, planning docs, etc.) is stored inside `developer files/` — this is meant to be
+the single place to look for developer context on the project. The only exception is this
+`CLAUDE.md` file itself, which must stay at the repo root so it's auto-loaded by Claude Code.
+
+When creating a new `.md` doc for the project, put it in `developer files/` unless the user
+explicitly asks for it elsewhere.
+
 ## Preferences and feedback
 
 - [2026-07-10] User wants CLAUDE.md and all future .md files in this project written in English, not Russian.
 - [2026-07-10] User wants PROJECT_STATUS.md and VERSION kept inside a `developer files/`
   subfolder, but CLAUDE.md must stay at the repo root (not moved into that subfolder), so
   it's picked up automatically by Claude Code.
+- [2026-07-10] User wants all project documentation files (e.g. Audience.md, Project
+  Concept.md) stored inside `developer files/` so Claude can look there for developer context.
