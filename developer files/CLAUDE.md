@@ -19,8 +19,8 @@ operations (force push, reset --hard, history rewrite, etc.).
 v{MAJOR.MINOR.PATCH} [{type}]: {short description}
 ```
 
-- `{MAJOR.MINOR.PATCH}` — project version, stored in the `VERSION` file at the repo root
-  (create `VERSION` with value `0.1.0` if it doesn't exist yet).
+- `{MAJOR.MINOR.PATCH}` — project version, stored in `developer files/VERSION`
+  (create it with value `0.1.0` if it doesn't exist yet).
 - Update the version before every commit:
   - `fix` → PATCH +1
   - `add` / `feat` → MINOR +1, PATCH reset to 0
@@ -53,7 +53,7 @@ Entry format:
 
 ## Project status file
 
-Maintain a `PROJECT_STATUS.md` file at the repo root that describes, in technical detail,
+Maintain a `developer files/PROJECT_STATUS.md` file that describes, in technical detail,
 everything that has been done in the project so far (setup steps, files/modules created,
 architecture decisions, configuration, fixes, integrations, etc.). Its purpose is to preserve
 context across sessions so work can be picked up without re-deriving history from `git log`.
@@ -75,3 +75,4 @@ All `.md` files in this project (this file included) must be written in English.
 ## Preferences and feedback
 
 - [2026-07-10] User wants CLAUDE.md and all future .md files in this project written in English, not Russian.
+- [2026-07-10] User wants CLAUDE.md, PROJECT_STATUS.md, and VERSION kept together inside a `developer files/` subfolder rather than at the repo root.

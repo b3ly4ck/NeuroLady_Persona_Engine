@@ -2,6 +2,9 @@
 
 ## Recent changes
 
+- Moved `CLAUDE.md`, `PROJECT_STATUS.md`, and `VERSION` into a `developer files/` subfolder
+  at the repo root (were previously at the repo root directly). `CLAUDE.md` was updated to
+  reference the new paths.
 - Added `CLAUDE.md` rule requiring this `PROJECT_STATUS.md` file to be kept up to date with
   technical details after every meaningful change.
 
@@ -37,5 +40,6 @@
 
 ## Current state of the codebase
 
-- No application code yet — the repository currently only contains `CLAUDE.md`, `VERSION`,
-  and this `PROJECT_STATUS.md`. No NeuroLady persona engine code has been added so far.
+- No application code yet — the repository currently only contains a `developer files/`
+  folder with `CLAUDE.md`, `VERSION`, and this `PROJECT_STATUS.md`. No NeuroLady persona
+  engine code has been added so far.
