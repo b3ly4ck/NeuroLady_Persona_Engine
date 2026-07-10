@@ -35,6 +35,23 @@ v0.2.0 [add]: added NeuroLady persona response generation module
 v0.2.1 [fix]: fixed persona config loading error
 ```
 
+## Feature branching and merging
+
+When a separate, self-contained feature is being built (as opposed to a small doc/config edit
+or a quick fix), it must be developed on its own dedicated branch rather than directly on
+`master`:
+
+1. Create a new branch for the feature (e.g. `feature/<short-name>`).
+2. Commit and push work-in-progress changes to that branch as work proceeds (following the
+   normal commit message/versioning rules above), not to `master`.
+3. Before merging the feature branch into `master`, all tests located in the `tests/` folder
+   must be run and must pass.
+4. Only merge into `master` after all tests pass. If tests fail, fix the issues on the feature
+   branch first — do not merge a branch with failing or skipped tests.
+
+This rule applies going forward, once features start being implemented (application code,
+not documentation-only changes).
+
 ## Automatically logging user feedback and preferences
 
 If the user, during a conversation:

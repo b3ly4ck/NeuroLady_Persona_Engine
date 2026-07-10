@@ -2,6 +2,10 @@
 
 ## Recent changes
 
+- Added a CLAUDE.md rule for future feature work: self-contained features must be built on a
+  dedicated branch (`feature/<short-name>`), not directly on `master`; a feature branch may
+  only be merged into `master` after all tests in `tests/` pass. Doc-only/config changes are
+  unaffected and continue to go straight to `master` per the existing workflow.
 - Moved `Audience.md` into `developer files/` (was briefly at the repo root). All future
   project documentation (concept, audience, research/planning notes) is now stored in
   `developer files/` — the intended single place for developer context — with `CLAUDE.md`
@@ -45,6 +49,8 @@
   tracked in a `VERSION` file at the repo root and bumped per change type (`fix`/`refactor`/
   `docs`/`chore`/`style`/`test` → patch bump; `add`/`feat` → minor bump; breaking changes →
   major bump).
+- **Feature branching**: self-contained features go on a dedicated `feature/<short-name>`
+  branch and may only be merged into `master` once all tests in `tests/` pass.
 - **Feedback logging**: whenever the user corrects an approach or states a preference, it is
   appended to the "Preferences and feedback" section of `CLAUDE.md` with a date, so it isn't
   repeated.
