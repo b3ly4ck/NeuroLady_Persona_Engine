@@ -51,6 +51,23 @@ Entry format:
 - [YYYY-MM-DD] <the essence of the preference/mistake — what to avoid, or what to do instead>
 ```
 
+## Project status file
+
+Maintain a `PROJECT_STATUS.md` file at the repo root that describes, in technical detail,
+everything that has been done in the project so far (setup steps, files/modules created,
+architecture decisions, configuration, fixes, integrations, etc.). Its purpose is to preserve
+context across sessions so work can be picked up without re-deriving history from `git log`.
+
+Rules:
+- Update `PROJECT_STATUS.md` every time a meaningful change is made to the project (new
+  feature, fix, config change, integration, etc.) — not for trivial/no-op edits.
+- Write concrete technical details (what was added, how it works, relevant file paths,
+  decisions made and why), not vague summaries.
+- Organize it by topic/component rather than strictly chronologically, so it stays readable
+  as the project grows; keep a "Recent changes" section at the top for the latest updates.
+- Include `PROJECT_STATUS.md` updates in the same commit as the change they describe,
+  following the normal commit/push workflow above.
+
 ## Language
 
 All `.md` files in this project (this file included) must be written in English.
