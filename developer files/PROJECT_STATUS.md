@@ -2,6 +2,13 @@
 
 ## Recent changes
 
+- Added `Audience.md` at the repo root — the product's target-audience definition. Structured
+  into three macro-groups (A: B2C end users, B: B2B operators/businesses using NeuroLady as an
+  engine, C: academic/scientific community) with ~16 segments profiled across geography, age,
+  gender, income, tech-savviness, psychographics, pain points/JTBD, willingness to pay,
+  acquisition channels, retention drivers, and objections/risks. Includes prioritization
+  (beachhead = Russian-speaking Gen Z) and an ethics/positioning note. `Project Concept.md`
+  is intentionally deferred to the next step per the user's request to start with audience.
 - Moved `CLAUDE.md` back to the repo root (Claude Code auto-loads CLAUDE.md from the project
   root, so it needs to live there). `PROJECT_STATUS.md` and `VERSION` remain inside
   `developer files/`.
@@ -41,8 +48,16 @@
 - **Project status**: this file (`PROJECT_STATUS.md`) must be kept current with technical
   detail on what has been built, to preserve context across sessions.
 
+## Product / concept documentation
+
+- `Audience.md` (repo root) — target audience definition (see Recent changes).
+- `Project Concept.md` — **not yet written**; planned as the next documentation step to
+  describe the core product concept (Telegram-based hyper-realistic AI companion, personality
+  engine, consistent appearance + auto-updating biography, media/photo/video incl. adult
+  content, extended real-world Turing test as the north-star goal).
+
 ## Current state of the codebase
 
-- No application code yet — the repository currently only contains a `developer files/`
-  folder with `CLAUDE.md`, `VERSION`, and this `PROJECT_STATUS.md`. No NeuroLady persona
-  engine code has been added so far.
+- No application code yet — the repository contains `CLAUDE.md` and `Audience.md` at the root,
+  plus a `developer files/` folder with `VERSION` and this `PROJECT_STATUS.md`. No NeuroLady
+  persona engine code has been added so far.
