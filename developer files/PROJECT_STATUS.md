@@ -2,6 +2,12 @@
 
 ## Recent changes
 
+- Added `developer files/Project Concept.md` — the core product concept plus a per-segment
+  mapping of how NeuroLady solves each audience's pain. Opens with the product definition and
+  four believability pillars (human conversation with long-term memory, consistent appearance,
+  consistent + auto-updating biography, rich proactive media incl. adult content where legal;
+  north star = extended real-world Turing test), then walks all ~16 audience segments from
+  `Audience.md` (Groups A/B/C) describing pain → concrete solution for each.
 - Added a CLAUDE.md rule for future feature work: self-contained features must be built on a
   dedicated branch (`feature/<short-name>`), not directly on `master`; a feature branch may
   only be merged into `master` after all tests in `tests/` pass. Doc-only/config changes are
@@ -61,14 +67,12 @@
 ## Product / concept documentation
 
 - `developer files/Audience.md` — target audience definition (see Recent changes).
-- `developer files/Project Concept.md` — **not yet written**; planned as the next
-  documentation step to describe the core product concept (Telegram-based hyper-realistic AI
-  companion, personality engine, consistent appearance + auto-updating biography,
-  media/photo/video incl. adult content, extended real-world Turing test as the north-star
-  goal).
+- `developer files/Project Concept.md` — core product concept (Telegram-based hyper-realistic
+  AI companion, personality engine, four believability pillars, extended real-world Turing test
+  as the north-star goal) plus a per-audience-segment pain → solution mapping.
 
 ## Current state of the codebase
 
 - No application code yet — the repository contains `CLAUDE.md` at the root, plus a
-  `developer files/` folder with `VERSION`, `Audience.md`, and this `PROJECT_STATUS.md`. No
-  NeuroLady persona engine code has been added so far.
+  `developer files/` folder with `VERSION`, `Audience.md`, `Project Concept.md`, and this
+  `PROJECT_STATUS.md`. No NeuroLady persona engine code has been added so far.
