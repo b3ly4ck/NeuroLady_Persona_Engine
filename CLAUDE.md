@@ -75,4 +75,6 @@ All `.md` files in this project (this file included) must be written in English.
 ## Preferences and feedback
 
 - [2026-07-10] User wants CLAUDE.md and all future .md files in this project written in English, not Russian.
-- [2026-07-10] User wants CLAUDE.md, PROJECT_STATUS.md, and VERSION kept together inside a `developer files/` subfolder rather than at the repo root.
+- [2026-07-10] User wants PROJECT_STATUS.md and VERSION kept inside a `developer files/`
+  subfolder, but CLAUDE.md must stay at the repo root (not moved into that subfolder), so
+  it's picked up automatically by Claude Code.

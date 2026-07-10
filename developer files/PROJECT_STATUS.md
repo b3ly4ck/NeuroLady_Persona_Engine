@@ -2,6 +2,9 @@
 
 ## Recent changes
 
+- Moved `CLAUDE.md` back to the repo root (Claude Code auto-loads CLAUDE.md from the project
+  root, so it needs to live there). `PROJECT_STATUS.md` and `VERSION` remain inside
+  `developer files/`.
 - Moved `CLAUDE.md`, `PROJECT_STATUS.md`, and `VERSION` into a `developer files/` subfolder
   at the repo root (were previously at the repo root directly). `CLAUDE.md` was updated to
   reference the new paths.
