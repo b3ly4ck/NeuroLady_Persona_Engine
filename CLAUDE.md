@@ -1,56 +1,60 @@
 # NeuroLady_Final
 
-## Git-workflow: коммит и push после каждого изменения
+## Git workflow: commit and push after every change
 
-После **любого** внесённого изменения в проект (новый файл, правка кода, конфиг и т.д.)
-нужно автоматически:
+After **any** change made to the project (new file, code edit, config change, etc.),
+automatically:
 
-1. Сделать `git add` изменённых файлов.
-2. Сделать `git commit` с сообщением по шаблону версионирования (см. ниже).
-3. Сделать `git push origin master`.
+1. `git add` the changed files.
+2. `git commit` with a message following the versioning template below.
+3. `git push origin master`.
 
-Не нужно спрашивать разрешения на сам факт коммита/пуша — это стандартное действие после
-каждого шага работы над проектом. Подтверждение нужно только для необычных/опасных
-git-операций (force push, reset --hard, перезапись истории и т.п.).
+No need to ask for permission for the commit/push itself — this is a standard step after
+every unit of work on the project. Confirmation is only needed for unusual/dangerous git
+operations (force push, reset --hard, history rewrite, etc.).
 
-### Формат сообщения коммита
+### Commit message format
 
 ```
-v{MAJOR.MINOR.PATCH} [{type}]: {краткое описание}
+v{MAJOR.MINOR.PATCH} [{type}]: {short description}
 ```
 
-- `{MAJOR.MINOR.PATCH}` — версия проекта, хранится в файле `VERSION` в корне репозитория
-  (создать `VERSION` со значением `0.1.0`, если его ещё нет).
-- Перед каждым коммитом обновлять версию:
-  - `fix` → +1 к PATCH
-  - `add` / `feat` → +1 к MINOR, PATCH сбросить в 0
-  - `refactor`, `docs`, `chore`, `style`, `test` → +1 к PATCH
-  - Ломающие/крупные изменения → +1 к MAJOR, MINOR и PATCH сбросить в 0
-- `{type}` — тип изменения: `add`, `fix`, `refactor`, `docs`, `chore`, `style`, `test`.
-- Описание — конкретно, что именно добавилось/изменилось/починилось (не общими словами).
+- `{MAJOR.MINOR.PATCH}` — project version, stored in the `VERSION` file at the repo root
+  (create `VERSION` with value `0.1.0` if it doesn't exist yet).
+- Update the version before every commit:
+  - `fix` → PATCH +1
+  - `add` / `feat` → MINOR +1, PATCH reset to 0
+  - `refactor`, `docs`, `chore`, `style`, `test` → PATCH +1
+  - Breaking/major changes → MAJOR +1, MINOR and PATCH reset to 0
+- `{type}` — change type: `add`, `fix`, `refactor`, `docs`, `chore`, `style`, `test`.
+- Description — specific, state exactly what was added/changed/fixed (no vague wording).
 
-Пример:
+Example:
 ```
-v0.2.0 [add]: добавлен модуль генерации ответов персонажа NeuroLady
-v0.2.1 [fix]: исправлена ошибка загрузки конфига персонажа
-```
-
-## Автоматическое сохранение фидбека и предпочтений пользователя
-
-Если пользователь в разговоре:
-- указывает, что где-то была допущена ошибка,
-- говорит, что хочет сделать иначе,
-- говорит, что ему что-то не нравится (например, конкретный тип UI, стиль кода, подход и т.д.),
-
-— это нужно **сразу** дописывать в раздел «Предпочтения и фидбек» ниже в этом же файле
-(CLAUDE.md), кратко и конкретно, с датой. Это делается для того, чтобы не повторять одни
-и те же нежелательные решения в будущем.
-
-Формат записи:
-```
-- [YYYY-MM-DD] <суть предпочтения/ошибки, чего именно избегать или что делать вместо этого>
+v0.2.0 [add]: added NeuroLady persona response generation module
+v0.2.1 [fix]: fixed persona config loading error
 ```
 
-## Предпочтения и фидбек
+## Automatically logging user feedback and preferences
 
-<!-- Записи добавляются сюда автоматически по мере получения обратной связи от пользователя -->
+If the user, during a conversation:
+- points out that a mistake was made,
+- says they want something done differently,
+- says they don't like something (e.g. a specific UI type, code style, approach, etc.),
+
+— this must be **immediately** appended to the "Preferences and feedback" section below in
+this same file (CLAUDE.md), briefly and specifically, with a date. This is done so the same
+undesired decisions aren't repeated in the future.
+
+Entry format:
+```
+- [YYYY-MM-DD] <the essence of the preference/mistake — what to avoid, or what to do instead>
+```
+
+## Language
+
+All `.md` files in this project (this file included) must be written in English.
+
+## Preferences and feedback
+
+- [2026-07-10] User wants CLAUDE.md and all future .md files in this project written in English, not Russian.
