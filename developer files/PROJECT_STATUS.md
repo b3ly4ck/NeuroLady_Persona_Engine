@@ -2,15 +2,13 @@
 
 ## Recent changes
 
-- Added `developer files/user_metrics.md` — measurable, SMART user metrics. Part 1 is a metric
-  catalog (M1 communication realism incl. a blind text Turing-fail target ≥70%/stretch 85%;
-  M2 SFW photo hyper-realism; M3 NSFW intimate realism with per-pose artifact targets;
-  M4 memory ≥95% recall over ≥180 days; M5 configurable text speed ≤3 s; M6 media speed
-  ≤10–60 s; M7 framework/persona-construction ≤2 h, 100% config-driven, publishable;
-  M8 availability/reliability) all with numeric thresholds. Part 2 maps metric priorities
-  (Critical/High/Relevant) onto every audience segment, tightening targets where a segment
-  cares most. Includes a compliance note that NSFW targets cover adult personas, permitted
-  jurisdictions, age verification.
+- Rewrote `developer files/user_metrics.md` to remove all numeric targets (they weren't
+  well-understood yet) and instead describe, in words, the **ideal use case** and requirements
+  per audience segment. Opens with shared quality dimensions (conversational realism, SFW photo
+  hyper-realism, NSFW intimate realism, memory, responsiveness, feeling alive/available), then
+  gives a narrative "ideal scenario + what he wants/requires" for every segment in Groups A/B/C.
+- (Superseded) Previously `user_metrics.md` held a numeric SMART metric catalog (M1–M8) with
+  per-segment priority ratings; replaced by the qualitative version above at the user's request.
 - Added `developer files/Project Concept.md` — the core product concept plus a per-segment
   mapping of how NeuroLady solves each audience's pain. Opens with the product definition and
   four believability pillars (human conversation with long-term memory, consistent appearance,
@@ -79,8 +77,8 @@
 - `developer files/Project Concept.md` — core product concept (Telegram-based hyper-realistic
   AI companion, personality engine, four believability pillars, extended real-world Turing test
   as the north-star goal) plus a per-audience-segment pain → solution mapping.
-- `developer files/user_metrics.md` — SMART user-metric catalog (M1–M8, numeric targets) and
-  per-audience-segment metric priorities.
+- `developer files/user_metrics.md` — qualitative (no numbers) description of the ideal use
+  case and requirements per audience segment, plus shared quality dimensions.
 
 ## Current state of the codebase
 
