@@ -2,7 +2,8 @@
 
 ## Recent changes
 
-- Created `developer files/features/` folder and added `features/README.md` — a full English
+- Created `developer files/features/` folder and added `features/feature_description_guide.md` —
+  a full English
   guide for how to document every product feature. Defines: file naming (`F-<NNN>-<slug>.md`),
   an ID scheme for traceability to tests (`F-`, `US-`, `UC-`, `FR-`, `NFR-`), and the required
   per-feature structure — (1) user stories per user category ("As a … I want … so that …" +
@@ -87,9 +88,9 @@
   as the north-star goal) plus a per-audience-segment pain → solution mapping.
 - `developer files/user_metrics.md` — qualitative (no numbers) description of the ideal use
   case and requirements per audience segment, plus shared quality dimensions.
-- `developer files/features/README.md` — guide for how to document features (structure, ID
-  scheme, template, worked example). Individual feature files (`F-<NNN>-*.md`) go in this
-  folder — none written yet.
+- `developer files/features/feature_description_guide.md` — guide for how to document features
+  (structure, ID scheme, template, worked example). Individual feature files (`F-<NNN>-*.md`)
+  go in this folder — none written yet.
 
 ## Current state of the codebase
 

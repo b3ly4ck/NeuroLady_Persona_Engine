@@ -53,9 +53,9 @@ This rule applies going forward, once features start being implemented (applicat
 not documentation-only changes).
 
 Every feature is also documented as its own file in `developer files/features/`, following the
-format defined in `developer files/features/README.md` (user stories → user flows → Gherkin
-use cases → functional & non-functional requirements, each requirement with a stable ID that
-tests will later reference).
+format defined in `developer files/features/feature_description_guide.md` (user stories → user
+flows → Gherkin use cases → functional & non-functional requirements, each requirement with a
+stable ID that tests will later reference).
 
 ## Automatically logging user feedback and preferences
 
