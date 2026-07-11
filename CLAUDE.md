@@ -52,6 +52,11 @@ or a quick fix), it must be developed on its own dedicated branch rather than di
 This rule applies going forward, once features start being implemented (application code,
 not documentation-only changes).
 
+Every feature is also documented as its own file in `developer files/features/`, following the
+format defined in `developer files/features/README.md` (user stories → user flows → Gherkin
+use cases → functional & non-functional requirements, each requirement with a stable ID that
+tests will later reference).
+
 ## Automatically logging user feedback and preferences
 
 If the user, during a conversation:

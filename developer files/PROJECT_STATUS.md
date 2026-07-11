@@ -2,6 +2,14 @@
 
 ## Recent changes
 
+- Created `developer files/features/` folder and added `features/README.md` — a full English
+  guide for how to document every product feature. Defines: file naming (`F-<NNN>-<slug>.md`),
+  an ID scheme for traceability to tests (`F-`, `US-`, `UC-`, `FR-`, `NFR-`), and the required
+  per-feature structure — (1) user stories per user category ("As a … I want … so that …" +
+  concrete narrative), (2) user-flow diagrams (Mermaid, per user), (3) use cases in Gherkin/BDD
+  (Given/When/Then, And/But, Scenario Outline), (4) functional + non-functional requirements
+  each with a stable ID. Includes a copy-paste template and a complete worked example (F-000
+  onboarding). Added a pointer to this guide in `CLAUDE.md` under the feature-branching rule.
 - Rewrote `developer files/user_metrics.md` to remove all numeric targets (they weren't
   well-understood yet) and instead describe, in words, the **ideal use case** and requirements
   per audience segment. Opens with shared quality dimensions (conversational realism, SFW photo
@@ -79,6 +87,9 @@
   as the north-star goal) plus a per-audience-segment pain → solution mapping.
 - `developer files/user_metrics.md` — qualitative (no numbers) description of the ideal use
   case and requirements per audience segment, plus shared quality dimensions.
+- `developer files/features/README.md` — guide for how to document features (structure, ID
+  scheme, template, worked example). Individual feature files (`F-<NNN>-*.md`) go in this
+  folder — none written yet.
 
 ## Current state of the codebase
 
