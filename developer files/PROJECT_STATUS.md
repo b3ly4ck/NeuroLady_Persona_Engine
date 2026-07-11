@@ -2,6 +2,18 @@
 
 ## Recent changes
 
+- Incorporated clarifications from the product Google Doc into `architecture.md` and
+  `Project Concept.md`: the engine is the open-source **Pygmalion** framework (Digital Persona /
+  Digital Human / Digital Self); **voice moved into scope** (ElevenLabs, personalized voice
+  replies, first 5/day free); **proactive daily video circles**; concrete monetization
+  (**5 free messages/day**, erotic photo access as daily/weekly/monthly subs); **roster of 10
+  personas (5 RU + 5 EN)**; example persona Alina = Moscow psychologist/fitness; **Big Five**
+  traits + voice profile + language in the persona model and ERD; added `DAILY_USAGE` entity for
+  the free-message quota; named the candidate stack (Qwen/Llama 3.1/Wizard-Vicuna chat, Flux Ultra
+  + IP Adapter imagery, Hedra talking-head video, ElevenLabs voice, Qdrant vector DB);
+  distinguished self-hosted vs external/cloud model services; added a phased implementation
+  roadmap (bot → daily circles+photos → adult media+storage → open-source Pygmalion) and a
+  `voice/` module in the repo layout.
 - Added `developer files/issue_log.md` — a tracker for problems the user reports where a feature
   doesn't work / the logic is wrong **despite all tests passing**. Each report gets an
   `ISS-<NNN>` id, a clear formulation, and a yes/no `[ ]`/`[x]` "fixed" checkbox; it is closed by

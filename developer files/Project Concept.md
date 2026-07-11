@@ -26,6 +26,30 @@ The believability rests on a few core pillars:
 Together these produce a companion that is emotionally and visually indistinguishable from a
 real person — and, underneath, a reusable engine that others can build their own personas on.
 
+### The Pygmalion framework (the engine)
+
+The underlying engine is called **Pygmalion**, intended to be **open-sourced**. It models a
+persona in three parts (see `architecture.md`): **Digital Persona** (who she is — a dynamic daily
+prompt of fixed traits incl. Big Five, variable traits, biographical layers, and future
+projections), **Digital Human** (how she manifests — text, **voice**, consistent imagery, and
+talking-head video), and **Digital Self** (what she remembers — vector memory of events and
+conversations for hyper-personalization).
+
+### Concrete v1 scope (from the product doc)
+
+- **Delivery:** Telegram bot. Example persona **Alina** — a Moscow-based psychologist and fitness
+  enthusiast — but the platform runs many configurable personas.
+- **Initial roster:** **10 personas — 5 Russian-speaking + 5 English-speaking**.
+- **Voice:** replies can be **personalized voice messages** (voice synthesis in scope, not just
+  future).
+- **Daily video circles:** subscribers get proactive daily talking-head circles of the persona
+  sharing stories from her day.
+- **Monetization:** **5 free messages per day**; erotic photo/video access via **daily / weekly /
+  monthly** subscriptions (separately or bundled into a tier).
+- **Candidate tech stack:** uncensored chat LLM (Qwen / Llama 3.1 / Wizard-Vicuna class),
+  imagery via **Flux Ultra + IP Adapter**, voice via **ElevenLabs**, talking-head video via
+  **Hedra**, vector memory via **Qdrant**; heavy models self-hosted on a day/night GPU schedule.
+
 This document maps that concept onto the audience segments defined in
 [`Audience.md`](Audience.md): for each segment, what their core pain is and how NeuroLady
 concretely solves it.

@@ -14,8 +14,32 @@ separated modules and directories), **persona-agnostic core** ("Alina" is just o
 configurable persona), **hyper-realism** (per `user_metrics.md` and `Project Concept.md`), and
 **self-hosted** heavy models with a day/night compute schedule.
 
-> Terminology: **Alina** is used throughout as the running example of a *persona*. A persona is
-> not hard-coded — the platform can create and run many personas from configuration.
+> Terminology: **Alina** is used throughout as the running example of a *persona* — concretely, a
+> Moscow-based psychologist and fitness enthusiast. A persona is not hard-coded — the platform can
+> create and run many personas from configuration. The initial roster is **10 personas: 5
+> Russian-speaking and 5 English-speaking**.
+
+---
+
+## The Pygmalion Framework (conceptual model)
+
+The engine is packaged as a framework called **Pygmalion** (intended to be open-sourced — see
+§8 Roadmap). It organizes each persona into three conceptual components, which map onto the
+services described below:
+
+- **Digital Persona** — *who she is.* A **dynamic daily prompt** assembled from:
+  - **Fixed elements:** name, core values, **Big Five personality traits**.
+  - **Variable elements:** age, interests, goals.
+  - **Biographical context layers:** history summaries + current-period detail.
+  - **Future projections:** weekly through lifetime scenarios.
+  - → realized by the **Persona Service** + **Life Engine** (§3.3, §3.5) and the biography
+    time-pyramid (§4.5).
+- **Digital Human** — *how she manifests.* Text generation with style-tuning, **voice
+  synthesis**, **consistent imagery**, and **talking-head video**.
+  - → realized by the Chat LLM, Voice, Image, and Video AI services (§4).
+- **Digital Self** — *what she remembers.* **Vector storage (Qdrant)** of daily events and
+  conversation histories enabling hyper-personalization.
+  - → realized by the Memory Service semantic store (§3.4) + the reflection pyramid (§3.5).
 
 ---
 
@@ -41,9 +65,9 @@ flowchart TB
     subgraph AI[AI services]
         LLM[Uncensored LLM<br/>chat, big context]
         EXTLLM[External LLM API<br/>reflection/goal synthesis]
-        IMG[Image Generation<br/>img2img, night batch]
-        VID[Video Generation<br/>img+text to video, night batch]
-        VOICE[Voice - future]
+        IMG[Image Generation<br/>Flux Ultra + IP Adapter, night batch]
+        VID[Video Generation<br/>talking-head Hedra + intimate img+text, night batch]
+        VOICE[Voice synthesis<br/>ElevenLabs]
     end
     subgraph Data
         SQL[(Relational DB)]
@@ -57,6 +81,7 @@ flowchart TB
     ORCH --> PERSONA
     ORCH --> MEM
     ORCH --> LLM
+    ORCH --> VOICE
     ORCH --> MEDIA
     ORCH --> SUB
     PERSONA --> SQL
@@ -115,8 +140,15 @@ flowchart TD
   teaser). Selecting one is a callback query.
 - **Video-note intro:** on selection, the persona sends a Telegram **video note (circle)** as her
   intro — a first hit of "she's a real person."
-- **Conversation screen:** the default state. The user just types; she replies. Rich media
-  (photos, videos, video notes, voice later) are sent inline.
+- **Daily video circles:** subscribers receive **proactive daily video notes** of the persona
+  sharing stories from her day (a recurring "she's alive" touchpoint, not just the intro). These
+  are talking-head circles driven by the schedule/Life Engine (§4.3, §3.5).
+- **Conversation screen:** the default state. The user just types; she replies. Replies can be
+  **text or personalized voice messages** (voice synthesis, §4.7), and rich media (photos,
+  videos, video notes) is sent inline.
+- **Free vs paid:** **5 free messages per day**; beyond that, and for erotic photo/video access,
+  the user needs a subscription (metered by Billing, §3.7). Photo access can be bought separately
+  (daily/weekly/monthly) or via a tier.
 - **Keyboards — two kinds, used by situation:**
   - **Reply keyboard** (replaces the typing keyboard) for persistent, session-level operations:
     `⬅️ Main menu`, `🔚 End chat`.
@@ -221,11 +253,14 @@ Owns a single user turn end-to-end:
   flag + entitlement check.
 
 ### 3.3 Persona Service
-- Source of truth for persona definitions: identity, layered biography, appearance references,
-  intro video-note, voice (future), tunable communication settings.
+- Source of truth for persona definitions: identity (name, core values, **Big Five personality
+  traits**), variable traits (age, interests, goals), layered biography, appearance references,
+  intro video-note, **voice profile**, tunable communication settings.
+- Manages the **roster of 10 personas (5 Russian-speaking + 5 English-speaking)**; `locale`/
+  language is part of persona metadata and drives the gallery and prompts.
 - Serves biography *layers* (see §4.5) and persona metadata to the Orchestrator and the gallery.
-- Backed by relational DB (structured) + vector DB (semantic biography) + object storage
-  (reference images, intro note).
+- Backed by relational DB (structured) + vector DB — **Qdrant** (semantic biography) + object
+  storage (reference images, intro note).
 
 ### 3.4 Memory Service
 - **Structured memory (SQL):** categorized user facts (e.g. `family`, `work`, `preferences`,
@@ -249,7 +284,8 @@ Runs the persona's simulated life on a schedule. Components:
   so she isn't only reactive — she has direction. Goals are stored, revisited, and updated.
 - **Relationship reflection:** per (user, persona), periodic reflection on how the relationship is
   developing, updating a **relationship state/scale** (see §4.6) that colors future replies.
-- Emits jobs to the queue (e.g. "generate tomorrow's media for schedule X").
+- Emits jobs to the queue (e.g. "generate tomorrow's media for schedule X") and schedules the
+  **proactive daily video circle** (a talking-head "story from her day" pushed to subscribers).
 
 ```mermaid
 flowchart LR
@@ -273,7 +309,12 @@ flowchart LR
 - Never generates on the hot path — only reads the day's archive from object storage.
 
 ### 3.7 Subscription/Billing Service
-- Tiers/entitlements, payment provider integration, gating (esp. intimate media).
+- **Free-message metering:** enforces **5 free messages/day** per user (per persona), resetting
+  daily; beyond the quota requires a subscription.
+- **Photo/video access:** erotic photo access sold as **daily / weekly / monthly** subscriptions,
+  purchasable separately or bundled into a tier.
+- Payment provider integration; entitlement checks; gating of intimate media (with adult
+  verification, §6.5).
 
 ### 3.8 Persona Studio (local authoring tool)
 - A local interface to **create and assemble personas** (see §4.4): questionnaire-driven bio
@@ -293,8 +334,11 @@ Everything here is designed to **change, be tuned, or be swapped**. Prompts are 
 stored per-module, never inlined ad hoc.
 
 ### 4.1 Chat LLM (real-time conversation)
-- **Uncensored, high-capacity model** (e.g. a larger Qwen-class model) chosen for **large context
-  window** and natural, adequate conversation.
+- **Uncensored, high-capacity model** chosen for a **large context window** and natural, adequate
+  conversation. Candidate models (a research task with existing candidates): a larger **Qwen**-
+  class model, **Llama 3.1**, **Wizard-Vicuna**, or similar Hugging Face uncensored models. The
+  interface is fixed so the model can be swapped after evaluation.
+- Style-tuning per persona (voice/register), so text matches the persona's character.
 - Self-hosted; **loaded during awake hours**, unloaded at night to free GPU for media.
 - Configurable decoding (temperature, etc.) exposed as persona/communication settings.
 
@@ -310,12 +354,16 @@ For each reply the Orchestrator builds the prompt from:
   hard requirement: the live dialogue must be in-context, not only summarized).
 - Assembled to fit the model's context budget with a clear priority order.
 
-### 4.3 Image & video generation (night batch, self-hosted)
-- **Images:** **img2img** from the persona's **reference images** to keep appearance consistent.
-  For each schedule slot, generate a set of **SFW** shots (selfie at gym, photo at office, …) and
-  a set of **intimate** shots, per the day's schedule → an archive.
-- **Video:** **image + text description → video**; fewer than photos, but ideally one per schedule
-  slot/location; mostly intimate at varying intensity.
+### 4.3 Image & video generation (night batch)
+- **Images:** **consistent imagery via Flux Ultra + IP Adapter**, conditioned on the persona's
+  **reference images** to keep appearance identity-consistent. For each schedule slot, generate a
+  set of **SFW** shots (selfie at gym, photo at office, …) and a set of **intimate** shots, per
+  the day's schedule → an archive. Self-hosted.
+- **Video — two kinds:**
+  - **Talking-head video circles** for the intro and the **daily story circles**, generated with
+    **Hedra** (an external/cloud service candidate) from a persona image + voice/script.
+  - **Intimate videos** via **image + text description → video** (self-hosted, night batch); fewer
+    than photos, but ideally one per schedule slot/location; mostly intimate at varying intensity.
 - Each generated asset is stored **with metadata** (slot, location, pose, background, intimacy
   level) so Media Delivery can serve context-appropriate media and support sexting continuity.
 - Prompts, model choices, and pipelines live **inside the respective module's directory**
@@ -323,8 +371,10 @@ For each reply the Orchestrator builds the prompt from:
   candidates; the interface is fixed so models can be swapped.
 
 ### 4.4 Persona construction (template + questionnaire + assembly)
-- A **biography template** defines the schema of a persona (identity, epochs, appearance refs,
-  goals seed, communication settings, voice later).
+- A **biography template** defines the schema of a persona (the Digital Persona of §"Pygmalion
+  Framework"): fixed identity (name, core values, **Big Five traits**), variable traits (age,
+  interests, goals), epochs/biographical layers, future projections (weekly→lifetime), appearance
+  references, **voice profile**, and communication settings.
 - **Persona Studio** turns the template into a **questionnaire-style authoring UI**: fill in the
   story, upload appearance references (used by img2img), and the tool **auto-assembles** the
   artifacts into the right places (SQL rows, vector embeddings, reference images in object
@@ -345,9 +395,12 @@ For each reply the Orchestrator builds the prompt from:
   configurable.
 - All these prompts are versioned assets under the Life Engine's prompt directory.
 
-### 4.7 Voice (future)
-- A voice module can be added later behind the same modular boundary (persona voice profile →
-  TTS/voice cloning). Out of scope for the first build, but the architecture leaves room.
+### 4.7 Voice (in scope)
+- The persona replies with **personalized voice messages** (the first 5 daily messages are free,
+  matching the free-message quota). Voice synthesis via **ElevenLabs (11labs)** as the current
+  candidate (external/cloud), behind a modular boundary so it can be swapped or self-hosted later.
+- Each persona has a **voice profile** (part of the persona definition, §3.3) so her voice is
+  consistent and in-character.
 
 ### 4.8 Prompt & model management
 - Prompts are first-class, **versioned** files organized **per module** (chat, image, video,
@@ -370,6 +423,7 @@ erDiagram
     PERSONA ||--o{ SESSION : hosts
     USER ||--o{ USER_FACT : reveals
     USER ||--o{ SUBSCRIPTION : holds
+    USER ||--o{ DAILY_USAGE : meters
     SESSION ||--o{ MESSAGE : contains
     PERSONA ||--o{ BIOGRAPHY_LAYER : has
     PERSONA ||--o{ DAILY_PLAN : has
@@ -392,9 +446,12 @@ erDiagram
     PERSONA {
         id PK
         name
+        language "ru|en"
         status
         avatar_ref
         intro_videonote_ref
+        big_five_json
+        voice_profile_ref
         comm_settings_json
         created_at
     }
@@ -489,14 +546,23 @@ erDiagram
         id PK
         user_id FK
         tier
+        photo_access "none|daily|weekly|monthly"
         entitlements_json
         status
         renews_at
     }
+    DAILY_USAGE {
+        id PK
+        user_id FK
+        persona_id FK
+        date
+        free_messages_used "0..5"
+    }
 ```
 
-- **Vector DB** stores embeddings referenced by `USER_FACT.embedding_ref` and
-  `BIOGRAPHY_LAYER.embedding_ref` for semantic retrieval.
+- `DAILY_USAGE` enforces the **5-free-messages/day** quota (per user, per persona), reset daily.
+- **Vector DB (Qdrant)** stores embeddings referenced by `USER_FACT.embedding_ref` and
+  `BIOGRAPHY_LAYER.embedding_ref` for semantic retrieval (the "Digital Self").
 - **Object storage** holds the actual media binaries referenced by `MEDIA_ASSET.storage_ref`
   (and persona reference images / intro notes).
 
@@ -565,9 +631,19 @@ flowchart LR
 
 ### 6.2 Data stores
 - **Relational DB** (e.g. PostgreSQL) for structured entities (§5.1).
-- **Vector DB** (e.g. pgvector/Qdrant-class) for embeddings.
+- **Vector DB — Qdrant** for embeddings (the Digital Self).
 - **Object storage** (e.g. S3-compatible/MinIO self-hosted) for media archives + references.
 - **Queue** (e.g. Redis/RabbitMQ-class) for media jobs and async work.
+
+### 6.2b Model services: self-hosted vs external
+The design mixes self-hosted heavy models with a few external/cloud services (candidates):
+- **Self-hosted (on our GPU, day/night scheduled):** the uncensored **Chat LLM** (Qwen/Llama 3.1/
+  Wizard-Vicuna class) and **image generation** (Flux Ultra + IP Adapter); intimate **video**
+  (image+text→video).
+- **External/cloud candidates:** **ElevenLabs** (voice), **Hedra** (talking-head video circles),
+  and an **external LLM API** (e.g. ChatGPT) for planning/reflection/goal/relationship synthesis.
+- Each sits behind a modular interface, so any external service can later be swapped or brought
+  in-house without touching callers.
 
 ### 6.3 Repository & module layout (modularity on disk)
 Text, image, and video each live in their own top-level module, with their **own prompts**:
@@ -583,9 +659,10 @@ services/
 image/                 # image generation module
   prompts/
   models/
-video/                 # video generation module
+video/                 # video generation module (Hedra talking-head + intimate img+text)
   prompts/
   models/
+voice/                 # voice synthesis module (ElevenLabs adapter + voice profiles)
 chat/                  # chat LLM serving + prompts/
 persona_studio/        # local persona authoring interface
 infra/                 # compose/k8s, schedulers, CI/CD
@@ -622,3 +699,22 @@ video and per-module prompt storage.)
   is where hyper-real "aliveness" is produced; it gets the most design attention.
 - **Prompts & models are assets, not code:** versioned, per-module, swappable — everything that
   "can change or be trained" is isolated in the AI-services layer.
+
+---
+
+## 8. Implementation roadmap
+
+Phased delivery (from the product doc), building the Pygmalion framework incrementally:
+
+1. **Telegram bot with uncensored conversation** — the Chat LLM + Orchestrator + Memory, the
+   5-free-messages/day model, basic persona(s).
+2. **Daily video circles with generated photo content** — talking-head daily circles (Hedra) +
+   the night-batch image pipeline (Flux Ultra + IP Adapter) feeding scheduled media.
+3. **Adult photo generation and data storage** — intimate photo/video archives per schedule, the
+   metadata model for sexting continuity, and photo-access subscriptions.
+4. **Open-source Pygmalion packaging** — package the persona engine (Digital Persona / Digital
+   Human / Digital Self) as the open-source **Pygmalion** framework for the B2B/engine and
+   academic audiences in `Audience.md`.
+
+Voice (ElevenLabs) and the full Persona Studio authoring flow are layered in across these phases;
+the initial roster target is **10 personas (5 RU + 5 EN)**.
