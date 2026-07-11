@@ -81,6 +81,24 @@ Every requirement must be covered by a **whole set of tests** (never just one), 
 the repo-root `tests/` folder, and all of it must pass before a feature branch merges to
 `master`.
 
+## Issue log (reported problems despite passing tests)
+
+When the user reports that **a feature doesn't work, or the logic is wrong — even though all
+tests pass** (or reports any behavior/logic problem regardless of test status), do the following:
+
+1. Assign the next `ISS-<NNN>` id and log the report in `developer files/issue_log.md`, clearly
+   formulated, with an unchecked `[ ]` "fixed" status and the current date.
+2. Investigate *why the tests didn't catch it* — the gap is usually a missing/incorrect test, an
+   architecture flaw, or a missing requirement.
+3. Close the gap **at its source**: add/fix tests (new `TC-` cases) in the relevant test spec and
+   `tests/` code, refine `architecture.md`, and/or add/adjust requirements (`FR-`/`NFR-`) in the
+   feature file — whatever was under-covered.
+4. Flip the issue's checkbox to `[x]`, record the resolution and date, and update the index table
+   in `issue_log.md`.
+
+This mechanism is how the architecture and coverage get modernized from real findings. Follow the
+full format in `developer files/issue_log.md`.
+
 ## Automatically logging user feedback and preferences
 
 If the user, during a conversation:

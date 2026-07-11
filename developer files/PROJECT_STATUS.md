@@ -2,6 +2,13 @@
 
 ## Recent changes
 
+- Added `developer files/issue_log.md` — a tracker for problems the user reports where a feature
+  doesn't work / the logic is wrong **despite all tests passing**. Each report gets an
+  `ISS-<NNN>` id, a clear formulation, and a yes/no `[ ]`/`[x]` "fixed" checkbox; it is closed by
+  fixing the gap at its source (adding `TC-` tests, refining `architecture.md`, adding/adjusting
+  `FR-`/`NFR-` requirements). Has an index table, how-it-works steps, and an entry template. This
+  is the mechanism for modernizing the architecture/coverage from real findings. Added the
+  corresponding rule to `CLAUDE.md`.
 - Added `developer files/architecture.md` — full system architecture across six levels:
   (1) UX (Telegram bot: welcome → persona gallery → video-note intro → chat with reply/inline
   keyboards → main menu/subscription); (2) API (Telegram webhook ingress + internal service
@@ -137,6 +144,8 @@
 - `developer files/architecture.md` — six-level system architecture (UX, API, services, AI
   services, data ERD/DFD, infrastructure) with Mermaid diagrams; persona-agnostic core,
   day/night GPU schedule, Life Engine reflection pyramid.
+- `developer files/issue_log.md` — tracker for reported problems that pass tests but are still
+  wrong; `ISS-<NNN>` ids with fixed/not-fixed checkboxes, closed by improving docs/tests/arch.
 
 ## Current state of the codebase
 
