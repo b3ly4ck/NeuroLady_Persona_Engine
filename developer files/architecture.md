@@ -118,28 +118,37 @@ driven; the user should barely need to type commands — inline/reply keyboards 
 
 ```mermaid
 flowchart TD
-    START[/start] --> WELCOME[Welcome message + brand intro]
-    WELCOME --> GALLERY[Persona gallery: choose a woman]
-    GALLERY --> INTRO[Selected persona sends a video-note<br/>Telegram 'circle' intro]
+    START[/start] --> WELCOME[Welcome screen: header 'NeuroLady AI'<br/>+ flirty welcome copy + 'Start' inline button]
+    WELCOME -->|tap Start| GALLERY[Choose Lady: intro message +<br/>persona card carousel]
+    GALLERY -->|◀ / ▶ paginate '1/6'| GALLERY
+    GALLERY -->|tap 'Start Chat'| INTRO[Selected persona sends a video-note<br/>Telegram 'circle' intro]
     INTRO --> CHAT[Conversation screen]
-    CHAT -->|inline keyboard| ACTIONS{In-chat actions}
-    ACTIONS -->|Ask for photo| PHOTO[Media Delivery -> photo]
-    ACTIONS -->|Ask for video| VIDEO[Media Delivery -> video]
-    ACTIONS -->|Switch woman| GALLERY
-    ACTIONS -->|Main menu| MENU[Main menu]
+    CHAT -->|reply keyboard '💋 Choose Lady'| GALLERY
+    CHAT -->|reply keyboard menu ≡| MENU[Main menu]
+    CHAT -->|ask for photo/video| MEDIA[Media Delivery -> photo/video]
     MENU -->|Subscription| SUBS[Subscription status / upgrade]
-    MENU -->|Switch persona| GALLERY
+    MENU -->|Choose Lady| GALLERY
     MENU -->|Resume chat| CHAT
-    CHAT -->|End chat| MENU
 ```
 
 ### 1.2 UX building blocks
-- **Welcome message:** short brand greeting ("Привет, это NeuroLady…") + a call to choose a
-  companion.
-- **Persona gallery:** an inline keyboard / carousel of available women (avatar + name + one-line
-  teaser). Selecting one is a callback query.
-- **Video-note intro:** on selection, the persona sends a Telegram **video note (circle)** as her
-  intro — a first hit of "she's a real person."
+> Grounded in the reference design (Figma "🧠 AIT"). Copy is English/adult-flirty in tone; the
+> Russian-language personas use equivalent Russian copy.
+
+- **Header:** standard Telegram chat header — `‹ Chats` back link, title **"NeuroLady AI"**, and
+  the persona/brand avatar (top-right).
+- **Welcome screen (Start):** a flirty welcome message (e.g. "Step into a realm of pleasure and
+  desire… Select the woman who captivates you… Tap **Start** to dive in!") followed by a single
+  full-width **`Start`** inline button.
+- **Choose Lady (persona gallery) — a paginated card carousel:**
+  - An intro message ("Choose the lady you'd like to chat with… Each one is unique…").
+  - A **persona card** per view: large **photo**, then **Name**, **Profession**, **Age**, and a
+    first-person **Description** teaser (e.g. Olivia, Psychologist, 30).
+  - **Pagination controls**: `◀` / `▶` with a `1/6`-style position counter to browse personas
+    (one card per view).
+  - A **`Start Chat`** inline button under the card to begin talking to the shown persona.
+- **Video-note intro:** on **Start Chat**, the persona sends a Telegram **video note (circle)** as
+  her intro — a first hit of "she's a real person."
 - **Daily video circles:** subscribers receive **proactive daily video notes** of the persona
   sharing stories from her day (a recurring "she's alive" touchpoint, not just the intro). These
   are talking-head circles driven by the schedule/Life Engine (§4.3, §3.5).
@@ -150,16 +159,17 @@ flowchart TD
   the user needs a subscription (metered by Billing, §3.7). Photo access can be bought separately
   (daily/weekly/monthly) or via a tier.
 - **Keyboards — two kinds, used by situation:**
-  - **Reply keyboard** (replaces the typing keyboard) for persistent, session-level operations:
-    `⬅️ Main menu`, `🔚 End chat`.
-  - **Inline keyboard** (attached to a message) for in-context actions: `🔄 Switch woman`,
-    `📸 Ask for a photo`, `💳 Subscription`, etc.
-- **Main menu:** end the current chat and return here to check subscription, switch persona, or
-  resume. Simple, few options, always reachable.
+  - **Reply keyboard** (replaces the typing keyboard) for persistent, session-level operations,
+    per the design: a **`💋 Choose Lady`** button (return to persona selection) and a **menu (≡)**
+    button; add `Subscription` / `End chat` as needed.
+  - **Inline keyboard** (attached to a message) for in-context actions: `Start`, `◀`/`▶`,
+    `Start Chat`, and in-chat `📸 photo` / `💳 Subscription`.
+- **Main menu:** reachable from the reply-keyboard menu; check subscription, choose another lady,
+  or resume. Simple, few options, always reachable.
 - **Subscription screen:** current tier, what's unlocked, upgrade CTA (ties into Billing, §3).
 
-> Screenshots to be supplied by the product owner; this section is the behavioral spec the bot
-> must implement. Actual keyboard layouts are refined per-screen during feature work
+> Reference design: Figma "🧠 AIT". This section is the behavioral spec the bot must implement;
+> exact copy and keyboard layouts are refined per-screen during feature work
 > (`developer files/features/`).
 
 ### 1.3 UX principles
@@ -258,6 +268,8 @@ Owns a single user turn end-to-end:
   intro video-note, **voice profile**, tunable communication settings.
 - Manages the **roster of 10 personas (5 Russian-speaking + 5 English-speaking)**; `locale`/
   language is part of persona metadata and drives the gallery and prompts.
+- Provides the **gallery card** data used by the "Choose Lady" carousel: name, profession, age,
+  first-person description teaser, and gallery photo (per the reference design).
 - Serves biography *layers* (see §4.5) and persona metadata to the Orchestrator and the gallery.
 - Backed by relational DB (structured) + vector DB — **Qdrant** (semantic biography) + object
   storage (reference images, intro note).
@@ -373,8 +385,9 @@ For each reply the Orchestrator builds the prompt from:
 ### 4.4 Persona construction (template + questionnaire + assembly)
 - A **biography template** defines the schema of a persona (the Digital Persona of §"Pygmalion
   Framework"): fixed identity (name, core values, **Big Five traits**), variable traits (age,
-  interests, goals), epochs/biographical layers, future projections (weekly→lifetime), appearance
-  references, **voice profile**, and communication settings.
+  interests, goals), **gallery card fields (profession, age, first-person description, photo)**,
+  epochs/biographical layers, future projections (weekly→lifetime), appearance references,
+  **voice profile**, and communication settings.
 - **Persona Studio** turns the template into a **questionnaire-style authoring UI**: fill in the
   story, upload appearance references (used by img2img), and the tool **auto-assembles** the
   artifacts into the right places (SQL rows, vector embeddings, reference images in object
@@ -446,9 +459,13 @@ erDiagram
     PERSONA {
         id PK
         name
+        profession
+        age
+        card_description "first-person gallery teaser"
         language "ru|en"
         status
         avatar_ref
+        gallery_photo_ref
         intro_videonote_ref
         big_five_json
         voice_profile_ref

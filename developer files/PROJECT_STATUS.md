@@ -2,6 +2,13 @@
 
 ## Recent changes
 
+- Refined `architecture.md` §1 (UX) to match the reference Figma design ("🧠 AIT"): concrete
+  **Welcome/Start screen** (flirty copy + single `Start` inline button), **"Choose Lady"**
+  persona **card carousel** with `◀ 1/6 ▶` pagination — each card shows photo + **Name /
+  Profession / Age / first-person Description** — and a `Start Chat` button; reply keyboard with
+  **`💋 Choose Lady`** + menu (≡); video-note intro fires on Start Chat. Added gallery-card fields
+  (`profession`, `age`, `card_description`, `gallery_photo_ref`) to the `PERSONA` entity in the
+  ERD and to the Persona Service + persona-construction template. Updated the §1 flow diagram.
 - Incorporated clarifications from the product Google Doc into `architecture.md` and
   `Project Concept.md`: the engine is the open-source **Pygmalion** framework (Digital Persona /
   Digital Human / Digital Self); **voice moved into scope** (ElevenLabs, personalized voice
