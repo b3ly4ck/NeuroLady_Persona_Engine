@@ -25,6 +25,11 @@ will cover.
   that make sense for it.
 - **Design tests before/alongside the code** (test-driven): the test spec for a feature exists
   before the feature is merged, and the code is written to make those tests pass.
+- **Tests are the bridge between requirements and architecture.** A requirement says *what* must
+  be true; the architecture (`architecture.md`) says *which services, data stores, AI services,
+  and flows* realize it. Tests must cover **both** — not only isolated units, but the
+  **integration and inter-service paths, the data flows (DFDs), and the end-to-end journeys**
+  through the architecture. For every architectural flow, cover **as many scenarios as possible**.
 
 ---
 
@@ -78,6 +83,8 @@ several levels.
 - **Integration** — several components together (e.g. dialogue engine + memory store), real
   wiring, external services stubbed.
 - **Component / API** — a service or bot handler exercised through its interface.
+- **Inter-service / contract** — two or more services exercised across their real boundary
+  (the API contracts in `architecture.md` §2), verifying the composed path and each hop.
 - **End-to-end (automated)** — the whole flow driven programmatically (e.g. a scripted Telegram
   client sends `/start` and asserts on the reply).
 - **Manual / real-device E2E** — a human runs the scenario by physically opening Telegram on
@@ -85,6 +92,46 @@ several levels.
   judge (does she *feel* human? does the photo *look* real?) and for final acceptance.
 - **Non-functional** — performance/latency, load/scale, reliability/failover, security,
   privacy/compliance. These verify `NFR-` requirements.
+
+---
+
+## 4b. Architecture-driven testing (tests as the bridge to `architecture.md`)
+
+Requirements alone don't tell you every path that can break — the **architecture** does. When
+writing a feature's tests, walk the architecture (`architecture.md`) and cover **every scenario**
+each relevant piece can produce. This is where **integration, inter-service, and end-to-end**
+tests come from.
+
+For each feature, map its requirements onto the architecture and add tests for:
+
+- **Inter-service / integration paths.** Every service boundary the feature crosses gets tested
+  together (real wiring, external/heavy deps stubbed). E.g. Bot Gateway → Orchestrator →
+  Memory → Chat LLM → Media Delivery. Test each hop *and* the composed path.
+- **API contracts.** Each internal endpoint the feature uses (§2 of `architecture.md`) gets
+  contract tests: schema, auth/entitlement, idempotency keys, error responses.
+- **Data-flow coverage (DFDs).** Reproduce each relevant DFD from `architecture.md` end-to-end
+  and assert the data lands correctly:
+  - *DFD-1 (conversation turn):* context assembly includes the recent raw messages + retrieved
+    facts + relationship state; reply persists; facts get extracted; media-intent routes correctly.
+  - *DFD-2 (life cycle):* plan → schedule → reflection → hierarchical compression
+    (day→week→month→year→epoch) → goals/relationship updates all persist and chain correctly.
+  - *DFD-3 (night media):* sleep → chat LLM unloaded → GPU freed → image/video jobs run → assets
+    tagged with pose/background/location/intimacy → archive + `MEDIA_ASSET` rows → wake reloads
+    chat LLM. Test the transitions and failure/rollback of each.
+- **End-to-end journeys.** Full user journeys through the UX (§1) and the stack: `/start` →
+  gallery → pick persona → video-note intro → chat → ask for photo/video → switch woman →
+  main menu → subscription. Automated e2e where possible, **manual real-device e2e** for realism
+  acceptance (does she feel human, does the media look real).
+- **Cross-subsystem consistency.** e.g. media served matches the *current schedule slot*; the LLM
+  "knows" what it sent (pose/background metadata) for sexting continuity; biography query returns
+  the right layer; day/night switch never leaves the persona with an empty media archive.
+- **Data-integrity & relationships (ERD).** Referential integrity, correct linkage across
+  entities (SESSION↔MESSAGE↔MEDIA_ASSET, PERSONA↔BIOGRAPHY_LAYER, RELATIONSHIP↔reflection), and
+  vector/object-store references resolve.
+
+Rule of thumb: **cover all scenarios the architecture makes possible** for the feature — every
+service hop, every branch of every DFD, every state transition — not just the requirement's happy
+path. If the architecture introduces a path, there is a test for it.
 
 ---
 
@@ -106,6 +153,9 @@ is how one requirement produces a whole set of tests.
 - **Compliance** (where relevant) — age/consent gating for intimate content, jurisdiction rules.
 - **Performance** — latency/throughput under normal and heavy load (for the relevant NFRs).
 - **Cross-device / channel** — different Telegram clients (mobile/desktop/web), weak network.
+- **Inter-service path** — the composed path across every service boundary the requirement
+  crosses (see §4b).
+- **Data flow** — each relevant DFD from `architecture.md` reproduced end-to-end (see §4b).
 - **Regression** — a test pinned to any bug once found, so it never comes back.
 
 If you can imagine a way the requirement could break or a condition under which it must hold,

@@ -2,6 +2,26 @@
 
 ## Recent changes
 
+- Added `developer files/architecture.md` — full system architecture across six levels:
+  (1) UX (Telegram bot: welcome → persona gallery → video-note intro → chat with reply/inline
+  keyboards → main menu/subscription); (2) API (Telegram webhook ingress + internal service
+  endpoints, auth/idempotency/contracts); (3) Services (Bot Gateway, Conversation Orchestrator,
+  Persona, Memory [SQL structured + vector semantic], Life Engine, Media Delivery, Billing,
+  Persona Studio, media-gen services); (4) AI services (uncensored high-context chat LLM served
+  by day; context assembly incl. recent raw messages; night-batch img2img photos + image+text
+  video with pose/background/intimacy metadata; external LLM for planning/reflection/goals/
+  relationship; biography time-pyramid day→…→epoch; persona construction via template +
+  questionnaire Studio; versioned per-module prompts); (5) Data (Mermaid ERD + three DFDs:
+  conversation turn, life cycle, night media gen); (6) Infrastructure (self-hosted GPU,
+  containers, day/night GPU scheduler that unloads chat LLM to run media batch, data stores,
+  module/dir layout, CI/CD with the tests/ merge gate, security/compliance). Persona "Alina" is
+  just a configurable instance; core is persona-agnostic.
+- Updated `test_driven_development.md` to make tests the **bridge between requirements and
+  architecture**: added a core principle, a new "Architecture-driven testing" section (cover
+  inter-service/integration paths, API contracts, all DFD flows, e2e journeys, cross-subsystem
+  consistency, ERD integrity — "cover all scenarios the architecture makes possible"), and new
+  test levels/checklist items (inter-service/contract, data-flow).
+- Added `CLAUDE.md`: `architecture.md` added to the "before coding, re-read these" list.
 - Added `developer files/test_driven_development.md` — English guide for how tests are designed:
   every requirement (`FR-`/`NFR-`) gets a *whole set* of tests (never one), aiming for exhaustive
   coverage (10k+ tests is normal/desired); test IDs `TC-<requirement-id>-<nn>` map back to
@@ -111,8 +131,12 @@
   (structure, ID scheme, template, worked example). Individual feature files (`F-<NNN>-*.md`)
   go in `developer files/features/` — none written yet.
 - `developer files/test_driven_development.md` — guide for how to design tests (set of tests per
-  requirement, levels/categories, ID scheme, template, worked example). Per-feature test specs
+  requirement, levels/categories, ID scheme, template, worked example; architecture-driven
+  testing section bridging requirements ↔ architecture). Per-feature test specs
   (`F-<NNN>-*.md`) go in `developer files/tests/` — none written yet.
+- `developer files/architecture.md` — six-level system architecture (UX, API, services, AI
+  services, data ERD/DFD, infrastructure) with Mermaid diagrams; persona-agnostic core,
+  day/night GPU schedule, Life Engine reflection pyramid.
 
 ## Current state of the codebase
 

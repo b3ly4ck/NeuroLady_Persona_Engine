@@ -7,7 +7,9 @@ Whenever the user asks to **code, implement, build, or start developing** anythi
 
 - `developer files/feature_description_guide.md` — how features are specified.
 - `developer files/test_driven_development.md` — how tests are designed (a whole set of tests
-  per requirement).
+  per requirement, and how tests bridge requirements to the architecture).
+- `developer files/architecture.md` — the system architecture across six levels (UX, API,
+  services, AI services, data ERD/DFD, infrastructure).
 - The relevant feature file(s) in `developer files/features/` and their test spec(s) in
   `developer files/tests/`.
 - For product context: `developer files/Project Concept.md`, `developer files/Audience.md`,
