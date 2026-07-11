@@ -2,7 +2,22 @@
 
 ## Recent changes
 
-- Created `developer files/features/` folder and added `features/feature_description_guide.md` —
+- Added `developer files/test_driven_development.md` — English guide for how tests are designed:
+  every requirement (`FR-`/`NFR-`) gets a *whole set* of tests (never one), aiming for exhaustive
+  coverage (10k+ tests is normal/desired); test IDs `TC-<requirement-id>-<nn>` map back to
+  requirement IDs; tests span levels (unit, integration, component/API, automated e2e, manual
+  real-device e2e via physically opening Telegram, and non-functional perf/load/security). Two
+  locations distinguished: **test specs** as one markdown per feature in `developer files/tests/`
+  (mirroring `features/`), and **test code** in the repo-root `tests/` folder (the one the merge
+  rule gates on). Includes a per-requirement coverage checklist, minimum-coverage rules, a
+  template, and a worked example expanding one requirement into a set of tests.
+- Moved `feature_description_guide.md` from `developer files/features/` up to `developer files/`
+  (both guides now sit at the developer-files root). Created empty `developer files/tests/` folder
+  (kept via `.gitkeep`) for per-feature test specs; `features/` keeps a `.gitkeep` too.
+- Added `CLAUDE.md` rules: (a) before any coding/development, re-read and keep in context the core
+  guides + relevant feature/test files; (b) every requirement is covered by a full set of tests
+  documented in `developer files/tests/`.
+- Created `developer files/features/` folder and added `feature_description_guide.md` —
   a full English
   guide for how to document every product feature. Defines: file naming (`F-<NNN>-<slug>.md`),
   an ID scheme for traceability to tests (`F-`, `US-`, `UC-`, `FR-`, `NFR-`), and the required
@@ -73,6 +88,10 @@
   major bump).
 - **Feature branching**: self-contained features go on a dedicated `feature/<short-name>`
   branch and may only be merged into `master` once all tests in `tests/` pass.
+- **Before coding**: re-read the core guides (`feature_description_guide.md`,
+  `test_driven_development.md`) and relevant feature/test files before starting development.
+- **Testing**: every requirement is covered by a whole set of tests (test specs in
+  `developer files/tests/`, test code in the repo-root `tests/` folder).
 - **Feedback logging**: whenever the user corrects an approach or states a preference, it is
   appended to the "Preferences and feedback" section of `CLAUDE.md` with a date, so it isn't
   repeated.
@@ -88,13 +107,17 @@
   as the north-star goal) plus a per-audience-segment pain → solution mapping.
 - `developer files/user_metrics.md` — qualitative (no numbers) description of the ideal use
   case and requirements per audience segment, plus shared quality dimensions.
-- `developer files/features/feature_description_guide.md` — guide for how to document features
+- `developer files/feature_description_guide.md` — guide for how to document features
   (structure, ID scheme, template, worked example). Individual feature files (`F-<NNN>-*.md`)
-  go in this folder — none written yet.
+  go in `developer files/features/` — none written yet.
+- `developer files/test_driven_development.md` — guide for how to design tests (set of tests per
+  requirement, levels/categories, ID scheme, template, worked example). Per-feature test specs
+  (`F-<NNN>-*.md`) go in `developer files/tests/` — none written yet.
 
 ## Current state of the codebase
 
 - No application code yet — the repository contains `CLAUDE.md` at the root, plus a
   `developer files/` folder with `VERSION`, `Audience.md`, `Project Concept.md`,
-  `user_metrics.md`, and this `PROJECT_STATUS.md`. No NeuroLady persona engine code has been
-  added so far.
+  `user_metrics.md`, `feature_description_guide.md`, `test_driven_development.md`, this
+  `PROJECT_STATUS.md`, and empty `features/` and `tests/` subfolders (kept via `.gitkeep`). No
+  NeuroLady persona engine code, and no repo-root `tests/` code folder, has been added so far.

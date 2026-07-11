@@ -1,5 +1,21 @@
 # NeuroLady_Final
 
+## Before writing code or starting development
+
+Whenever the user asks to **code, implement, build, or start developing** anything, first
+**re-read and keep in context** the project's core guide docs before doing the work:
+
+- `developer files/feature_description_guide.md` — how features are specified.
+- `developer files/test_driven_development.md` — how tests are designed (a whole set of tests
+  per requirement).
+- The relevant feature file(s) in `developer files/features/` and their test spec(s) in
+  `developer files/tests/`.
+- For product context: `developer files/Project Concept.md`, `developer files/Audience.md`,
+  `developer files/user_metrics.md`.
+
+Do not start implementing from memory — reload these each time so the work follows the agreed
+format (feature documented → requirements with IDs → full set of tests → then code).
+
 ## Git workflow: commit and push after every change
 
 After **any** change made to the project (new file, code edit, config change, etc.),
@@ -53,9 +69,15 @@ This rule applies going forward, once features start being implemented (applicat
 not documentation-only changes).
 
 Every feature is also documented as its own file in `developer files/features/`, following the
-format defined in `developer files/features/feature_description_guide.md` (user stories → user
-flows → Gherkin use cases → functional & non-functional requirements, each requirement with a
-stable ID that tests will later reference).
+format defined in `developer files/feature_description_guide.md` (user stories → user flows →
+Gherkin use cases → functional & non-functional requirements, each requirement with a stable ID).
+
+Every requirement must be covered by a **whole set of tests** (never just one), designed per
+`developer files/test_driven_development.md`. Each feature file has a mirror test spec in
+`developer files/tests/F-<NNN>-<slug>.md` enumerating all tests, with test IDs
+(`TC-<requirement-id>-<nn>`) that map back to the requirement IDs. Runnable test code lives in
+the repo-root `tests/` folder, and all of it must pass before a feature branch merges to
+`master`.
 
 ## Automatically logging user feedback and preferences
 

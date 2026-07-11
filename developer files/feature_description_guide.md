@@ -1,9 +1,12 @@
 # How to Describe Features — Guide
 
-This folder (`developer files/features/`) holds one Markdown file per product feature. Every
-feature file must follow the structure defined in this guide, so that features are consistent,
-reviewable, and — importantly — **traceable to tests**. Each requirement gets a unique ID, and
-later every requirement will have one or more tests (in the repo's `tests/` folder) that verify it.
+This guide lives at `developer files/feature_description_guide.md`. The `developer files/features/`
+folder holds one Markdown file per product feature. Every feature file must follow the structure
+defined in this guide, so that features are consistent, reviewable, and — importantly —
+**traceable to tests**. Each requirement gets a unique ID, and later every requirement will have
+a whole set of tests that verify it (test specs in `developer files/tests/`, test code in the
+repo-root `tests/` folder). See `developer files/test_driven_development.md` for how tests are
+written.
 
 Read this guide before writing a new feature file. A copy-paste template and a full worked
 example are at the bottom.
@@ -53,7 +56,7 @@ A short block at the top:
 - **One-line summary** of what the feature is.
 
 ### 3.1 — User stories
-Describe *what* the user wants and *why*, per user category (from `../Audience.md`). A feature
+Describe *what* the user wants and *why*, per user category (from `Audience.md`). A feature
 usually has several — write them **per user category**.
 
 Format (classic user story + the concrete "came here / clicked here / got this" narrative):
