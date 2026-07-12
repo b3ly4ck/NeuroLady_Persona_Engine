@@ -171,3 +171,10 @@ explicitly asks for it elsewhere.
   tests per requirement (≈100-150 per feature), not a fixed 1000+. Test spec file names must mirror
   the feature file names, and every test must be addressed to a specific `FR-`/`NFR-`/`US-` id via a
   consistent `TC-` id. Prefer varied, meaningful cases over raw count.
+- [2026-07-12] **Describe every feature maximally in detail** — do not compress important features.
+  F-002 was under-detailed relative to F-001; going forward each feature file must be thorough:
+  exhaustive user stories per relevant audience segment, complete user-flow diagrams, a rich set of
+  Gherkin use cases, and a full, granular set of `FR-`/`NFR-` requirements covering every facet of
+  the feature (not a minimal set). More detail in the feature spec is wanted, especially for the
+  important features. (This is about spec thoroughness; the ~2-3-tests-per-requirement rule above
+  still governs test count — more requirements simply yield more tests overall.)

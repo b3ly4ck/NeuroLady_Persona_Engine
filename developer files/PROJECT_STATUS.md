@@ -2,6 +2,13 @@
 
 ## Recent changes
 
+- **New rule (CLAUDE.md preference): describe every feature maximally in detail.** F-002 was
+  under-detailed relative to F-001; going forward each feature file must be thorough (exhaustive user
+  stories per segment, full flows, a rich set of Gherkin use cases, and a granular full `FR-`/`NFR-`
+  set). Spec thoroughness is separate from the ~2-3-tests-per-requirement rule (more requirements →
+  more tests overall). Next feature to be written under this rule: **F-003 — human-likeness of
+  communication** (reply pacing/timing, message length/volume, realistic emoji use, informal texting
+  register, variability, not-over-eager tone).
 - **Wrote the F-002 test spec: `developer files/tests/F-002-conversation-and-memory.md`**
   (mirror name of the feature file) — **115 tests total**: **73 functional** (FR-002-01..24, 3 each
   except FR-002-04 which has 4), **36 non-functional** (NFR-002-01..12, 3 each incl. 1 manual
