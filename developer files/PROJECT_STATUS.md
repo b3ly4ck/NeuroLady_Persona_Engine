@@ -2,6 +2,40 @@
 
 ## Recent changes
 
+- **Wrote the third feature file: `developer files/features/F-003-human-like-communication.md`**
+  (mirror-named after the coming test spec), written under the "describe every feature maximally in
+  detail" rule and deliberately **more thorough than F-002**. Follows `feature_description_guide.md`:
+  header + **Scope boundary** note, **10 user stories** (US-003-01..10, mapped to Audience segments
+  A1 "bot energy", A8 skeptic, A2 emotional texture, A4 unhurried pacing, A6 neurodivergent
+  literal/low-emoji, A7 gentle register, plus returning-user "same texting personality" continuity
+  and anti-repetition), **4 Mermaid user flows** (single paced reply with typing indicator; long
+  reply split into several messages; the emoji/register/variability styling path; not-over-eager
+  mood + in-exchange follow-up), **18 Gherkin use cases** (UC-003-01..18, incl. a Scenario Outline
+  for reply length → pace/chunk count), and **55 requirements — 38 functional (FR-003-01..38) + 17
+  non-functional (NFR-003-01..17)**. **Scope:** the **believability/delivery layer on top of
+  F-002's correct-reply loop** — it shapes *how* an already-decided reply is timed, chunked, and
+  styled (architecture.md §3.2 steps 4–6, §4.1 style-tuning, §4.2 communication-style, and the
+  per-persona **`comm_settings_json`** in §3.3/§5.1). Covers: deliberate **variable reply pacing**
+  with the Telegram "typing…" indicator (proportional to length, slower when "busy"/night, with an
+  **upper bound** so it never feels ignored); **message-length/volume realism** (split long replies
+  into several short consecutive messages with pauses+typing between chunks, no walls of text, no
+  bullet/essay/assistant formatting); **sparse persona-tuned emoji**; **informal texting register**
+  (casual lowercase, contractions, slang, rare typo, RU/EN localized); **anti-repetition** (varied
+  greetings/openings/catchphrases); a **not-over-eager, not-assistant-polite tone** with real mood
+  (tease/sulk/quiet) and an in-exchange short follow-up; and **per-persona tunability + style
+  consistency** driven by `comm_settings_json`. **Pacing-vs-fast-compute nuance handled
+  explicitly** (FR-003-07, NFR-003-02, UC-003-14): the deliberate pause is an **additive wait after
+  fast warm-model compute**, never an extension of compute — consistent with §4.1/F-002, not
+  contradictory. **Neurodivergent low-emoji tension handled** via a per-user interaction-style
+  overlay (FR-003-37, UC-003-09, NFR-003-14, US-003-05) that reduces emoji + increases literalness
+  on top of persona defaults. **Out of scope (stated in the Scope boundary):** reply *content* +
+  memory (→ **F-002**); onboarding/persona selection/intro (→ **F-001**); cold-start/model-load
+  latency itself (architecture.md §4.1/§6.1 — F-003 assumes fast compute); voice (ElevenLabs) and
+  photos/videos (later phases); autonomous **cross-session** proactive "she messages first" / daily
+  circles / Life Engine (separate feature — F-003's only proactivity is the in-exchange follow-up,
+  FR-003-32/33); monetization (deferred, §3.7). **Next step:** the mirror test spec
+  `developer files/tests/F-003-human-like-communication.md` per `test_driven_development.md`
+  (~2-3 tests per requirement, each `TC-` addressed to an `FR-`/`NFR-`/`US-` id).
 - **New rule (CLAUDE.md preference): describe every feature maximally in detail.** F-002 was
   under-detailed relative to F-001; going forward each feature file must be thorough (exhaustive user
   stories per segment, full flows, a rich set of Gherkin use cases, and a granular full `FR-`/`NFR-`
