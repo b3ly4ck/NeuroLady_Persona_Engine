@@ -2,6 +2,31 @@
 
 ## Recent changes
 
+- **Wrote the second feature file: `developer files/features/F-002-conversation-and-memory.md`**
+  (mirror-named after the coming test spec). Follows `feature_description_guide.md`: header +
+  **Scope boundary** note, **6 user stories** (US-002-01..06, mapped to Audience segments
+  A1/A2/A4/A6/A8 + returning user), **3 Mermaid user flows** (single conversation turn;
+  returning-days-later "she remembers"; skeptic probing memory/consistency), **11 Gherkin use cases**
+  (UC-002-01..11, incl. a varied-message Scenario Outline, plus first-reply, recent-raw-history
+  carry-through, fact extraction, old-fact recall, in-character-under-provocation, LLM
+  timeout/fallback, long-history trimming, no-cross-user-leakage, Russian reply, media-request
+  acknowledged-but-not-delivered), and **34 requirements** — **23 functional (FR-002-01..23)** +
+  **11 non-functional (NFR-002-01..11)**. **Scope:** the live **text** conversation turn + memory
+  that serve the reply loop (architecture.md §3.2/§3.4/§4.2/§4.6, DFD-1) — message intake → load
+  session/relationship → assemble context (persona prompt + biography layers + user facts +
+  relationship summary + **recent raw history verbatim, called out as its own hard-requirement
+  FR-002-04**) → uncensored Chat LLM call → post-process → in-character reply → persist `MESSAGE`
+  rows → extract + categorize + embed `USER_FACT` (Qdrant) → recall fused into later turns →
+  relationship-state update; covers empty/very-long history + context-budget trimming, LLM
+  timeout/fallback, per-user memory isolation, persona never-breaks-character, and Russian
+  localization. **Out of scope (stated in the Scope boundary):** onboarding/persona
+  selection/video-note intro (→ F-001); photo/video sending & media generation (Phase 2+, media
+  intent only *acknowledged* in-character); voice replies/ElevenLabs (future); the Life Engine's
+  autonomous planning/reflection/goals/proactive "she messages first" (separate feature — F-002
+  only consumes memory/relationship state as reply inputs); monetization/quota/subscriptions
+  (deferred, §3.7). **Next step:** the mirror test spec `developer files/tests/F-002-*.md` per
+  `test_driven_development.md` (~2-3 tests per requirement, each `TC-` addressed to an
+  `FR-`/`NFR-`/`US-` id).
 - **Wrote the F-001 test spec: `developer files/tests/F-001-onboarding-persona-selection.md`**
   (mirror name of the feature file) — **100 tests total**: 64 functional (FR-001-01..20, 3-4 each),
   30 non-functional (NFR-001-01..10, 3 each incl. 1 manual localization check), 6 manual real-device
