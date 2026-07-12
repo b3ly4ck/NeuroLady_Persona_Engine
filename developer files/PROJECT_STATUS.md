@@ -2,6 +2,19 @@
 
 ## Recent changes
 
+- **F-001 implementation complete on `feature/f-001-onboarding` — 48 tests green.** Added the
+  Telegram I/O layer (aiogram 3): `keyboards.py` (welcome Start button; ◀ counter ▶ + Start Chat
+  card kb; persistent reply kb 💋 Choose Lady + ≡ Menu; menu kb), `views.py` (pure `(text, keyboard)`
+  builders — system copy in user locale, card copy in the persona's language), `handlers/onboarding.py`
+  (/start → Welcome or resume; Start → gallery; card:<i> cyclic nav; startchat:<id> → session +
+  intro-once + reply kb; Choose Lady / Menu / Resume), `middlewares.py` (per-update DB session),
+  `app.py` + `__main__.py` (build_dispatcher + polling entrypoint; refuses to start without a token).
+  Intro delivery sends a video note from `intro_videonote_ref` when present, else a graceful text
+  fallback (FR-001-18). Tests: `test_f001_views.py` (9) + `test_f001_handlers.py` (10, handlers
+  driven with mocked aiogram objects over a real in-memory DB) on top of the 29 domain tests =
+  **48 passing**, covering FR-001-01..20 and NFR-001-04/09/10 behaviors. Remaining: **manual
+  real-device acceptance (TC-US-001-*)** in Telegram — needs the regenerated bot token — then merge
+  to `master`.
 - **Started F-001 implementation (branch `feature/f-001-onboarding`) — domain foundation, 29 tests
   green.** Stack: Python 3.11+, **aiogram 3.x**, **SQLAlchemy 2 async** + aiosqlite (dev). Added
   `pyproject.toml`, `services/bot/` package: `config.py` (env/.env via pydantic-settings, no
