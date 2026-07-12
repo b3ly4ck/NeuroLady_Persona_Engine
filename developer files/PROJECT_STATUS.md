@@ -2,6 +2,13 @@
 
 ## Recent changes
 
+- **Rewrote `architecture.md` §8 roadmap as a Mermaid diagram** and removed all billing/monetization
+  from it. New phase order (each phase depends on the previous): **Phase 1** conversation core
+  (chat LLM → orchestrator → memory → dynamic persona/Life Engine → voice replies); **Phase 2**
+  photo sending (SFW + intimate) via the night-batch image pipeline + `media/` archive; **Phase 3**
+  daily talking-head video circles (HunyuanVideo-Avatar); **Phase 4** intimate video (Wan 2.2);
+  **Phase 5** open-source Pygmalion packaging. The old "5-free-messages" and "photo-access
+  subscriptions" mentions were dropped (monetization is deferred, §3.7).
 - **Reworked the data model (`architecture.md` §5 ERD/DFD + related prose).** Product-driven
   changes to the persona/media schema:
   - **Removed `SCHEDULE_SLOT`.** The daily schedule now lives as **free text in

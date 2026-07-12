@@ -758,18 +758,54 @@ separation of text/image/video and per-module prompt storage.)
 
 ## 8. Implementation roadmap
 
-Phased delivery (from the product doc), building the Pygmalion framework incrementally:
+Phased delivery, building the Pygmalion framework incrementally. Each phase depends on the previous
+one; monetization/billing is **out of scope** for this roadmap (deferred, §3.7).
 
-1. **Telegram bot with uncensored conversation** — the Chat LLM + Orchestrator + Memory, the
-   5-free-messages/day model, basic persona(s).
-2. **Daily video circles with generated photo content** — talking-head daily circles
-   (HunyuanVideo-Avatar) + the night-batch image pipeline (Qwen-Image-Edit-Rapid-AIO) feeding
-   scheduled media.
-3. **Adult photo generation and data storage** — intimate photo/video archives per schedule, the
-   metadata model for sexting continuity, and photo-access subscriptions.
-4. **Open-source Pygmalion packaging** — package the persona engine (Digital Persona / Digital
-   Human / Digital Self) as the open-source **Pygmalion** framework for the B2B/engine and
-   academic audiences in `Audience.md`.
+```mermaid
+flowchart TB
+    subgraph P1["Phase 1 — Conversation core: she talks, remembers, feels alive"]
+        direction TB
+        P1a["Chat LLM connected<br/>Qwen3.5-35B-A3B-Uncensored"]
+        P1b["Conversation Orchestrator<br/>context assembly + recent raw history"]
+        P1c["Memory Service<br/>structured SQL facts + Qdrant semantic recall"]
+        P1d["Dynamic persona / Life Engine<br/>daily plan, reflections, goals,<br/>biography time-pyramid, relationship state"]
+        P1e["Personalized voice replies<br/>ElevenLabs"]
+        P1a --> P1b --> P1c --> P1d --> P1e
+    end
+    subgraph P2["Phase 2 — Photo sending (SFW + intimate)"]
+        direction TB
+        P2a["Image gen pipeline<br/>Qwen-Image-Edit-Rapid-AIO + LightX2V, night batch"]
+        P2b["media/ archive + MEDIA_ASSET metadata<br/>pose/background/location/activity"]
+        P2c["Media Delivery<br/>serves photo matching current activity"]
+        P2a --> P2b --> P2c
+    end
+    subgraph P3["Phase 3 — Daily video circles"]
+        direction TB
+        P3a["Talking-head circles<br/>HunyuanVideo-Avatar"]
+        P3b["Proactive daily 'story from her day'<br/>pushed to users"]
+        P3a --> P3b
+    end
+    subgraph P4["Phase 4 — Intimate videos"]
+        direction TB
+        P4a["Intimate video gen<br/>Wan 2.2 distilled, image+text to video, night batch"]
+        P4b["Sexting continuity via media metadata"]
+        P4a --> P4b
+    end
+    subgraph P5["Phase 5 — Open-source Pygmalion"]
+        direction TB
+        P5a["Package Digital Persona / Digital Human / Digital Self<br/>as the open-source Pygmalion framework<br/>(B2B/engine + academic audiences)"]
+    end
+    P1 --> P2 --> P3 --> P4 --> P5
+```
 
-Voice (ElevenLabs) and the full Persona Studio authoring flow are layered in across these phases;
-the initial roster target is **10 personas (5 RU + 5 EN)**.
+- **Phase 1** is the heart: everything user-facing about *communication* — from wiring the chat LLM
+  through to a fully realized memory system and a dynamic, "living" persona (Life Engine). Voice
+  replies (ElevenLabs) are part of communication and land here.
+- **Phase 2** adds photo sending (both SFW and intimate) via the night-batch image pipeline and the
+  `media/` archive.
+- **Phase 3** adds proactive **daily talking-head circles**.
+- **Phase 4** adds **intimate video**.
+- **Phase 5** packages the engine as the open-source **Pygmalion** framework.
+
+The full Persona Studio authoring flow is layered in across these phases; the initial roster target
+is **10 personas (5 RU + 5 EN)**.
