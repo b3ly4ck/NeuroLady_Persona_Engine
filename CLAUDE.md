@@ -178,3 +178,7 @@ explicitly asks for it elsewhere.
   the feature (not a minimal set). More detail in the feature spec is wanted, especially for the
   important features. (This is about spec thoroughness; the ~2-3-tests-per-requirement rule above
   still governs test count — more requirements simply yield more tests overall.)
+- [2026-07-12] Don't stack two consecutive bot messages that both nudge the user toward the same
+  action (e.g. an intro line asking "write me?" immediately followed by a separate "ready — say
+  something" message). It reads as robotic/redundant. Combine into one message and attach whatever
+  keyboard/markup is needed directly to it, rather than sending a second follow-up text.

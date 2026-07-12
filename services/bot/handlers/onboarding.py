@@ -11,10 +11,10 @@ import os
 
 from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
-from aiogram.types import CallbackQuery, FSInputFile, Message
+from aiogram.types import CallbackQuery, FSInputFile, Message, ReplyKeyboardMarkup
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from services.bot import views
+from services.bot import keyboards, views
 from services.bot.domain.gallery import list_gallery_personas
 from services.bot.domain.sessions import get_active_session, start_or_switch_session
 from services.bot.domain.users import get_or_create_user
@@ -38,21 +38,32 @@ async def _persona(db: AsyncSession, persona_id: int) -> Persona | None:
     return await db.get(Persona, persona_id)
 
 
-async def send_persona_intro(bot: Bot, chat_id: int, persona: Persona) -> str:
+async def send_persona_intro(
+    bot: Bot,
+    chat_id: int,
+    persona: Persona,
+    reply_markup: ReplyKeyboardMarkup | None = None,
+) -> str:
     """Deliver the persona's intro. Returns 'video_note' or 'fallback'.
 
     FR-001-11 (video-note circle from `intro_videonote_ref`), FR-001-18 (graceful text fallback if
     there is no usable circle), FR-001-20 (media belongs to the selected persona — it is *her* row),
     NFR-001-06 (a send error degrades to the fallback rather than crashing).
+
+    FR-001-12: `reply_markup` (the reply keyboard) is attached to this single intro message rather
+    than sent as a separate follow-up — the intro itself already invites a reply, so a second
+    "ready to chat" text would just repeat the same nudge (see CLAUDE.md preferences).
     """
     ref = persona.intro_videonote_ref
     if ref and os.path.exists(ref):
         try:
-            await bot.send_video_note(chat_id, video_note=FSInputFile(ref))
+            await bot.send_video_note(chat_id, video_note=FSInputFile(ref), reply_markup=reply_markup)
             return "video_note"
         except Exception:  # pragma: no cover - defensive; falls through to text fallback
             log.warning("intro video note failed for persona %s; using fallback", persona.id)
-    await bot.send_message(chat_id, t("intro_fallback", persona.language, name=persona.name))
+    await bot.send_message(
+        chat_id, t("intro_fallback", persona.language, name=persona.name), reply_markup=reply_markup
+    )
     return "fallback"
 
 
@@ -122,7 +133,12 @@ async def on_noop(cb: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("startchat:"))
 async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
-    """FR-001-10/11/12/14/17 — create/reuse/switch session, send intro (once), show reply keyboard."""
+    """FR-001-10/11/12/14/17 — create/reuse/switch session, send intro once, keyboard attached to it.
+
+    Only a single message is sent (the intro, carrying the reply keyboard) — no separate "ready to
+    chat" text follows it (FR-001-12; avoids two consecutive nudge messages). On a reused session
+    (double-tap on the same persona), nothing is (re-)sent — the chat is already ready.
+    """
     user = await _user_from(db, cb.from_user)
     persona_id = int(cb.data.split(":", 1)[1])
     persona = await _persona(db, persona_id)
@@ -131,9 +147,9 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
         return
     _, is_new_intro = await start_or_switch_session(db, user.id, persona_id)
     if is_new_intro:  # FR-001-17: a reused (double-tapped) session does not re-send the intro
-        await send_persona_intro(bot, cb.message.chat.id, persona)
-    text, kb = views.chat_ready_view(persona, user.locale)
-    await cb.message.answer(text, reply_markup=kb)
+        await send_persona_intro(
+            bot, cb.message.chat.id, persona, reply_markup=keyboards.reply_kb(user.locale)
+        )
     await cb.answer()
 
 

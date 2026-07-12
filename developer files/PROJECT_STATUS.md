@@ -2,6 +2,17 @@
 
 ## Recent changes
 
+- **Fixed a live-tested UX issue: Start Chat sent two stacked "please write" messages.** Live
+  Telegram testing showed the fallback intro ("Hey, it's Sofia 💋 ... write me?") immediately
+  followed by a separate "You're all set — say something" message — both nudging the same action,
+  reading as robotic/redundant. Fix: `send_persona_intro` now accepts a `reply_markup` and the
+  keyboard is attached directly to the single intro message (video note or fallback text); the
+  `on_start_chat` handler no longer sends a second `chat_ready_view` message. Updated `F-001`
+  **FR-001-12** to state this explicitly (keyboard attached to the intro delivery, no separate
+  follow-up), and logged the general pattern as a dated CLAUDE.md preference ("don't stack two
+  consecutive nudge messages"). Updated `test_uc_001_04_...` accordingly. **48/48 tests still
+  green.** (The `/start` resume path and the menu's "Resume chat" still show a single
+  `chat_ready_view` message each — those are not stacked with anything, so unaffected.)
 - **F-001 implementation complete on `feature/f-001-onboarding` — 48 tests green.** Added the
   Telegram I/O layer (aiogram 3): `keyboards.py` (welcome Start button; ◀ counter ▶ + Start Chat
   card kb; persistent reply kb 💋 Choose Lady + ≡ Menu; menu kb), `views.py` (pure `(text, keyboard)`

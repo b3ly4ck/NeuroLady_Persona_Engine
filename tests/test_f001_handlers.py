@@ -100,7 +100,9 @@ async def test_fr_001_06_03_nav_to_index(seeded_db):
 
 
 async def test_uc_001_04_start_chat_intro_and_ready(seeded_db):
-    """TC-FR-001-10/12/18 — Start Chat creates a session, sends a (fallback) intro, shows reply keyboard."""
+    """TC-FR-001-10/12/18 — Start Chat creates a session and sends ONE intro carrying the reply
+    keyboard (no separate 'ready to chat' message — see CLAUDE.md preference against stacked
+    nudges)."""
     await get_or_create_user(seeded_db, 1005, "en")
     persona = (await list_gallery_personas(seeded_db, "en"))[0]
     bot = AsyncMock()
@@ -111,8 +113,8 @@ async def test_uc_001_04_start_chat_intro_and_ready(seeded_db):
     assert active is not None and active.persona_id == persona.id
     bot.send_message.assert_awaited_once()      # fallback intro (seed persona has no video note)
     bot.send_video_note.assert_not_awaited()    # FR-001-18 graceful fallback
-    cb.message.answer.assert_awaited_once()      # chat-ready message with the reply keyboard
-    assert cb.message.answer.await_args.kwargs.get("reply_markup") is not None
+    assert bot.send_message.await_args.kwargs.get("reply_markup") is not None  # keyboard on the intro
+    cb.message.answer.assert_not_awaited()      # no second/duplicate "ready" message
 
 
 async def test_fr_001_17_01_double_tap_start_chat_single_intro(seeded_db):

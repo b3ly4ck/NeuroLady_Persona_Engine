@@ -198,7 +198,11 @@ Feature: F-001 Onboarding & Persona Selection
 - **FR-001-11** — On starting a chat, the selected persona must send her intro as a Telegram
   **video note (circle)** from her stored `intro_videonote_ref`.
 - **FR-001-12** — After the intro, the system must show a **reply keyboard** containing a
-  **"💋 Choose Lady"** button and a **menu (≡)** button, leaving the chat ready for input.
+  **"💋 Choose Lady"** button and a **menu (≡)** button, leaving the chat ready for input. The
+  keyboard must be attached to the **intro delivery itself** (the video note or the FR-001-18
+  fallback message) — the system must **not** send a second, separate "ready to chat" text right
+  after the intro, since the intro already invites a reply; stacking two consecutive nudge
+  messages reads as unnatural/robotic (see `user_metrics.md` conversational-realism bar).
 - **FR-001-13** — Tapping **"💋 Choose Lady"** from the chat must reopen the "Choose Lady" gallery.
 - **FR-001-14** — Selecting a different persona via "Start Chat" must **switch the active session** to
   that persona and send her intro.
