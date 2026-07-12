@@ -201,6 +201,15 @@ Feature: F-002 Conversation & Memory
     When the user asks the persona to send a photo or video
     Then the persona acknowledges the request in-character in text
     But no media is generated or delivered in this feature (deferred to a later phase)
+
+  Scenario: UC-002-12 A message arriving while the model is still loading is not left hanging
+    Given the chat LLM is still loading/warming up (e.g. during the night to day reload)
+    When the user sends a message before the model is ready
+    Then the user is immediately acknowledged with a "typing" indicator and/or a short
+        in-character holding line
+    And the real in-character reply is delivered once the model is warm, within the bounded
+        cold-start worst case
+    But no system-voice or "model is loading" text is ever shown to the user
 ```
 
 ---
@@ -268,11 +277,17 @@ Feature: F-002 Conversation & Memory
   acknowledgement.
 - **FR-002-23** — Fact extraction, embedding, and relationship-state updates must run **without
   blocking the user-visible reply** — the reply is not delayed waiting on memory writes.
+- **FR-002-24** — If a user message arrives while the **chat LLM is not yet ready** (cold/loading —
+  e.g. during the night→day model reload), the system must **immediately acknowledge** the user — a
+  Telegram "typing…" indicator and/or a short **in-character** holding line (never a system/"model is
+  loading" message, per NFR-002-10) — instead of leaving the chat frozen, and must deliver the real
+  reply once the model is warm.
 
 ### Non-functional
 
-- **NFR-002-01** — Under normal conditions the persona's text reply must be delivered in **under 5
-  seconds** from message receipt (allowing a natural human-pacing pause within that budget).
+- **NFR-002-01** — Under normal conditions **with a warm (already-loaded) model**, the persona's
+  text reply must be delivered in **under 5 seconds** from message receipt (allowing a natural
+  human-pacing pause within that budget).
 - **NFR-002-02** — **Memory recall must be correct and relevant**: when the current message relates
   to a previously stored fact, the relevant fact must be retrieved and made available to the context,
   and irrelevant facts must not dominate the recall set.
@@ -299,3 +314,9 @@ Feature: F-002 Conversation & Memory
 - **NFR-002-11** — Every turn must be **idempotent/safe against duplicate sends** (double-tap, resend,
   retry): a single logical user message must not produce duplicate replies or duplicate stored
   facts.
+- **NFR-002-12** — **Model cold-start must not leak to users.** The chat LLM must be **pre-loaded and
+  warmed before the awake/serving window opens** (per architecture.md §4.1/§6.1) and kept resident
+  during awake hours, so steady-state replies always hit a warm model and meet NFR-002-01. A **cold
+  reply** (a message that unavoidably arrives while the model is still loading — e.g. during the
+  night→day reload) must be bounded to a **defined worst-case load+reply time** and must never hang
+  the chat indefinitely.

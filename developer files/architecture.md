@@ -365,6 +365,21 @@ stored per-module, never inlined ad hoc.
 - Served **self-hosted** at an FP8/quantized precision sized to the GPU (the repo ships
   quantizations from ~11 GB IQ2 up to ~69 GB BF16). Loaded during awake hours, unloaded at night
   to free the GPU for media (§6.1).
+- **Model-load ("cold-start") latency is a first-class concern.** Loading a multi-GB model onto the
+  GPU and warming it up takes real time; if a user's message hits a **cold** model (first request
+  after startup, after the night unload, or after a model swap), the naive reply time can be tens of
+  seconds — unacceptable for a "she feels like a real person" product. The design therefore requires:
+  - **Pre-warming:** the serving layer **pre-loads and warms the chat LLM before the awake/serving
+    window opens** (a warm-up inference on boot and right after the night→day reload), so a user
+    never pays the cold-start cost. See the day/night scheduler in §6.1.
+  - **Keep-warm:** during awake hours the model stays **resident/pinned** on the GPU — it is not
+    lazily unloaded between messages — so steady-state replies hit a warm model.
+  - **Graceful cold path:** if a message does arrive while the model is still loading (unavoidable
+    edge, e.g. a request during the reload window), the user must be **immediately acknowledged**
+    (Telegram "typing…" indicator and/or a short in-character "one sec…" line) rather than left with
+    a frozen chat, and the real reply delivered once the model is ready, within a bounded worst case.
+  - This warm-vs-cold distinction is reflected in the reply-latency requirements of the conversation
+    feature (`features/F-002-*`).
 - Style-tuning per persona (voice/register); configurable decoding (temperature, etc.) exposed as
   persona/communication settings. The serving interface is fixed so the model can still be swapped
   after evaluation.
@@ -642,7 +657,7 @@ flowchart LR
     META1 --> OBJ[(media/ archive: file named by MED-id)]
     META2 --> OBJ
     OBJ --> SQLm[(MEDIA_ASSET rows)]
-    WAKE[Wake window] --> RELOAD[Reload chat LLM]
+    WAKE[Wake window] --> RELOAD[Reload + warm up chat LLM<br/>before serving opens]
 ```
 
 ---
@@ -658,6 +673,14 @@ flowchart LR
   queue) that, at sleep time, drains chat traffic, **unloads the chat LLM**, and starts the
   **image/video batch workers**; at wake time reverses it. Media jobs are queued so the night
   window processes the next day's archive.
+- **Warm-up before serving (cold-start mitigation):** the night→day transition must **finish
+  reloading *and* warming up the chat LLM (a warm-up inference) before the awake/serving window
+  opens** — users must never eat the model-load latency (§4.1). The scheduler treats "model warm"
+  (not merely "process started") as the readiness gate for accepting chat traffic; the awake window
+  is only declared open once a warm-up inference has succeeded. If a message somehow arrives while
+  the model is still loading, the Bot Gateway/Orchestrator immediately sends a "typing…" indicator
+  (and/or a short in-character holding line) and delivers the reply once ready. Observability
+  (§6.4) alerts if the model is not warm at the start of the serving window.
 
 ### 6.2 Data stores
 - **Relational DB** (e.g. PostgreSQL) for structured entities (§5.1).
@@ -732,8 +755,10 @@ separation of text/image/video and per-module prompt storage.)
   media/GPU workers deployed with the day/night scheduler config.
 - **Environments:** local (compose, single GPU) → staging → production.
 - **Observability:** logs/metrics/traces per service; GPU/queue depth dashboards for the night
-  batch; alerting on failed reflections or empty media archives (a persona must never wake up
-  with no media for the day).
+  batch; **chat-LLM readiness/warm-up metrics** (load time, warm-vs-cold reply latency); alerting on
+  failed reflections, empty media archives (a persona must never wake up with no media for the day),
+  or **the chat LLM not being warm at the start of a serving window** (cold-start would leak to
+  users).
 
 ### 6.5 Security, privacy, compliance
 - Adult verification for intimate media; jurisdiction rules honored. (Entitlement/paywall gating is

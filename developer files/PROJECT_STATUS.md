@@ -2,6 +2,18 @@
 
 ## Recent changes
 
+- **Added model cold-start / warm-up latency as a first-class concern** across the docs. In
+  `architecture.md`: §4.1 gets a bullet on model-load ("cold-start") latency requiring **pre-warming
+  before the serving window, keep-warm (resident) during awake hours, and a graceful cold path**
+  (immediate "typing…"/in-character holding line if a request hits a loading model); §6.1 day/night
+  scheduler must finish **reload + warm-up inference before the awake window opens** and treats "model
+  warm" (not "process started") as the readiness gate; DFD-3 wake node updated to "reload + warm up
+  before serving"; §6.4 observability adds chat-LLM readiness/warm-up metrics + an alert if the model
+  isn't warm at the start of a serving window. In `F-002`: refined **NFR-002-01** (the <5s budget is
+  for a **warm** model), added **NFR-002-12** (cold-start must not leak to users; pre-warm + bounded
+  worst-case cold reply), **FR-002-24** (immediate in-character acknowledgement while the model
+  loads), and **UC-002-12** (message during model load is not left hanging). F-002 now has 24 FR +
+  12 NFR + 12 UC.
 - **Wrote the second feature file: `developer files/features/F-002-conversation-and-memory.md`**
   (mirror-named after the coming test spec). Follows `feature_description_guide.md`: header +
   **Scope boundary** note, **6 user stories** (US-002-01..06, mapped to Audience segments
