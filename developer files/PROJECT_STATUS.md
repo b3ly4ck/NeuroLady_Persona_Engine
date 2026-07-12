@@ -2,6 +2,19 @@
 
 ## Recent changes
 
+- **Wrote the F-003 test spec: `developer files/tests/F-003-human-like-communication.md`**
+  (mirror name of the feature file) — **147 tests total**: **97 functional** (FR-003-01..38, 2-3
+  each), **41 non-functional** (NFR-003-01..17, 2-3 each incl. 1 manual localization check
+  TC-NFR-003-05-03), and **9 manual real-device acceptance tests** keyed to the user stories
+  (US-003-01..09). Coverage verified: **38/38 FR, 17/17 NFR, 9/9 US**. Every `TC-` id embeds the
+  `FR-`/`NFR-`/`US-` id it verifies; cases vary across unit / integration / component / e2e /
+  performance / load / statistical / concurrency / error and happy / negative / boundary / mapping /
+  consistency / persistence / localization / idempotency. Because F-003 governs *delivery/style*
+  (not content), tests assert on timing (delay bounded & additive-not-slowing-compute, typing
+  indicator), chunking (ordering/integrity, natural boundaries, capped count), emoji/register/slang
+  realism, anti-repetition (statistical), per-persona + per-user style tunability, and the
+  correctness-preservation boundary (FR-003-38). Sits near the top of the 100-150 band by design (55
+  requirements). **Next step:** implementation of Phase 1 once the F-001/F-002/F-003 specs are approved.
 - **Verified F-003 spec and documented its `comm_settings_json` dependency in `architecture.md`.**
   Reviewed the F-003 feature file end-to-end: sections complete per the guide; IDs confirmed as
   **9 US (US-003-01..09) / 18 UC / 38 FR / 17 NFR** with valid F-002 cross-refs. Fixed one dangling
