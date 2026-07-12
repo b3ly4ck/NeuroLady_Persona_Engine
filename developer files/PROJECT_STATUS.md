@@ -2,6 +2,25 @@
 
 ## Recent changes
 
+- **Wrote the F-004 test spec: `developer files/tests/F-004-memory-system.md`** (mirror name of the
+  feature file) — **147 tests total**: **98 functional** (FR-004-01..43, 2 each, 3 for the 12 critical
+  ones: FR-004-04/05/07/09/10/11/21/24/25/36/39/40), **39 non-functional** (NFR-004-01..18, 2 each,
+  3 for the 3 critical ones: NFR-004-03/07/16), and **10 manual real-device acceptance tests** keyed
+  to the user stories (US-004-01..10). **Coverage verified by grep: 43/43 FR, 18/18 NFR, 10/10 US,
+  no numbering gaps; grand total 147 in the 100-150 band.** Every `TC-` id embeds the `FR-`/`NFR-`/
+  `US-` id it verifies; cases vary across unit / integration / inter-service / data-flow / component /
+  e2e / performance / load / security / consistency / concurrency / persistence and happy / negative /
+  boundary / empty / error / idempotency / mapping. Because F-004 is the **memory subsystem itself**
+  (not the reply loop), tests assert on **storage, dual-store referential integrity (SQL row ↔
+  `embedding_ref` ↔ vector-point payload), fact categorization, semantic recall of old facts,
+  structured recall by active-only category, fact supersession (old soft-superseded / new active /
+  re-embed), persona biography answered by scope with no self-contradiction across layers, fused
+  `query` ranking/relevance, per-user isolation (security tests on the vector owner-filter),
+  retention across restart, re-embed on update, reconciliation/drift healing, Qdrant-down graceful
+  degrade, and export/delete from BOTH stores** — reply-content correctness stays owned by F-002.
+  A boundary note states F-002's own spec tests the turn that *uses* memory while this spec tests the
+  subsystem *behind* that call. **Next step:** implementation of Phase 1 (conversation core + memory)
+  once the F-001..F-004 specs are approved.
 - **Started the codebase (infra foundation).** Added `architecture.md` **§6.2c — dependency
   isolation & model-runner environments**: each self-hosted model is its own isolated runner
   (own env + weights) behind a fixed network API; locally one `uv` venv per runner
