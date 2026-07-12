@@ -2,6 +2,23 @@
 
 ## Recent changes
 
+- **Wrote the F-002 test spec: `developer files/tests/F-002-conversation-and-memory.md`**
+  (mirror name of the feature file) — **115 tests total**: **73 functional** (FR-002-01..24, 3 each
+  except FR-002-04 which has 4), **36 non-functional** (NFR-002-01..12, 3 each incl. 1 manual
+  localization check TC-NFR-002-06-03), and **6 manual real-device acceptance tests** keyed to the
+  user stories (US-002-01..06). Every `TC-` id embeds the `FR-`/`NFR-`/`US-` id it verifies; cases
+  vary across unit / integration / inter-service / data-flow / component / e2e / performance / load /
+  security / consistency and happy / negative / boundary / empty / error / concurrency / idempotency /
+  localization / persistence / mapping. Walks DFD-1 (conversation turn) and the failover/cold-start
+  paths. Explicitly covers the **cold-start** items: warm-model latency (NFR-002-01), pre-warm +
+  keep-warm + bounded cold reply (NFR-002-12), and the in-character typing/holding-line
+  acknowledgement while the model loads with no system-voice leak (FR-002-24); plus memory behaviors
+  (fact extraction/categorization/embedding FR-002-10..12, semantic + unprompted old-fact recall
+  FR-002-13..14, recent-raw-history hard requirement FR-002-04), persona-never-breaks-character
+  (FR-002-08 / NFR-002-10), per-user memory isolation (FR-002-20 / NFR-002-07 security),
+  LLM/Qdrant failover degrade-don't-fail (FR-002-19 / NFR-002-04/05), and Russian localization
+  (FR-002-21 / NFR-002-06). Count verified in-band (100-150). **Next step:** implementation of the
+  conversation core (Phase 1) once feature+test specs are approved.
 - **Added model cold-start / warm-up latency as a first-class concern** across the docs. In
   `architecture.md`: §4.1 gets a bullet on model-load ("cold-start") latency requiring **pre-warming
   before the serving window, keep-warm (resident) during awake hours, and a graceful cold path**
