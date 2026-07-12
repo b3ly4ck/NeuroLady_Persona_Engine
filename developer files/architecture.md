@@ -217,12 +217,12 @@ Representative endpoints (illustrative, not exhaustive — finalized per feature
 **Life Engine**
 - `POST /life/plan/day` — generate today's plan for a persona.
 - `POST /life/reflect` — trigger a reflection (day/week/month/…); internal/scheduled.
-- `GET /life/schedule/{personaId}?date=` — the persona's schedule for a day (drives media).
+- `GET /life/plan/{personaId}?date=` — the persona's day plan (schedule as free text; drives media).
 
 **Media Delivery Service**
 - `POST /media/request` — `{userId, personaId, type: photo|video, intimate: bool}` → returns a
-  media item consistent with the persona's *current* schedule slot, plus its metadata (pose,
-  background, location) for sexting continuity.
+  media item consistent with the persona's *current activity* (derived from her day plan + current
+  time), plus its metadata (pose, background, location, activity) for sexting continuity.
 - `GET /media/archive/{personaId}?date=` — list the day's pre-generated archive (internal).
 
 **Subscription/Billing**
@@ -287,8 +287,12 @@ Owns a single user turn end-to-end:
 ### 3.5 Life Engine (persona "living" — highest-value subsystem)
 Runs the persona's simulated life on a schedule. Components:
 - **Planner:** at a set time (e.g. early morning) sends a system prompt to the reflection LLM
-  ("You are Alina, characteristics …, plan your day") → produces a **daily plan** + **schedule**
-  (time slots with location/activity), stored in SQL. The schedule drives media generation.
+  ("You are Alina, characteristics …, plan your day") → produces a **daily plan with a schedule
+  written as free text** (activities across the day with rough times/locations), stored in
+  `DAILY_PLAN.plan_text`. There is **no structured slot table**: when media is generated, the
+  external LLM is handed this schedule text + the persona's **current time** (from
+  `PERSONA.timezone`) and asked to write a generation prompt for the setting matching her current
+  activity (§4.3).
 - **Reflector:** at end of day, prompts the LLM to **reflect** on the day given today's plan +
   events + prior lore → stores a **daily reflection**. Reflections **compress hierarchically**:
   7 daily → 1 weekly; ~4 weekly → 1 monthly; 12 monthly → 1 yearly; years → **epochs**
@@ -297,8 +301,8 @@ Runs the persona's simulated life on a schedule. Components:
   so she isn't only reactive — she has direction. Goals are stored, revisited, and updated.
 - **Relationship reflection:** per (user, persona), periodic reflection on how the relationship is
   developing, updating a **relationship state/scale** (see §4.6) that colors future replies.
-- Emits jobs to the queue (e.g. "generate tomorrow's media for schedule X") and schedules the
-  **proactive daily video circle** (a talking-head "story from her day" pushed to subscribers).
+- Emits jobs to the queue (e.g. "generate tomorrow's media from the day plan") and schedules the
+  **proactive daily video circle** (a talking-head "story from her day" pushed to users).
 
 ```mermaid
 flowchart LR
@@ -314,14 +318,17 @@ flowchart LR
 ```
 
 ### 3.6 Media Delivery Service
-- Serves pre-generated media matching the persona's **current schedule slot** (gym selfie during
-  the gym slot, office selfie during the office slot, etc.).
-- Enforces entitlement + adult verification for intimate content.
+- Serves pre-generated media matching the persona's **current activity**, derived from the current
+  time (per `PERSONA.timezone`) against the `DAILY_PLAN.plan_text` schedule (gym selfie around her
+  gym time, office selfie during work, etc.).
+- Enforces **adult verification** for intimate content.
 - Returns the media **plus its metadata** (pose, background, location, intimacy level) so the
   Orchestrator/LLM can **sext consistently** ("knows what she sent").
 - Never generates on the hot path — only reads the day's archive from object storage.
 
-### 3.7 Subscription/Billing Service
+### 3.7 Subscription/Billing Service (deferred — not in current scope)
+> **Monetization is parked for now.** There are no subscription/usage tables in §5.1 and nothing
+> here is being built yet. This subsection is kept as the intended *future* design so it isn't lost.
 - **Free-message metering:** enforces **5 free messages/day** per user (per persona), resetting
   daily; beyond the quota requires a subscription.
 - **Photo/video access:** erotic photo access sold as **daily / weekly / monthly** subscriptions,
@@ -387,12 +394,13 @@ video models below, so the night batch fits the sleep window on our own GPU.
   ~28 GB checkpoint), running at **4–8 steps**. The NSFW branch has community LoRAs (`snofs`,
   `qwen4play`, …) baked in. Conditioned on each persona's **reference images** to keep appearance
   identity-consistent (Qwen-Image-Edit-2511 is tuned specifically for character consistency across
-  edits). For each schedule slot it generates a set of **SFW** shots (gym selfie, office photo, …)
-  and a set of **intimate** shots → the day's archive.
+  edits). Guided by the day plan + current time (the external LLM writes the generation prompt for
+  her current activity/setting, §3.5), it produces **SFW** shots (gym selfie, office photo, …) and
+  **intimate** shots → the day's archive.
 - **Video — two separate models for two jobs:**
   - **Intimate / no-speech video → `Wan 2.2` (distilled).** Best-in-class body anatomy and motion
     realism; image+text → video, self-hosted night batch, accelerated by LightX2V's Wan 4-step
-    distillation. Ideally one per schedule slot/location, at varying intimacy.
+    distillation. Ideally one per planned activity/location, at varying intimacy.
   - **Talking-head video circles → `HunyuanVideo-Avatar`.** Drives the intro note and the
     **proactive daily story circles** from a persona image + voice/script. Chosen for its
     audio-driven emotion (Audio Emotion Module) and face-aware audio adapter, giving lifelike
@@ -459,16 +467,12 @@ erDiagram
     USER ||--o{ SESSION : has
     PERSONA ||--o{ SESSION : hosts
     USER ||--o{ USER_FACT : reveals
-    USER ||--o{ SUBSCRIPTION : holds
-    USER ||--o{ DAILY_USAGE : meters
     SESSION ||--o{ MESSAGE : contains
     PERSONA ||--o{ BIOGRAPHY_LAYER : has
     PERSONA ||--o{ DAILY_PLAN : has
     PERSONA ||--o{ REFLECTION : has
     PERSONA ||--o{ GOAL : pursues
-    PERSONA ||--o{ SCHEDULE_SLOT : has
     PERSONA ||--o{ MEDIA_ASSET : owns
-    SCHEDULE_SLOT ||--o{ MEDIA_ASSET : "produces context for"
     USER ||--o{ RELATIONSHIP : in
     PERSONA ||--o{ RELATIONSHIP : in
     RELATIONSHIP ||--o{ RELATIONSHIP_REFLECTION : logs
@@ -485,15 +489,18 @@ erDiagram
         name
         profession
         age
+        timezone "IANA tz, e.g. Europe/Moscow — defines her current time"
         card_description "first-person gallery teaser"
         language "ru|en"
         status
-        avatar_ref
-        gallery_photo_ref
-        intro_videonote_ref
-        big_five_json
-        voice_profile_ref
+        big_five "plain-text description of the Big Five traits (not JSON)"
         comm_settings_json
+        face_ref "media path: face reference photo"
+        fullbody_ref "media path: full-body reference photo"
+        avatar_ref "media path"
+        gallery_photo_ref "media path"
+        intro_videonote_ref "media path"
+        voice_profile_ref "media path"
         created_at
     }
     SESSION {
@@ -534,15 +541,6 @@ erDiagram
         date
         plan_text
     }
-    SCHEDULE_SLOT {
-        id PK
-        persona_id FK
-        date
-        start_time
-        end_time
-        location
-        activity
-    }
     REFLECTION {
         id PK
         persona_id FK
@@ -573,39 +571,30 @@ erDiagram
         content
     }
     MEDIA_ASSET {
-        id PK
+        id PK "MED-<persona>-<nnnnn>; also the file name"
         persona_id FK
-        schedule_slot_id FK "nullable"
         kind "photo|video|videonote"
         intimate  bool
         intimacy_level
-        storage_ref "object storage"
-        meta_json "pose|background|location"
+        storage_ref "media path under media/<persona>/..."
+        meta_json "pose|background|location|activity|time_of_day"
         created_at
-    }
-    SUBSCRIPTION {
-        id PK
-        user_id FK
-        tier
-        photo_access "none|daily|weekly|monthly"
-        entitlements_json
-        status
-        renews_at
-    }
-    DAILY_USAGE {
-        id PK
-        user_id FK
-        persona_id FK
-        date
-        free_messages_used "0..5"
     }
 ```
 
-- `DAILY_USAGE` enforces the **5-free-messages/day** quota (per user, per persona), reset daily.
+- **All persona `*_ref` fields and `MEDIA_ASSET.storage_ref` are relative paths** into the external
+  **`media/`** library (§6.3): `media/<persona_slug>/…`. Every generated media file is named by its
+  `MEDIA_ASSET.id` (scheme **`MED-<persona>-<nnnnn>`**), so a DB row and its file map **1:1** and IDs
+  stay uniform across the project.
 - **Vector DB (Qdrant)** stores embeddings referenced by `USER_FACT.embedding_ref` and
   `BIOGRAPHY_LAYER.embedding_ref` for semantic retrieval (the "Digital Self").
-- **Object storage** holds the actual media binaries referenced by `MEDIA_ASSET.storage_ref`
-  (and persona reference images / intro notes).
+- The persona's **daily schedule is kept as free text inside `DAILY_PLAN.plan_text`** — there is no
+  structured slot table. Media-generation prompts are synthesized on demand by giving the external
+  LLM the schedule text + the persona's **current time** (from `PERSONA.timezone`) and asking for a
+  prompt matching her current activity (§3.5, §4.3).
+- **Monetization is deferred:** subscription/usage tables (and the 5-free-messages quota) are
+  intentionally **out of the current data model** and will be added when billing is implemented
+  (§3.7).
 
 ### 5.2 Data-Flow Diagrams (DFD)
 
@@ -631,8 +620,8 @@ flowchart LR
 ```mermaid
 flowchart LR
     CRON[Scheduler] --> PLAN[Planner -> External LLM]
-    PLAN --> SQLp[(DAILY_PLAN + SCHEDULE_SLOT)]
-    SQLp --> JOBS[Enqueue media jobs]
+    PLAN --> SQLp[(DAILY_PLAN - plan + schedule as text)]
+    SQLp --> JOBS[Enqueue media jobs - prompt from plan text + current time]
     EOD[End of day] --> REF[Reflector -> External LLM]
     REF --> SQLr[(REFLECTION)]
     SQLr --> COMPRESS[Hierarchical compression day->...->epoch]
@@ -648,9 +637,9 @@ flowchart LR
     UNLOAD --> GPU[Free GPU]
     Q[[Media job queue]] --> IMG[Image gen img2img + refs]
     Q --> VID[Video gen image+text]
-    IMG --> META1[Tag pose/background/location/intimacy]
+    IMG --> META1[Tag pose/background/location/activity/intimacy]
     VID --> META2[Tag metadata]
-    META1 --> OBJ[(Object storage: day archive)]
+    META1 --> OBJ[(media/ archive: file named by MED-id)]
     META2 --> OBJ
     OBJ --> SQLm[(MEDIA_ASSET rows)]
     WAKE[Wake window] --> RELOAD[Reload chat LLM]
@@ -702,7 +691,7 @@ services/
   memory/
   life_engine/         # planning, reflection, goals, relationship + prompts/
   media_delivery/
-  billing/
+  billing/             # DEFERRED - monetization parked (§3.7), no tables yet
 image/                 # image generation module
   prompts/
   models/              # Qwen-Image-Edit-Rapid-AIO (v23 NSFW) + LightX2V accel
@@ -716,9 +705,24 @@ chat/                  # chat LLM serving (Qwen3.5-35B-A3B-Uncensored) + prompts
 persona_studio/        # local persona authoring interface
 infra/                 # compose/k8s, schedulers, CI/CD
 tests/                 # runnable tests (gates merges) - see TDD guide
+
+media/                 # EXTERNAL media library - one folder per persona; paths stored in DB
+  <persona_slug>/      # e.g. alina/
+    reference/         # identity anchors that condition image/video gen
+      face.png         # PERSONA.face_ref
+      fullbody.png     # PERSONA.fullbody_ref
+    gallery/           # "Choose Lady" card image(s)  -> PERSONA.gallery_photo_ref
+    avatar/            # chat-header avatar            -> PERSONA.avatar_ref
+    intro/             # intro video note (circle)     -> PERSONA.intro_videonote_ref
+    voice/             # voice profile sample(s)        -> PERSONA.voice_profile_ref
+    photos/            # generated photo archive - files named <MED-id>.png
+    videos/            # generated video archive - files named <MED-id>.mp4
 ```
-(Exact names finalized during implementation; the principle is strict separation of text/image/
-video and per-module prompt storage.)
+Every persona keeps all her material under `media/<persona_slug>/`. Generated files are named by
+their `MEDIA_ASSET.id` (`MED-<persona>-<nnnnn>`), so DB rows and files map 1:1 and IDs are uniform.
+In production this `media/` tree is backed by object storage (MinIO/S3, §6.2); the layout above is
+the logical structure. (Exact names finalized during implementation; the principle is strict
+separation of text/image/video and per-module prompt storage.)
 
 ### 6.4 CI/CD
 - **CI:** on every push/PR — lint, unit + integration tests, contract tests; build images.
@@ -732,7 +736,8 @@ video and per-module prompt storage.)
   with no media for the day).
 
 ### 6.5 Security, privacy, compliance
-- Adult verification + entitlement gating for intimate media; jurisdiction rules honored.
+- Adult verification for intimate media; jurisdiction rules honored. (Entitlement/paywall gating is
+  deferred together with billing, §3.7.)
 - Encrypted secrets, least-privilege service tokens, encrypted media at rest.
 - Per-user data export/delete to satisfy privacy expectations (and the academic/ethics framing in
   `Project Concept.md`).

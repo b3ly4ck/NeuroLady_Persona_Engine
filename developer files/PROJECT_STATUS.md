@@ -2,6 +2,25 @@
 
 ## Recent changes
 
+- **Reworked the data model (`architecture.md` §5 ERD/DFD + related prose).** Product-driven
+  changes to the persona/media schema:
+  - **Removed `SCHEDULE_SLOT`.** The daily schedule now lives as **free text in
+    `DAILY_PLAN.plan_text`**. Media-gen prompts are synthesized on demand by handing the external
+    LLM the schedule text + the persona's current time and asking for a prompt matching her current
+    activity (updated §3.5, §3.6, §4.3, DFD-2, and the `/media/request` + `/life/plan` API notes).
+  - **Removed `MEDIA_ASSET.schedule_slot_id`;** `meta_json` now also carries `activity` +
+    `time_of_day`. `MEDIA_ASSET.id` uses scheme **`MED-<persona>-<nnnnn>`** and is also the file name.
+  - **`PERSONA` changes:** `big_five_json` → **`big_five`** (plain text, for uniformity); added
+    **`timezone`** (IANA, defines her "current time"); added explicit reference-photo paths
+    **`face_ref`** + **`fullbody_ref`**; all `*_ref` fields documented as **relative paths** into a
+    new external **`media/`** library.
+  - **New external `media/` folder** (§6.3), one subfolder per persona
+    (`media/<persona_slug>/{reference,gallery,avatar,intro,voice,photos,videos}`); generated files
+    named by their `MED-id` so DB rows ↔ files map 1:1. Backed by object storage (MinIO/S3) in prod.
+  - **Removed `SUBSCRIPTION` and `DAILY_USAGE` tables** — monetization is deferred; `§3.7 Billing`,
+    the `billing/` dir, and `§6.5` entitlement gating are marked deferred (the intended future
+    design is kept, but no tables/paywall are in the current model). Note: `§1` UX copy and `§2.2`
+    still mention the future 5-free-messages/subscription flow as intent.
 - **Locked in the concrete self-hosted model stack** (replacing the earlier "candidate" lists)
   across `architecture.md` (§0 diagram, Pygmalion framework, §4.1, §4.3, §4.7, §6.2b, §6.3, §8)
   and `Project Concept.md`. Decisions:
