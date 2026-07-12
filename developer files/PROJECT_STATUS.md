@@ -2,6 +2,23 @@
 
 ## Recent changes
 
+- **Closed the 6 architecture gaps F-004 relies on (`architecture.md`), so the schema matches the
+  feature.** (1) **`USER_FACT`** gains `status (active|superseded)`, `superseded_by`, `confidence`,
+  `updated_at` — enabling fact supersession/recency (F-004 FR-004-11..14). (2) **Vector point-payload
+  contract** documented in §3.4: every Qdrant point carries `user_id` (facts) / `persona_id`
+  (biography) in its payload and all semantic queries filter by these keys — provable per-user
+  isolation (NFR-002-07). (3) **Memory export/delete endpoints** added to §2.2:
+  `GET`/`DELETE /memory/user-data/{userId}` (erase from both stores), wired into §6.5. (4)
+  **Life-Engine→Memory write contract** `POST /memory/biography-layer` (upsert + re-embed a layer;
+  Memory stores/indexes, Life Engine authors). (5) **Store reconciliation/repair** added to §3.4
+  (heal orphan/missing embeddings + drift) with new **memory-store consistency metrics + drift alert**
+  in §6.4. (6) **`scope` vs epoch-name reconciliation:** `BIOGRAPHY_LAYER.scope` is the pyramid
+  **level only** (`epoch|year|month|week|day`); the epoch names `childhood|youth|current` are
+  **`period_key` values under `scope=epoch`** — fixed the biography API to
+  `?scope=epoch|year|month|week|day[&period_key=]` (§2.2) and clarified §4.5/§5.1 accordingly. Also
+  expanded §3.4 Memory Service into the full dual-store spec (fused ranked `query`, async re-embed,
+  supersession, reconciliation, privacy). Verified F-004 IDs are clean and contiguous
+  (10 US / 19 UC / 43 FR / 18 NFR) with valid F-002 cross-refs.
 - **Wrote the fourth feature file: `developer files/features/F-004-memory-system.md`** (mirror-named
   after the coming test spec), written under the "describe every feature maximally in detail" rule.
   **F-004 is the Memory subsystem as a standalone capability** — the **dual-store** engine

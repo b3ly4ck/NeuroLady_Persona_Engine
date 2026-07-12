@@ -207,12 +207,21 @@ Representative endpoints (illustrative, not exhaustive — finalized per feature
 - `GET /persona` / `GET /persona/{id}` — list / fetch persona metadata (name, avatar, teaser,
   intro video-note ref, status).
 - `POST /persona` — create a persona (used by Persona Studio, §4.4).
-- `GET /persona/{id}/biography?scope=childhood|youth|current|year|month|week|day` — layered bio.
+- `GET /persona/{id}/biography?scope=epoch|year|month|week|day[&period_key=]` — layered bio.
+  `scope` is the pyramid **level** only; the epoch names **`childhood|youth|current`** are
+  `period_key` values under `scope=epoch` (not scope values) — see §4.5 / §5.1.
 
 **Memory Service**
 - `POST /memory/user-fact` — store a categorized fact the user revealed.
-- `POST /memory/query` — retrieve relevant context (semantic + structured) for a reply.
+- `POST /memory/query` — retrieve relevant context (semantic + structured + biography) for a reply.
 - `GET /memory/relationship/{userId}/{personaId}` — relationship state/summary.
+- `POST /memory/biography-layer` — **write/index a persona `BIOGRAPHY_LAYER`** (upsert its row +
+  (re)embed it). Called by the **Life Engine** after it authors/compresses a layer (§3.5); Memory
+  only stores/indexes/serves, it does not author (see §3.4, F-004).
+- `GET /memory/user-data/{userId}` — export all of a user's stored memory (facts, messages,
+  relationship state) for the privacy export requirement (§6.5).
+- `DELETE /memory/user-data/{userId}` — delete a user's memory from **both** the relational store
+  and the vector store (right-to-erasure; §6.5).
 
 **Life Engine**
 - `POST /life/plan/day` — generate today's plan for a persona.
@@ -298,13 +307,35 @@ Owns a single user turn end-to-end:
   storage (reference images, intro note).
 
 ### 3.4 Memory Service
+The dual-store memory subsystem (full behavioral spec: feature **`F-004`**). It **stores, indexes,
+retrieves, and serves** memory; it does **not** author biography/reflections (that is the Life
+Engine, §3.5) — the Life Engine hands produced layers to Memory via `POST /memory/biography-layer`.
 - **Structured memory (SQL):** categorized user facts (e.g. `family`, `work`, `preferences`,
-  `complaints`), relationship state, session logs.
-- **Semantic memory (Vector DB):** embeddings of user statements and of persona biography, for
-  "she remembers what you said months ago" retrieval.
-- Provides `query` that fuses structured + semantic recall into the context bundle for a reply.
-- Categorization pipeline: incoming user messages are classified and salient facts extracted &
-  stored (so context can be re-injected later).
+  `complaints`), relationship state, session logs. User facts carry **`status` (active|superseded)**,
+  **`superseded_by`**, and **`confidence`**: when the user reveals something that contradicts an
+  earlier fact, the old row is soft-**superseded** (kept for history) and the new one becomes active
+  (F-004).
+- **Semantic memory (Vector DB, Qdrant):** embeddings of user statements and of persona biography,
+  for "she remembers what you said months ago" retrieval.
+  - **Point-payload contract (isolation):** every vector point carries owner scope keys in its
+    payload — **`user_id`** for user facts, **`persona_id`** for biography layers — plus the source
+    row id. All semantic queries are **filtered by these keys**, so a user's facts can never surface
+    in another user's recall (enforces `NFR-002-07` / F-004 isolation). `embedding_ref` on the SQL
+    row and the point's source-id form the two-way link.
+- Provides **`query`** (`POST /memory/query`) that **fuses** structured recall (facts by category,
+  active only) + semantic recall (top-k, filtered by owner) + the relevant **biography layers**
+  (by scope, §4.5) into the context bundle for a reply, **ranked by relevance/recency/confidence** so
+  irrelevant facts don't dominate.
+- **Categorization & write pipeline:** incoming user messages are classified and salient facts
+  extracted, categorized, stored in SQL, and embedded (async, off the hot path). Fact updates
+  **re-embed** so the vector store stays in sync with SQL.
+- **Store reconciliation / repair:** a background job detects and heals inconsistencies between the
+  two stores — orphan embeddings (vector point with no live SQL row), missing embeddings (active
+  SQL row with no point), and drift — and emits drift/coverage metrics (see §6.4). This keeps the
+  `embedding_ref` ↔ point mapping trustworthy over time (F-004).
+- **Privacy:** supports per-user **export** and **delete** across *both* stores
+  (`GET`/`DELETE /memory/user-data/{userId}`, §6.5). Persona biography is shared config; user facts
+  are private and per-user isolated.
 
 ### 3.5 Life Engine (persona "living" — highest-value subsystem)
 Runs the persona's simulated life on a schedule. Components:
@@ -465,6 +496,11 @@ video models below, so the night batch fits the sleep window on our own GPU.
 - Layers from coarse to fine: **epochs** (childhood/youth/current) → **years** → **months** →
   **weeks** → **days**. Fine layers are generated live (plan + reflection) and **compressed
   upward** over time (§3.5). This gives a consistent, evolving, queryable life story.
+- In the data model (§5.1), the pyramid **level** is `BIOGRAPHY_LAYER.scope`
+  (`epoch|year|month|week|day`) and the specific period is `period_key`; the epoch names
+  **`childhood|youth|current` are `period_key` values under `scope=epoch`**, not scope values.
+  The Life Engine authors/compresses these layers; the **Memory Service stores, indexes, and serves**
+  them (by scope, and semantically) — F-004.
 
 ### 4.6 Reflection & goal prompts (external LLM)
 - **Planning, reflection, goal synthesis, and relationship reflection** are generated by calling
@@ -562,14 +598,18 @@ erDiagram
         user_id FK
         category "family|work|preferences|complaints|..."
         content
+        status "active|superseded (F-004)"
+        superseded_by FK "nullable -> USER_FACT.id (F-004)"
+        confidence "0..1, recency/certainty (F-004)"
         embedding_ref "vector DB"
         created_at
+        updated_at
     }
     BIOGRAPHY_LAYER {
         id PK
         persona_id FK
-        scope "epoch|year|month|week|day"
-        period_key
+        scope "level only: epoch|year|month|week|day"
+        period_key "e.g. childhood|youth|current for scope=epoch; 2026|2026-07|... otherwise"
         content
         embedding_ref "vector DB"
     }
@@ -778,17 +818,21 @@ separation of text/image/video and per-module prompt storage.)
   media/GPU workers deployed with the day/night scheduler config.
 - **Environments:** local (compose, single GPU) → staging → production.
 - **Observability:** logs/metrics/traces per service; GPU/queue depth dashboards for the night
-  batch; **chat-LLM readiness/warm-up metrics** (load time, warm-vs-cold reply latency); alerting on
-  failed reflections, empty media archives (a persona must never wake up with no media for the day),
-  or **the chat LLM not being warm at the start of a serving window** (cold-start would leak to
-  users).
+  batch; **chat-LLM readiness/warm-up metrics** (load time, warm-vs-cold reply latency);
+  **memory-store consistency metrics** (SQL↔vector drift: orphan/missing embeddings, embedding
+  backlog depth, reconciliation repairs — §3.4, F-004); alerting on failed reflections, empty media
+  archives (a persona must never wake up with no media for the day), **the chat LLM not being warm at
+  the start of a serving window** (cold-start would leak to users), or **memory drift crossing a
+  threshold** (recall would silently degrade).
 
 ### 6.5 Security, privacy, compliance
 - Adult verification for intimate media; jurisdiction rules honored. (Entitlement/paywall gating is
   deferred together with billing, §3.7.)
 - Encrypted secrets, least-privilege service tokens, encrypted media at rest.
 - Per-user data export/delete to satisfy privacy expectations (and the academic/ethics framing in
-  `Project Concept.md`).
+  `Project Concept.md`) — realized by the Memory Service `GET`/`DELETE /memory/user-data/{userId}`
+  endpoints, which erase a user's facts + messages + relationship state from **both** the relational
+  and the vector store (§3.4, §2.2, F-004).
 
 ---
 
