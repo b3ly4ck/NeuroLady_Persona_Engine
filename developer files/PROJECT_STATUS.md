@@ -2,6 +2,20 @@
 
 ## Recent changes
 
+- **Started F-001 implementation (branch `feature/f-001-onboarding`) — domain foundation, 29 tests
+  green.** Stack: Python 3.11+, **aiogram 3.x**, **SQLAlchemy 2 async** + aiosqlite (dev). Added
+  `pyproject.toml`, `services/bot/` package: `config.py` (env/.env via pydantic-settings, no
+  hard-coded secrets), `db.py` (async engine/sessionmaker/init), `models.py` (USER/PERSONA/SESSION —
+  a faithful subset of the §5.1 ERD, extra later-feature fields modelled up front), `i18n.py`
+  (RU/EN copy catalog), `personas_seed.py` (starter roster: 3 RU + 3 EN), and pure **domain** logic
+  (`domain/users.py` get-or-create; `domain/gallery.py` active/locale-filtered + cyclic pagination;
+  `domain/sessions.py` create/reuse/switch with one-active-session invariant). Repo-root `tests/`
+  with `conftest.py` (in-memory async SQLite) + `test_f001_onboarding_domain.py`: **29 passing**
+  tests traced to TC ids covering FR-001-01/05/06/07/08/10/14/15/17/20 and NFR-001-10. Env note: the
+  Git-Bash `python` is a MinGW build with no PyPI wheels; the venv must be built from the python.org
+  CPython (`AppData/Local/Programs/Python/Python312`). **Next:** aiogram handlers + keyboards +
+  entrypoint (the Telegram I/O layer) and their tests, then run end-to-end and merge to master once
+  all `tests/` pass.
 - **SECURITY: scrubbed a real Telegram bot token from `.env.example`.** A real token had been placed
   in the tracked template `.env.example` (which is intentionally NOT git-ignored) and pushed in
   commit `69782ba` — i.e. exposed in the public repo. Restored the placeholder (`TELEGRAM_BOT_TOKEN=`
