@@ -2,10 +2,22 @@
 
 ## Recent changes
 
+- **Verified F-003 spec and documented its `comm_settings_json` dependency in `architecture.md`.**
+  Reviewed the F-003 feature file end-to-end: sections complete per the guide; IDs confirmed as
+  **9 US (US-003-01..09) / 18 UC / 38 FR / 17 NFR** with valid F-002 cross-refs. Fixed one dangling
+  reference (`NFR-003-08` pointed at a nonexistent `US-003-16`; corrected to `UC-003-16`) and
+  corrected the previous status note that miscounted 10 user stories (it is 9 — the 10th was the
+  typo'd id). Architecture updates so the schema matches what F-003 relies on: **§3.3** now describes
+  the per-persona **`comm_settings_json`** human-likeness knobs (pacing/typing_speed, verbosity/
+  chunking, emoji_frequency, register/slang_level/typo_rate, variability_strength, mood_expressiveness,
+  followup_policy); **§5.1** annotates `PERSONA.comm_settings_json` and adds
+  **`USER.interaction_style_json`** (the per-user low-emoji/literal overlay, F-003 FR-003-37);
+  **§3.2** step 5 now names the F-003 human-likeness styling + pacing (added on top of fast compute,
+  never altering reply content). **Next step:** the F-003 test spec.
 - **Wrote the third feature file: `developer files/features/F-003-human-like-communication.md`**
   (mirror-named after the coming test spec), written under the "describe every feature maximally in
   detail" rule and deliberately **more thorough than F-002**. Follows `feature_description_guide.md`:
-  header + **Scope boundary** note, **10 user stories** (US-003-01..10, mapped to Audience segments
+  header + **Scope boundary** note, **9 user stories** (US-003-01..09, mapped to Audience segments
   A1 "bot energy", A8 skeptic, A2 emotional texture, A4 unhurried pacing, A6 neurodivergent
   literal/low-emoji, A7 gentle register, plus returning-user "same texting personality" continuity
   and anti-repetition), **4 Mermaid user flows** (single paced reply with typing indicator; long

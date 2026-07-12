@@ -257,7 +257,12 @@ Owns a single user turn end-to-end:
    biography layers + retrieved user facts + relationship summary + **the recent raw message
    history (several last messages of the live conversation)**.
 4. Call the **chat LLM** (§4.1).
-5. Post-process (safety/consistency checks, media-intent detection).
+5. Post-process (safety/consistency checks, media-intent detection) and apply the **human-likeness
+   layer (feature `F-003`)**: style the reply per the persona's `comm_settings_json` (register,
+   emoji, slang, variability) and the `USER.interaction_style_json` overlay, then deliver it with
+   deliberate human **pacing** (a "typing…" indicator + a bounded, length-scaled delay *added on top
+   of* the fast compute) and, when long, **split into several shorter messages**. Styling/pacing
+   never change the reply's content or correctness (that stays owned by this loop / §4.2).
 6. If the user asked for media, call **Media Delivery**; otherwise return text.
 7. Persist the exchange (Memory) and update relationship signals.
 - Handles media-intent detection ("send me a pic") and routes to Media Delivery with the intimate
@@ -267,6 +272,23 @@ Owns a single user turn end-to-end:
 - Source of truth for persona definitions: identity (name, core values, **Big Five personality
   traits**), variable traits (age, interests, goals), layered biography, appearance references,
   intro video-note, **voice profile**, tunable communication settings.
+- **`comm_settings_json` — the per-persona human-likeness style knobs** (source of truth for the
+  communication-style / "she texts like a real person" layer, feature `F-003`). It configures, by
+  data (no code changes), at least:
+  - `pacing_style` / `typing_speed` — her default reply tempo (the deliberate, variable pre-send
+    delay added *on top of* fast compute; bounded by an upper cap — F-003 FR-003-04..08, NFR-003-01).
+  - `verbosity` / `chunking` — how terse vs chatty she is, and how a long reply is split into
+    several short consecutive messages (FR-003-09..15).
+  - `emoji_frequency` — how sparingly she uses emoji (some personas almost none; FR-003-16..20).
+  - `register` / `slang_level` / `typo_rate` — informality: lowercase, contractions, slang, the rare
+    human typo, localized to her language (FR-003-21..25).
+  - `variability_strength` — anti-repetition of greetings/openings/catchphrases (FR-003-26..28).
+  - `mood_expressiveness` — how much she teases/sulks/goes quiet vs uniform cheer (FR-003-30..31).
+  - `followup_policy` — whether/how she sends one in-exchange short follow-up if the user goes
+    briefly quiet (FR-003-32; never cross-session — that is the Life Engine).
+  A **per-user overlay** (`USER.interaction_style_json`, e.g. low-emoji / more-literal for
+  neurodivergent or low-tech-comfort users, F-003 FR-003-37) is applied on top of these persona
+  defaults at reply-styling time.
 - Manages the **roster of 10 personas (5 Russian-speaking + 5 English-speaking)**; `locale`/
   language is part of persona metadata and drives the gallery and prompts.
 - Provides the **gallery card** data used by the "Choose Lady" carousel: name, profession, age,
@@ -497,6 +519,7 @@ erDiagram
         telegram_id
         locale
         adult_verified
+        interaction_style_json "per-user comm overlay: low_emoji|literal|... (F-003 FR-003-37)"
         created_at
     }
     PERSONA {
@@ -509,7 +532,7 @@ erDiagram
         language "ru|en"
         status
         big_five "plain-text description of the Big Five traits (not JSON)"
-        comm_settings_json
+        comm_settings_json "human-likeness style knobs — see §3.3 (F-003)"
         face_ref "media path: face reference photo"
         fullbody_ref "media path: full-body reference photo"
         avatar_ref "media path"

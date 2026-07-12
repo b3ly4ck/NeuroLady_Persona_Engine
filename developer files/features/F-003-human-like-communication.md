@@ -463,7 +463,7 @@ Feature: F-003 Human-Likeness of Communication
   calibrated by configuration.
 - **NFR-003-08** — A persona's texting style must be **self-consistent over time and across
   sessions**: repeated or adversarial probing must not surface style drift, so a skeptic re-testing
-  recognizes the same person (supports US-003-02, US-003-06, US-003-16).
+  recognizes the same person (supports US-003-02, US-003-06, UC-003-16).
 - **NFR-003-09** — **Per-persona differentiation must be perceptible**: two personas with different
   `comm_settings_json` must read as visibly different texters (distinct cadence, emoji habit, and
   register), not the same voice with different names.
