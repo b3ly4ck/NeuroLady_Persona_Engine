@@ -2,6 +2,12 @@
 
 ## Recent changes
 
+- **SECURITY: scrubbed a real Telegram bot token from `.env.example`.** A real token had been placed
+  in the tracked template `.env.example` (which is intentionally NOT git-ignored) and pushed in
+  commit `69782ba` — i.e. exposed in the public repo. Restored the placeholder (`TELEGRAM_BOT_TOKEN=`
+  empty). **The exposed token is compromised and must be revoked/regenerated via @BotFather** — it
+  remains in git history (commit `69782ba`), so scrubbing the current file does not undo the exposure;
+  only revocation does. The real token belongs only in `.env` (git-ignored), never in `.env.example`.
 - **Wrote the F-004 test spec: `developer files/tests/F-004-memory-system.md`** (mirror name of the
   feature file) — **147 tests total**: **98 functional** (FR-004-01..43, 2 each, 3 for the 12 critical
   ones: FR-004-04/05/07/09/10/11/21/24/25/36/39/40), **39 non-functional** (NFR-004-01..18, 2 each,
