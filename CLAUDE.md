@@ -74,12 +74,25 @@ Every feature is also documented as its own file in `developer files/features/`,
 format defined in `developer files/feature_description_guide.md` (user stories → user flows →
 Gherkin use cases → functional & non-functional requirements, each requirement with a stable ID).
 
-Every requirement must be covered by a **whole set of tests** (never just one), designed per
-`developer files/test_driven_development.md`. Each feature file has a mirror test spec in
-`developer files/tests/F-<NNN>-<slug>.md` enumerating all tests, with test IDs
-(`TC-<requirement-id>-<nn>`) that map back to the requirement IDs. Runnable test code lives in
-the repo-root `tests/` folder, and all of it must pass before a feature branch merges to
-`master`.
+Every requirement must be covered by **several tests** (never just one), designed per
+`developer files/test_driven_development.md`.
+
+**Test volume is proportional to feature granularity — do not chase a fixed huge number.** When
+features are split finely (small, self-contained), aim for roughly **2-3 tests per requirement**
+(≈100-150 tests for a typical feature), not thousands. Only broad, coarse-grained features warrant
+very large suites. More is not automatically better; pick *varied, meaningful* cases (happy,
+negative, boundary, error, concurrency, localization, integration, e2e) over sheer count.
+
+**File-name matching + ID traceability (strict):**
+- Each feature file `developer files/features/F-<NNN>-<slug>.md` has a **mirror test spec with the
+  exact same file name** in `developer files/tests/F-<NNN>-<slug>.md`.
+- **Every test must be addressed to a specific artifact ID from the feature file** — either a
+  requirement (`FR-`/`NFR-`) or a user story (`US-`) — via its own ID:
+  `TC-<FR|NFR|US-id>-<nn>` (e.g. `TC-FR-001-05-02`, `TC-NFR-001-01-01`, `TC-US-001-03-01`). The IDs
+  on both sides must stay consistent so coverage is traceable both ways.
+
+Runnable test code lives in the repo-root `tests/` folder, and all of it must pass before a feature
+branch merges to `master`.
 
 ## Issue log (reported problems despite passing tests)
 
@@ -154,3 +167,7 @@ explicitly asks for it elsewhere.
   it's picked up automatically by Claude Code.
 - [2026-07-10] User wants all project documentation files (e.g. Audience.md, Project
   Concept.md) stored inside `developer files/` so Claude can look there for developer context.
+- [2026-07-12] Test volume must scale with feature granularity: for finely-split features, ~2-3
+  tests per requirement (≈100-150 per feature), not a fixed 1000+. Test spec file names must mirror
+  the feature file names, and every test must be addressed to a specific `FR-`/`NFR-`/`US-` id via a
+  consistent `TC-` id. Prefer varied, meaningful cases over raw count.

@@ -2,6 +2,17 @@
 
 ## Recent changes
 
+- **Wrote the F-001 test spec: `developer files/tests/F-001-onboarding-persona-selection.md`**
+  (mirror name of the feature file) — **100 tests total**: 64 functional (FR-001-01..20, 3-4 each),
+  30 non-functional (NFR-001-01..10, 3 each incl. 1 manual localization check), 6 manual real-device
+  acceptance tests keyed to the user stories (US-001-01..06). Every `TC-` id embeds the
+  `FR-`/`NFR-`/`US-` id it verifies. Cases vary across unit/integration/component/e2e/performance/
+  load/security/concurrency and happy/negative/boundary/error/idempotency/localization/persistence.
+- **New rule (CLAUDE.md + `test_driven_development.md`): test volume scales with feature
+  granularity.** For finely-split features, ~2-3 tests per requirement (≈100-150 per feature), not a
+  fixed 1000+. Test-spec file names must mirror feature file names; every test must be addressed to a
+  specific `FR-`/`NFR-`/`US-` id via a consistent `TC-` id (ID scheme in the TDD guide extended to
+  allow user-story-addressed tests). Logged as a dated preference in CLAUDE.md.
 - **Wrote the first feature file: `developer files/features/F-001-onboarding-persona-selection.md`**
   (the first real feature; `F-000` remains the guide's reserved example). Follows
   `feature_description_guide.md`: header, **6 user stories** (US-001-01..06, mapped to Audience

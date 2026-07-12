@@ -12,12 +12,13 @@ will cover.
 ## 1. Core principles
 
 - **Every requirement gets a *set* of tests, never a single one.** For each functional (`FR-`)
-  and non-functional (`NFR-`) requirement, write a whole battery of tests covering every case
-  you can think of — happy path, negative inputs, boundaries, edge cases, error/failure modes,
-  concurrency, localization, etc.
-- **Aim for exhaustive coverage.** Enumerate *all plausible* behaviors, not just the obvious one.
-  A mature project may have thousands — even 10,000+ — tests. That is normal and desired, not a
-  problem. More coverage is better.
+  and non-functional (`NFR-`) requirement, write several tests covering varied cases — happy path,
+  negative inputs, boundaries, edge cases, error/failure modes, concurrency, localization, etc.
+- **Test volume scales with feature granularity — don't chase a fixed huge number.** When features
+  are split finely (small, self-contained), aim for roughly **2-3 tests per requirement**
+  (≈100-150 tests for a typical feature). Only broad, coarse-grained features warrant very large
+  suites. **Variety and meaning beat raw count**: pick cases that actually exercise different
+  behaviors, rather than padding to hit a number.
 - **Every test traces to a requirement.** Each test's ID embeds the requirement ID it verifies,
   so we always know which requirement a failing test protects.
 - **Tests span multiple levels and categories** (unit → integration → end-to-end → manual
@@ -51,14 +52,17 @@ will cover.
 
 ## 3. Test ID scheme (traceability to requirements)
 
-Test IDs are built directly from the requirement they verify:
+Test IDs are built directly from the artifact they verify:
 
 ```
-TC-<requirement-id>-<nn>
+TC-<artifact-id>-<nn>
 ```
 
-- `<requirement-id>` is the full requirement ID, e.g. `FR-001-02` or `NFR-001-01`.
-- `<nn>` is a two-digit sequence for the multiple tests of that requirement (`01`, `02`, …).
+- `<artifact-id>` is the full ID of the thing the test is addressed to — usually a **requirement**
+  (`FR-001-02`, `NFR-001-01`), or a **user story** (`US-001-03`) for story-level acceptance tests.
+- `<nn>` is a two-digit sequence for the multiple tests of that artifact (`01`, `02`, …).
+- **Every test must be addressed to exactly one such artifact** (requirement or user story), so the
+  spec file and the feature file stay traceable to each other in both directions.
 
 Examples:
 - `TC-FR-001-02-01`, `TC-FR-001-02-02`, `TC-FR-001-02-03` — three different tests, all verifying
