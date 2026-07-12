@@ -36,7 +36,8 @@ services described below:
     time-pyramid (§4.5).
 - **Digital Human** — *how she manifests.* Text generation with style-tuning, **voice
   synthesis**, **consistent imagery**, and **talking-head video**.
-  - → realized by the Chat LLM, Voice, Image, and Video AI services (§4).
+  - → realized by the Chat LLM (Qwen3.5-35B-A3B-Uncensored), Voice (ElevenLabs), Image
+    (Qwen-Image-Edit-Rapid-AIO), and Video (Wan 2.2 + HunyuanVideo-Avatar) AI services (§4).
 - **Digital Self** — *what she remembers.* **Vector storage (Qdrant)** of daily events and
   conversation histories enabling hyper-personalization.
   - → realized by the Memory Service semantic store (§3.4) + the reflection pyramid (§3.5).
@@ -63,10 +64,10 @@ flowchart TB
         STUDIO[Persona Studio<br/>local authoring tool]
     end
     subgraph AI[AI services]
-        LLM[Uncensored LLM<br/>chat, big context]
+        LLM[Uncensored LLM<br/>Qwen3.5-35B-A3B-Uncensored, chat, big context]
         EXTLLM[External LLM API<br/>reflection/goal synthesis]
-        IMG[Image Generation<br/>Flux Ultra + IP Adapter, night batch]
-        VID[Video Generation<br/>talking-head Hedra + intimate img+text, night batch]
+        IMG[Image Generation<br/>Qwen-Image-Edit-Rapid-AIO, night batch]
+        VID[Video Generation<br/>Wan 2.2 intimate + HunyuanVideo-Avatar circles, night batch]
         VOICE[Voice synthesis<br/>ElevenLabs]
     end
     subgraph Data
@@ -346,10 +347,20 @@ Everything here is designed to **change, be tuned, or be swapped**. Prompts are 
 stored per-module, never inlined ad hoc.
 
 ### 4.1 Chat LLM (real-time conversation)
-- **Uncensored, high-capacity model** chosen for a **large context window** and natural, adequate
-  conversation. Candidate models (a research task with existing candidates): a larger **Qwen**-
-  class model, **Llama 3.1**, **Wizard-Vicuna**, or similar Hugging Face uncensored models. The
-  interface is fixed so the model can be swapped after evaluation.
+- **Selected model:** **`Qwen3.5-35B-A3B-Uncensored` (HauhauCS "Aggressive" variant)** — an
+  uncensored MoE model with **35B total / ~3B active** parameters (cheap to serve, large-model
+  quality), a **262K native context** (extendable to 1M via YaRN), reported **0/465 refusals**,
+  under **Apache 2.0**. The large context comfortably fits the §4.2 bundle (persona prompt +
+  biography layers + user memory + relationship state + recent raw messages).
+- **Why this over the earlier candidates:** it supersedes the previously-listed Llama 3.1 /
+  Wizard-Vicuna class candidates — newer, uncensored out of the box, MoE-efficient for the
+  day/night self-hosted schedule, and permissively licensed.
+- Served **self-hosted** at an FP8/quantized precision sized to the GPU (the repo ships
+  quantizations from ~11 GB IQ2 up to ~69 GB BF16). Loaded during awake hours, unloaded at night
+  to free the GPU for media (§6.1).
+- Style-tuning per persona (voice/register); configurable decoding (temperature, etc.) exposed as
+  persona/communication settings. The serving interface is fixed so the model can still be swapped
+  after evaluation.
 - Style-tuning per persona (voice/register), so text matches the persona's character.
 - Self-hosted; **loaded during awake hours**, unloaded at night to free GPU for media.
 - Configurable decoding (temperature, etc.) exposed as persona/communication settings.
@@ -367,20 +378,31 @@ For each reply the Orchestrator builds the prompt from:
 - Assembled to fit the model's context budget with a clear priority order.
 
 ### 4.3 Image & video generation (night batch)
-- **Images:** **consistent imagery via Flux Ultra + IP Adapter**, conditioned on the persona's
-  **reference images** to keep appearance identity-consistent. For each schedule slot, generate a
-  set of **SFW** shots (selfie at gym, photo at office, …) and a set of **intimate** shots, per
-  the day's schedule → an archive. Self-hosted.
-- **Video — two kinds:**
-  - **Talking-head video circles** for the intro and the **daily story circles**, generated with
-    **Hedra** (an external/cloud service candidate) from a persona image + voice/script.
-  - **Intimate videos** via **image + text description → video** (self-hosted, night batch); fewer
-    than photos, but ideally one per schedule slot/location; mostly intimate at varying intensity.
+All media models are **self-hosted** and accelerated with **LightX2V** — an inference framework
+(not a model) that provides 4-step distilled checkpoints + FP8/INT8 quantization for the image and
+video models below, so the night batch fits the sleep window on our own GPU.
+
+- **Images — `Qwen-Image-Edit-Rapid-AIO` v23 (NSFW variant):** an All-In-One, distilled +
+  FP8-quantized build on top of **Qwen-Image-Edit-2511** (accelerator + VAE + CLIP merged into one
+  ~28 GB checkpoint), running at **4–8 steps**. The NSFW branch has community LoRAs (`snofs`,
+  `qwen4play`, …) baked in. Conditioned on each persona's **reference images** to keep appearance
+  identity-consistent (Qwen-Image-Edit-2511 is tuned specifically for character consistency across
+  edits). For each schedule slot it generates a set of **SFW** shots (gym selfie, office photo, …)
+  and a set of **intimate** shots → the day's archive.
+- **Video — two separate models for two jobs:**
+  - **Intimate / no-speech video → `Wan 2.2` (distilled).** Best-in-class body anatomy and motion
+    realism; image+text → video, self-hosted night batch, accelerated by LightX2V's Wan 4-step
+    distillation. Ideally one per schedule slot/location, at varying intimacy.
+  - **Talking-head video circles → `HunyuanVideo-Avatar`.** Drives the intro note and the
+    **proactive daily story circles** from a persona image + voice/script. Chosen for its
+    audio-driven emotion (Audio Emotion Module) and face-aware audio adapter, giving lifelike
+    expression on the "circle" — and it shares the Hunyuan family with our video stack. This
+    **replaces the earlier external Hedra candidate**, so all video is now self-hosted.
 - Each generated asset is stored **with metadata** (slot, location, pose, background, intimacy
   level) so Media Delivery can serve context-appropriate media and support sexting continuity.
 - Prompts, model choices, and pipelines live **inside the respective module's directory**
-  (`image/prompts/…`, `video/prompts/…`). Model selection is a research task with existing
-  candidates; the interface is fixed so models can be swapped.
+  (`image/prompts/…`, `video/models/wan22/`, `video/models/hunyuan_avatar/`). The interfaces are
+  fixed so models can still be swapped after evaluation.
 
 ### 4.4 Persona construction (template + questionnaire + assembly)
 - A **biography template** defines the schema of a persona (the Digital Persona of §"Pygmalion
@@ -411,7 +433,9 @@ For each reply the Orchestrator builds the prompt from:
 ### 4.7 Voice (in scope)
 - The persona replies with **personalized voice messages** (the first 5 daily messages are free,
   matching the free-message quota). Voice synthesis via **ElevenLabs (11labs)** as the current
-  candidate (external/cloud), behind a modular boundary so it can be swapped or self-hosted later.
+  candidate — the **one remaining external/cloud model** in the stack — behind a modular boundary
+  so it can be swapped or **self-hosted later** (open-weight candidates for a full-server stack:
+  F5-TTS, XTTS-v2, CosyVoice). Whether to bring voice in-house is an open decision.
 - Each persona has a **voice profile** (part of the persona definition, §3.3) so her voice is
   consistent and in-character.
 
@@ -653,14 +677,20 @@ flowchart LR
 - **Queue** (e.g. Redis/RabbitMQ-class) for media jobs and async work.
 
 ### 6.2b Model services: self-hosted vs external
-The design mixes self-hosted heavy models with a few external/cloud services (candidates):
-- **Self-hosted (on our GPU, day/night scheduled):** the uncensored **Chat LLM** (Qwen/Llama 3.1/
-  Wizard-Vicuna class) and **image generation** (Flux Ultra + IP Adapter); intimate **video**
-  (image+text→video).
-- **External/cloud candidates:** **ElevenLabs** (voice), **Hedra** (talking-head video circles),
+The design keeps **all heavy generative models self-hosted on our GPU**, with only two
+external/cloud dependencies remaining:
+- **Self-hosted (on our GPU, day/night scheduled), all accelerated by LightX2V where applicable:**
+  - **Chat LLM** — `Qwen3.5-35B-A3B-Uncensored` (HauhauCS Aggressive), MoE 35B/3B-active.
+  - **Image gen/edit** — `Qwen-Image-Edit-Rapid-AIO` v23 NSFW (distilled, FP8, on Qwen-Image-Edit-2511).
+  - **Intimate video** — `Wan 2.2` (distilled), image+text→video.
+  - **Talking-head circles** — `HunyuanVideo-Avatar` (replaces the former Hedra dependency).
+- **External/cloud (only two left):** **ElevenLabs** (voice — candidate to self-host later, §4.7)
   and an **external LLM API** (e.g. ChatGPT) for planning/reflection/goal/relationship synthesis.
-- Each sits behind a modular interface, so any external service can later be swapped or brought
-  in-house without touching callers.
+- **LightX2V** is an inference framework (not a model) providing 4-step distilled checkpoints and
+  INT8/FP8/NVFP4 quantization for the image + video models, so the night batch fits the GPU/time
+  budget.
+- Each sits behind a modular interface, so any service can later be swapped or brought in-house
+  without touching callers.
 
 ### 6.3 Repository & module layout (modularity on disk)
 Text, image, and video each live in their own top-level module, with their **own prompts**:
@@ -675,12 +705,14 @@ services/
   billing/
 image/                 # image generation module
   prompts/
-  models/
-video/                 # video generation module (Hedra talking-head + intimate img+text)
+  models/              # Qwen-Image-Edit-Rapid-AIO (v23 NSFW) + LightX2V accel
+video/                 # video generation module (two separate pipelines)
   prompts/
   models/
+    wan22/             # intimate / no-speech video (Wan 2.2 distilled)
+    hunyuan_avatar/    # talking-head circles (HunyuanVideo-Avatar)
 voice/                 # voice synthesis module (ElevenLabs adapter + voice profiles)
-chat/                  # chat LLM serving + prompts/
+chat/                  # chat LLM serving (Qwen3.5-35B-A3B-Uncensored) + prompts/
 persona_studio/        # local persona authoring interface
 infra/                 # compose/k8s, schedulers, CI/CD
 tests/                 # runnable tests (gates merges) - see TDD guide
@@ -725,8 +757,9 @@ Phased delivery (from the product doc), building the Pygmalion framework increme
 
 1. **Telegram bot with uncensored conversation** — the Chat LLM + Orchestrator + Memory, the
    5-free-messages/day model, basic persona(s).
-2. **Daily video circles with generated photo content** — talking-head daily circles (Hedra) +
-   the night-batch image pipeline (Flux Ultra + IP Adapter) feeding scheduled media.
+2. **Daily video circles with generated photo content** — talking-head daily circles
+   (HunyuanVideo-Avatar) + the night-batch image pipeline (Qwen-Image-Edit-Rapid-AIO) feeding
+   scheduled media.
 3. **Adult photo generation and data storage** — intimate photo/video archives per schedule, the
    metadata model for sexting continuity, and photo-access subscriptions.
 4. **Open-source Pygmalion packaging** — package the persona engine (Digital Persona / Digital

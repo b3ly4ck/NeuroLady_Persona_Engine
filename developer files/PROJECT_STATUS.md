@@ -2,6 +2,27 @@
 
 ## Recent changes
 
+- **Locked in the concrete self-hosted model stack** (replacing the earlier "candidate" lists)
+  across `architecture.md` (§0 diagram, Pygmalion framework, §4.1, §4.3, §4.7, §6.2b, §6.3, §8)
+  and `Project Concept.md`. Decisions:
+  - **Chat LLM:** `Qwen3.5-35B-A3B-Uncensored` (HauhauCS "Aggressive") — uncensored MoE 35B/3B-
+    active, 262K context (→1M YaRN), 0/465 refusals, Apache 2.0. Supersedes the old Llama 3.1 /
+    Wizard-Vicuna candidates.
+  - **Image gen/edit:** `Qwen-Image-Edit-Rapid-AIO` v23 **NSFW** variant — distilled + FP8 AIO
+    build on Qwen-Image-Edit-2511 (~28 GB, 4–8 steps, community NSFW LoRAs baked in). Replaces
+    Flux Ultra + IP-Adapter (Flux Ultra is closed/API-only — incompatible with the all-on-server
+    requirement).
+  - **Video split into two dedicated models:** intimate/no-speech → `Wan 2.2` (distilled);
+    talking-head circles → `HunyuanVideo-Avatar` (audio-driven emotion). The latter **removes the
+    external Hedra dependency** — all video is now self-hosted. `video/models/` now has
+    `wan22/` and `hunyuan_avatar/` subdirs.
+  - **Inference accelerator:** **LightX2V** — an inference *framework* (not a model) giving 4-step
+    distilled checkpoints + INT8/FP8/NVFP4 for the image/video models so the night batch fits the
+    GPU/time budget.
+  - **Voice:** still **ElevenLabs** — now the *only* external/cloud model; noted open decision to
+    self-host later (F5-TTS / XTTS-v2 / CosyVoice candidates).
+  - Net result: the entire chat + image + video stack is self-hosted; only ElevenLabs (voice) and
+    the external planning/reflection LLM remain off-server.
 - Refined `architecture.md` §1 (UX) to match the reference Figma design ("🧠 AIT"): concrete
   **Welcome/Start screen** (flirty copy + single `Start` inline button), **"Choose Lady"**
   persona **card carousel** with `◀ 1/6 ▶` pagination — each card shows photo + **Name /

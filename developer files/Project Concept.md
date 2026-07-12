@@ -46,9 +46,12 @@ conversations for hyper-personalization).
   sharing stories from her day.
 - **Monetization:** **5 free messages per day**; erotic photo/video access via **daily / weekly /
   monthly** subscriptions (separately or bundled into a tier).
-- **Candidate tech stack:** uncensored chat LLM (Qwen / Llama 3.1 / Wizard-Vicuna class),
-  imagery via **Flux Ultra + IP Adapter**, voice via **ElevenLabs**, talking-head video via
-  **Hedra**, vector memory via **Qdrant**; heavy models self-hosted on a day/night GPU schedule.
+- **Selected tech stack:** uncensored chat LLM **`Qwen3.5-35B-A3B-Uncensored`** (HauhauCS),
+  imagery via **`Qwen-Image-Edit-Rapid-AIO`** (v23 NSFW, on Qwen-Image-Edit-2511), intimate video
+  via **`Wan 2.2`** (distilled), talking-head circles via **`HunyuanVideo-Avatar`**, all image/
+  video inference accelerated by **LightX2V**; voice via **ElevenLabs** (the only external model,
+  self-host TBD), vector memory via **Qdrant**. All heavy models are self-hosted on a day/night
+  GPU schedule. See `architecture.md` §4/§6.2b for details.
 
 This document maps that concept onto the audience segments defined in
 [`Audience.md`](Audience.md): for each segment, what their core pain is and how NeuroLady
