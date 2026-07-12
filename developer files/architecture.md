@@ -767,6 +767,35 @@ external/cloud dependencies remaining:
 - Each sits behind a modular interface, so any service can later be swapped or brought in-house
   without touching callers.
 
+### 6.2c Dependency isolation & model-runner environments
+
+Each self-hosted model has **different, mutually conflicting dependencies** (different torch /
+CUDA / diffusers / vLLM / llama.cpp / LightX2V builds, custom kernels, etc.). Forcing them into one
+environment would be unresolvable. The rule:
+
+> **Each model is its own isolated runner, in its own environment, behind a fixed network API.**
+> Callers (Orchestrator, media pipeline) never import model code — they talk to the runner over
+> localhost. Dependency conflicts are impossible because no two model stacks share an environment.
+
+- **Local / single-GPU dev:** one environment **per model runner**, created with `uv` (fast,
+  reproducible, pinned Python). Each runner folder is self-contained:
+  `chat/.venv`, `image/.venv`, `video/models/wan22/.venv`, `video/models/hunyuan_avatar/.venv`.
+  Weights live in that runner's `models/` dir. Both `.venv/` and weight files are **git-ignored**
+  (never committed — they are huge).
+- **Production:** each runner is its **own Docker image** (its own CUDA base + pinned deps),
+  orchestrated by compose/k8s. Same fixed API as local. Containers are the strong isolation
+  boundary; `uv` envs are the lightweight local equivalent.
+- **Fixed contracts:** the chat runner exposes an **OpenAI-compatible HTTP** endpoint; the media
+  runners expose a **job API** (enqueue → generate → write archive). Swapping a model = rebuilding
+  one runner; callers are untouched.
+- **GPU ownership via the day/night scheduler (§6.1):** only one heavy runner owns the GPU at a
+  time. The scheduler **starts/stops** runners — chat resident and warm by day; image/video runners
+  brought up for the night batch, then torn down. Because each runner is a separate process/env,
+  starting one never disturbs another's dependencies.
+- **Prompts** stay versioned inside each runner's `prompts/` dir (never shared across runners).
+
+This is why the layout below is one self-contained folder per runner rather than a shared package.
+
 ### 6.3 Repository & module layout (modularity on disk)
 Text, image, and video each live in their own top-level module, with their **own prompts**:
 ```

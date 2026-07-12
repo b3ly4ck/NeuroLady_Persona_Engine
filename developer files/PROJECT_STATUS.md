@@ -2,6 +2,18 @@
 
 ## Recent changes
 
+- **Started the codebase (infra foundation).** Added `architecture.md` **§6.2c — dependency
+  isolation & model-runner environments**: each self-hosted model is its own isolated runner
+  (own env + weights) behind a fixed network API; locally one `uv` venv per runner
+  (`chat/.venv`, `image/.venv`, …), in prod one Docker image per runner; the day/night scheduler
+  owns which runner holds the GPU. Created the **`chat/` runner** per §6.3: `chat/{models,prompts}`,
+  `README.md`, `download_model.py`, isolated `chat/.venv` (uv, Python 3.11). **Downloading the chat
+  LLM** `HauhauCS/Qwen3.5-35B-A3B-Uncensored-HauhauCS-Aggressive` **Q6_K GGUF (~28.5 GB)** into
+  `chat/models/` (fits the 48 GB Quadro RTX 8000 with KV-cache headroom). Added a hardened
+  **`.gitignore`** (secrets `.env`, venvs, model weights, generated `media/`, local DBs) and
+  **`.env.example`** (secrets template — real `.env` is git-ignored so keys never reach GitHub).
+  **Kicked off F-001 implementation on branch `feature/f-001-onboarding`** (delegated to a coding
+  subagent; onboarding needs no model, so it proceeds while the LLM downloads).
 - **Closed the 6 architecture gaps F-004 relies on (`architecture.md`), so the schema matches the
   feature.** (1) **`USER_FACT`** gains `status (active|superseded)`, `superseded_by`, `confidence`,
   `updated_at` — enabling fact supersession/recency (F-004 FR-004-11..14). (2) **Vector point-payload

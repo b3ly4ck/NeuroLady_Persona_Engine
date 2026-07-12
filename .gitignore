@@ -1,0 +1,42 @@
+# ── Secrets — NEVER commit real keys/tokens ──────────────────────────────
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+secrets/
+
+# ── Python virtual environments (one per runner/service — never committed) ─
+.venv/
+**/.venv/
+__pycache__/
+*.py[cod]
+
+# ── Model weights — huge, never committed (kept locally / in object storage) ─
+*.gguf
+*.safetensors
+*.bin
+*.pt
+*.pth
+*.onnx
+chat/models/*
+!chat/models/.gitkeep
+image/models/*
+!image/models/.gitkeep
+video/models/*
+!video/models/.gitkeep
+
+# ── Generated persona media (architecture.md §6.3) — lives outside git ─────
+media/**
+!media/.gitkeep
+
+# ── Local databases / caches / logs ───────────────────────────────────────
+*.sqlite3
+*.db
+.cache/
+*.log
+
+# ── Tooling ───────────────────────────────────────────────────────────────
+uv.lock
+.pytest_cache/
+.ruff_cache/
