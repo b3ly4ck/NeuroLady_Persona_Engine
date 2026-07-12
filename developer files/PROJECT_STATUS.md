@@ -2,6 +2,51 @@
 
 ## Recent changes
 
+- **Wrote the fourth feature file: `developer files/features/F-004-memory-system.md`** (mirror-named
+  after the coming test spec), written under the "describe every feature maximally in detail" rule.
+  **F-004 is the Memory subsystem as a standalone capability** — the **dual-store** engine
+  (structured **PostgreSQL** relational + **Qdrant** vector) behind two kinds of recall: the
+  **persona's own biography** (the time-pyramid layers epoch/year/month/week/day, architecture.md
+  §4.5) and the **user's biography** (categorized `USER_FACT`s). Covers all eight requested facets:
+  (1) dual-store architecture + `embedding_ref` referential integrity; (2) user-fact memory
+  (categorize/store/embed, structured + semantic recall, **superseding contradictory facts**,
+  recency/confidence/dedup); (3) persona self-biography (store/index/serve layers by scope +
+  semantically, **no self-contradiction across layers**); (4) **fused `query`** contract
+  (`POST /memory/query`) ranking structured + semantic + biography, not letting irrelevant facts
+  dominate; (5) consistency/correctness (faithful to stored truth); (6) retention/durability
+  (persist until deletion, embeddings in sync, **re-embed on update**, drift reconciliation);
+  (7) privacy/isolation (provable per-user isolation, shared-biography vs private-facts, export +
+  delete from **both** stores, §6.5); (8) failure/degrade (Qdrant-down → degrade to structured +
+  recent history; SQL-down defined & safe, no fabrication; async embedding backlog off the hot
+  path). Follows `feature_description_guide.md`: header + **Scope boundary** note, **10 user stories**
+  (US-004-01..10 — A2 unprompted recall + A2 months-later returning recall, A8 skeptic probing her
+  biography and his memory-of-him for contradictions, A6 reliable/consistent recall, A1 fact-update/
+  supersede, privacy-conscious isolation+export/delete, A4 disclosures-honored, returning-user
+  answers-about-her-own-life-by-scope, and a durability story), **5 Mermaid user flows** (unprompted
+  old-fact recall; answering about her own life by scope; contradictory fact supersedes; vector-store
+  degrade; export/delete), **19 Gherkin use cases** (UC-004-01..19, incl. **2 Scenario Outlines** —
+  fact categorization across categories, and biography answers across scopes), and **61 requirements
+  — 43 functional (FR-004-01..43) + 18 non-functional (NFR-004-01..18)**.
+  **F-002 vs F-004 boundary (consumer/capability split):** F-002 owns the *conversation turn that
+  consumes memory* (assemble context, produce reply) and is a **consumer** of the F-004 contract;
+  **F-004 owns the memory subsystem itself** and specifies *how* store/categorize/embed/recall/fuse
+  work. To avoid duplication, F-004 **cross-references** F-002 ids instead of restating them:
+  **FR-002-04** (recent raw history in-context — F-002 owns carrying it), **FR-002-10** (extraction
+  trigger — F-004 owns store/categorize/embed/supersede of the result), **FR-002-11..12**
+  (categorize/embed — realized inside F-004's pipeline, FR-004-07/08), **FR-002-13..14** (recall +
+  fuse — served by F-004's `query`, FR-004-24..28), **FR-002-20 / NFR-002-07** (per-user isolation —
+  enforced inside F-004's stores/vector filters, FR-004-36/NFR-004-03/16), **NFR-002-05** (Qdrant-down
+  degrade — implemented by FR-004-40/NFR-004-07).
+  **Life-Engine-generates vs F-004-stores/serves split (biography):** stated in the Scope boundary and
+  in **FR-004-22** — the **Life Engine** (§3.5/§4.5/§4.6) *authors, reflects on, and hierarchically
+  compresses* the biography layers and relationship state; **F-004 only stores, indexes, keeps
+  consistent, and serves** them (by scope via `GET /persona/{id}/biography?scope=` and semantically),
+  and exposes a write/index contract the Life Engine calls (UC-004-19). **Out of scope:** reply
+  content/pacing/styling (F-002/F-003); autonomous reflection/biography compression (Life Engine);
+  onboarding (F-001); media/voice (later phases); monetization (deferred, §3.7).
+  **Next step:** the mirror test spec `developer files/tests/F-004-memory-system.md` per
+  `test_driven_development.md` (~2-3 tests per requirement, each `TC-` addressed to an
+  `FR-`/`NFR-`/`US-` id) — with 61 requirements this lands high in the 100-150 test band.
 - **Wrote the F-003 test spec: `developer files/tests/F-003-human-like-communication.md`**
   (mirror name of the feature file) — **147 tests total**: **97 functional** (FR-003-01..38, 2-3
   each), **41 non-functional** (NFR-003-01..17, 2-3 each incl. 1 manual localization check
