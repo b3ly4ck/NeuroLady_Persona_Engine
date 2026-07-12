@@ -2,6 +2,19 @@
 
 ## Recent changes
 
+- **Wrote the first feature file: `developer files/features/F-001-onboarding-persona-selection.md`**
+  (the first real feature; `F-000` remains the guide's reserved example). Follows
+  `feature_description_guide.md`: header, **6 user stories** (US-001-01..06, mapped to Audience
+  segments A1/A2/A7/A8 + returning/switching users), **3 Mermaid user flows** (first-time,
+  returning, switch-persona), **9 Gherkin use cases** (UC-001-01..09, incl. a pagination Scenario
+  Outline), and **30 requirements** — **20 functional (FR-001-01..20)** + **10 non-functional
+  (NFR-001-01..10)**. Scope: `/start` → Welcome screen → "Choose Lady" card carousel (photo/name/
+  profession/age/first-person description, ◀ 1/N ▶, Start Chat) → video-note "circle" intro →
+  ready chat with the `💋 Choose Lady` + menu reply keyboard; includes returning-user resume,
+  persona switching, idempotency, missing-intro fallback, and localization. **Out of scope
+  (→ F-002):** the actual message↔reply conversation loop + memory; monetization and age-gating are
+  deferred. Next step: the mirror test spec `developer files/tests/F-001-*.md` (~1000 tests) per
+  `test_driven_development.md`.
 - **Rewrote `architecture.md` §8 roadmap as a Mermaid diagram** and removed all billing/monetization
   from it. New phase order (each phase depends on the previous): **Phase 1** conversation core
   (chat LLM → orchestrator → memory → dynamic persona/Life Engine → voice replies); **Phase 2**
