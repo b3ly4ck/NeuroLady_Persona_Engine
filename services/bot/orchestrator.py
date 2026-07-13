@@ -22,6 +22,7 @@ from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
 from services.bot.domain.fact_extraction import extract_memory_ops
 from services.bot.domain.persona_prompt import build_system_prompt
+from services.bot.domain.vector_store import MemoryIndex
 from services.bot.models import MessageSender, Persona, Session, UserFact
 
 log = logging.getLogger(__name__)
@@ -67,6 +68,7 @@ async def handle_turn(
     persona: Persona,
     user_text: str,
     chat_client: ChatClient,
+    memory_index: MemoryIndex | None = None,
 ) -> str:
     """Process one turn and return the reply text to send. Persists the user message and the reply.
 
@@ -83,8 +85,8 @@ async def handle_turn(
     history = await msg_domain.load_recent(db, session.id)
     system_content = build_system_prompt(persona)
     # F-004: fuse the user's relevant stored facts into the context so she "remembers" (FR-002-13/14,
-    # FR-004-24/28). Semantic/biography recall is deferred (Postgres-only slice).
-    recalled = await memory_domain.recall_facts(db, session.user_id, user_text)
+    # FR-004-24/28). Semantic search when a vector index is available, else keyword recall.
+    recalled = await memory_domain.recall_relevant(db, session.user_id, user_text, memory_index)
     mem_block = _memory_block(recalled, persona.language)
     if mem_block:
         system_content += "\n\n" + mem_block
@@ -107,20 +109,25 @@ async def handle_turn(
 
 
 async def update_user_memory(
-    db: AsyncSession, user_id: int, user_text: str, chat_client: ChatClient
+    db: AsyncSession,
+    user_id: int,
+    user_text: str,
+    chat_client: ChatClient,
+    memory_index: MemoryIndex | None = None,
 ) -> list[UserFact]:
     """Extract salient facts from the user's message and store them (F-004 FR-004-06/07/11/15).
 
     Called by the handler **after the reply is delivered**, so this LLM extraction never delays the
-    user-visible reply (FR-002-23 / FR-004-42/43). Returns the newly-stored facts. Never raises —
-    a memory failure must not affect the already-sent reply.
+    user-visible reply (FR-002-23 / FR-004-42/43). When a vector `index` is given, new facts are
+    also embedded and superseded ones removed (FR-004-08/33). Returns the newly-stored facts. Never
+    raises — a memory failure must not affect the already-sent reply.
     """
     try:
         existing = [(f.id, f.category, f.content) for f in await memory_domain.active_facts(db, user_id)]
         ops = await extract_memory_ops(chat_client, user_text, existing)
         if not ops.add and not ops.supersede:
             return []
-        return await memory_domain.apply_memory_ops(db, user_id, ops)
+        return await memory_domain.apply_memory_ops(db, user_id, ops, memory_index)
     except Exception:  # pragma: no cover - defensive: memory must never break the turn
         log.warning("user-memory update failed", exc_info=True)
         return []

@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from services.bot.chat_client import ChatClient
 from services.bot.config import get_settings
 from services.bot.db import init_models, make_engine, make_sessionmaker
+from services.bot.domain.vector_store import MemoryIndex, build_memory_index
 from services.bot.handlers import router
 from services.bot.middlewares import DbSessionMiddleware
 from services.bot.personas_seed import seed_personas
@@ -48,9 +49,11 @@ async def _run_polling_with_reconnect(dp: Dispatcher, bot: Bot) -> None:
 def build_dispatcher(
     sessionmaker: async_sessionmaker[AsyncSession],
     chat_client: ChatClient | None = None,
+    memory_index: "MemoryIndex | None" = None,
 ) -> Dispatcher:
-    # `chat_client` is injected into handlers by name via workflow data; tests pass a fake.
-    dp = Dispatcher(chat_client=chat_client or ChatClient())
+    # `chat_client` / `memory_index` are injected into handlers by name via workflow data; tests
+    # pass fakes or None (None → memory degrades to keyword recall).
+    dp = Dispatcher(chat_client=chat_client or ChatClient(), memory_index=memory_index)
     db_mw = DbSessionMiddleware(sessionmaker)
     dp.message.middleware(db_mw)
     dp.callback_query.middleware(db_mw)
@@ -76,11 +79,18 @@ async def _run() -> None:
         if inserted:
             logging.getLogger(__name__).info("seeded %d personas", inserted)
 
+    # F-004 semantic memory index (None if disabled / deps missing → keyword recall fallback).
+    memory_index = None
+    if settings.qdrant_location:
+        memory_index = build_memory_index(settings.qdrant_location, settings.embed_model or None)
+        if memory_index is not None:
+            log.info("semantic memory enabled (qdrant=%s)", settings.qdrant_location)
+
     bot = Bot(
         token=settings.telegram_bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = build_dispatcher(sessionmaker, ChatClient(settings.chat_base_url))
+    dp = build_dispatcher(sessionmaker, ChatClient(settings.chat_base_url), memory_index)
     try:
         await _run_polling_with_reconnect(dp, bot)
     finally:

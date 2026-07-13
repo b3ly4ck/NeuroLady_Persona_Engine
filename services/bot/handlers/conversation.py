@@ -22,6 +22,7 @@ from services.bot.chat_client import ChatClient
 from services.bot.domain.humanize import chunk_reply, pacing_delay, parse_settings
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
+from services.bot.domain.vector_store import MemoryIndex
 from services.bot.models import Persona
 from services.bot.orchestrator import handle_turn, update_user_memory
 
@@ -41,7 +42,11 @@ _PICK_FIRST = {
 
 @router.message(F.text & ~F.text.startswith("/"))
 async def on_text(
-    message: Message, db: AsyncSession, bot: Bot, chat_client: ChatClient
+    message: Message,
+    db: AsyncSession,
+    bot: Bot,
+    chat_client: ChatClient,
+    memory_index: MemoryIndex | None = None,
 ) -> None:
     tg_user = message.from_user
     if tg_user is None or not message.text:
@@ -61,7 +66,7 @@ async def on_text(
     # Immediate acknowledgement — the chat never looks frozen while we generate (FR-002-24).
     await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
-    reply = await handle_turn(db, session, persona, message.text, chat_client)
+    reply = await handle_turn(db, session, persona, message.text, chat_client, memory_index)
 
     # F-003 human-likeness delivery: split a long reply into a few short messages and pace each
     # with a "typing…" indicator + a deliberate, capped pause, so it reads like a real person
@@ -75,4 +80,4 @@ async def on_text(
     # F-004: extract + store the user's salient facts AFTER the reply is delivered, so this LLM
     # extraction never delays what he sees (FR-004-42/43). The DB session commits when the handler
     # returns. (Production would move this to a proper background queue.)
-    await update_user_memory(db, user.id, message.text, chat_client)
+    await update_user_memory(db, user.id, message.text, chat_client, memory_index)

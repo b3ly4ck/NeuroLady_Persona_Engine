@@ -2,6 +2,34 @@
 
 ## Recent changes
 
+- **F-004 semantic half — Qdrant + embeddings (branch `feature/f-004-memory`).** Completed the
+  memory system's vector side: recall now finds facts by **meaning**, not literal words. Validated
+  live against the real embedding model.
+  - **`services/bot/domain/embeddings.py`** — `Embedder` protocol + `FastEmbedEmbedder` (fastembed,
+    ONNX on CPU — no torch, no GPU contention). Default `paraphrase-multilingual-MiniLM-L12-v2`
+    (384-dim, ~120 MB, RU+EN), lazy-loaded, swappable via `EMBED_MODEL`.
+  - **`services/bot/domain/vector_store.py`** — `MemoryIndex` (Qdrant + embedder): `index_fact`
+    (point id = SQL `fact_id`, 1:1 — FR-004-04), `remove_facts`, `search` that **always** filters by
+    `user_id` (FR-004-05/36, NFR-004-16). Backend failures raise `VectorStoreUnavailable`.
+    `build_memory_index` supports a Qdrant URL / local dir (embedded, dev) / `:memory:`; returns
+    `None` if optional deps are missing.
+  - **`services/bot/domain/memory.py`** — `apply_memory_ops` also embeds new facts + removes
+    superseded points (sets `embedding_ref`; FR-004-08/33), swallowing index failures so the SQL
+    write always stands. New `recall_relevant` prefers semantic search and **falls back to keyword**
+    when there's no index or the store is down (FR-004-10/40, NFR-004-07); vector calls via
+    `asyncio.to_thread`.
+  - **Wiring:** orchestrator/handler/app inject an optional `MemoryIndex` (like `ChatClient`);
+    `config.qdrant_location` + `embed_model`; `.env.example` + `qdrant_data/` gitignore; `pyproject`
+    `semantic` extra (`qdrant-client`, `fastembed`).
+  - **Tests:** `tests/test_f004_semantic.py` (6) — deterministic FakeEmbedder + in-memory Qdrant:
+    semantic recall, user-filtered search (isolation), remove-on-supersede, embedding_ref/1:1,
+    degrade-to-keyword (recall + indexing failure). **Full suite: 115 passed.**
+  - **Live check (real model):** facts stored in English, queried in Russian with no shared words —
+    "когда у сестры торжество?"→wedding fact, "чем он зарабатывает?"→design-studio fact; keyword
+    missed 2 of 3. Cross-language + synonym recall works. (qdrant-client 1.18: `.search()` →
+    `.query_points().points`.)
+  - **Note:** committed from an isolated worktree because 3 agents were sharing the main working
+    directory (another was on `feature/image-runner`); this avoided a branch/working-tree collision.
 - **Etap 4 — F-004 memory (Postgres-only slice): she remembers what you told her (branch
   `feature/f-004-memory`, off `feature/f-003-human-likeness`).** Wired structured user-fact memory
   into the F-002 loop; the semantic/Qdrant half + biography pyramid are deferred (biography belongs

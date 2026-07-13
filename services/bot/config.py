@@ -20,6 +20,11 @@ class Settings(BaseSettings):
     # Chat-LLM runner (chat/serve.py) OpenAI-compatible endpoint — the F-002 conversation loop
     # calls this over localhost (architecture.md §6.2c).
     chat_base_url: str = "http://127.0.0.1:8080"
+    # F-004 semantic memory (vector half). Qdrant location: a URL (http://…), a local dir path, or
+    # ":memory:". Dev default is an embedded on-disk store (no Docker). Empty → keyword recall only.
+    qdrant_location: str = "./qdrant_data"
+    # Embedding model name (fastembed); empty → the multilingual MiniLM default in embeddings.py.
+    embed_model: str = ""
     env: str = "dev"
     log_level: str = "INFO"
 

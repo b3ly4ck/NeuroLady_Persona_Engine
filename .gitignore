@@ -46,3 +46,6 @@ dist/
 
 # chat runner readiness marker (runtime only)
 chat/.runner_ready
+
+# F-004 embedded Qdrant store (dev, local)
+qdrant_data/

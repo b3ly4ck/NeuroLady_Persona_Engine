@@ -8,6 +8,8 @@ keyword-overlap + recency + confidence heuristic rather than embedding similarit
 """
 from __future__ import annotations
 
+import asyncio
+import logging
 import re
 from datetime import datetime, timezone
 
@@ -15,7 +17,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.domain.fact_extraction import MemoryOps
+from services.bot.domain.vector_store import MemoryIndex, VectorStoreUnavailable
 from services.bot.models import FactStatus, UserFact
+
+log = logging.getLogger(__name__)
 
 # How many recalled facts are fused into the reply context (FR-004-26 — bounded, don't dominate).
 RECALL_LIMIT = 6
@@ -40,11 +45,15 @@ async def active_facts(db: AsyncSession, user_id: int) -> list[UserFact]:
     return list((await db.execute(stmt)).scalars().all())
 
 
-async def apply_memory_ops(db: AsyncSession, user_id: int, ops: MemoryOps) -> list[UserFact]:
+async def apply_memory_ops(
+    db: AsyncSession, user_id: int, ops: MemoryOps, index: MemoryIndex | None = None
+) -> list[UserFact]:
     """Apply extraction results: supersede contradicted facts, dedup, insert new ones.
 
     Returns the newly-inserted facts. Supersession and dedup are scoped to the acting user so one
-    user's memory can never touch another's (FR-004-36).
+    user's memory can never touch another's (FR-004-36). When a vector `index` is given, new facts
+    are embedded/indexed and superseded ones removed from it (FR-004-08/33); an index failure is
+    logged and swallowed so the SQL write still stands (degrade — FR-004-40).
     """
     existing = await active_facts(db, user_id)
     existing_ids = {f.id for f in existing}
@@ -67,6 +76,7 @@ async def apply_memory_ops(db: AsyncSession, user_id: int, ops: MemoryOps) -> li
 
     # 2. Supersede contradicted facts (only this user's active facts — FR-004-11/12).
     replacement_id = inserted[0].id if inserted else None
+    superseded_ids: list[int] = []
     for fid in ops.supersede:
         if fid not in existing_ids:
             continue
@@ -75,7 +85,20 @@ async def apply_memory_ops(db: AsyncSession, user_id: int, ops: MemoryOps) -> li
             fact.status = FactStatus.superseded
             fact.superseded_by = replacement_id
             fact.updated_at = datetime.now(timezone.utc)
+            superseded_ids.append(fid)
     await db.flush()
+
+    # 3. Vector half: index new facts, drop superseded points (off the SQL correctness path).
+    if index is not None:
+        try:
+            for fact in inserted:
+                await asyncio.to_thread(index.index_fact, user_id, fact.id, fact.content)
+                fact.embedding_ref = str(fact.id)  # SQL row ↔ vector point 1:1 (FR-004-04)
+            if superseded_ids:
+                await asyncio.to_thread(index.remove_facts, superseded_ids)
+            await db.flush()
+        except VectorStoreUnavailable as exc:
+            log.warning("vector indexing skipped (store unavailable): %s", exc)  # degrade
     return inserted
 
 
@@ -101,3 +124,40 @@ async def recall_facts(
     newest_id = max(f.id for f in facts)
     ranked = sorted(facts, key=lambda f: _score(f, query_tokens, newest_id), reverse=True)
     return ranked[:limit]
+
+
+async def recall_relevant(
+    db: AsyncSession,
+    user_id: int,
+    message: str,
+    index: MemoryIndex | None = None,
+    limit: int = RECALL_LIMIT,
+) -> list[UserFact]:
+    """Recall the user's facts most relevant to `message`, preferring semantic search.
+
+    With a vector `index`, embeds the message and retrieves by cosine similarity, filtered to this
+    user (FR-004-10/28/36). Falls back to keyword recall when there is no index or the vector store
+    is unavailable (degrade — FR-004-40 / NFR-004-07). Only **active** facts are returned.
+    """
+    if index is None:
+        return await recall_facts(db, user_id, message, limit)
+    try:
+        fact_ids = await asyncio.to_thread(index.search, user_id, message, limit)
+    except VectorStoreUnavailable as exc:
+        log.warning("semantic recall degraded to keyword (store unavailable): %s", exc)
+        return await recall_facts(db, user_id, message, limit)
+
+    if not fact_ids:
+        return []
+    # Load the hit rows, keep only this user's active facts, preserve the similarity order.
+    rows = (
+        await db.execute(
+            select(UserFact).where(
+                UserFact.id.in_(fact_ids),
+                UserFact.user_id == user_id,
+                UserFact.status == FactStatus.active,
+            )
+        )
+    ).scalars().all()
+    by_id = {f.id: f for f in rows}
+    return [by_id[fid] for fid in fact_ids if fid in by_id]

@@ -20,6 +20,12 @@ dev = [
 postgres = [
     "asyncpg>=0.29",
 ]
+# F-004 semantic memory half: vector store + local embedding model. Optional — without it the
+# memory system degrades to keyword recall (FR-004-40), so the bot still runs.
+semantic = [
+    "qdrant-client>=1.7",
+    "fastembed>=0.3",
+]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
