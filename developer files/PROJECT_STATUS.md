@@ -2,6 +2,15 @@
 
 ## Recent changes
 
+- **F-001 live-tested and approved by the user; noted a future-work item.** User confirmed the
+  reworked onboarding flow works correctly end-to-end in live Telegram testing. Logged a **known
+  future work** note in `F-001`'s Scope boundary: the S3 opener (`intro_opener`) and the S2/S3 photo
+  are currently **static** (one canned line + one fixed image per persona); once the Chat LLM (F-002)
+  and media generation (roadmap Phase 2) exist, both should become **dynamically generated** — an
+  LLM-written, in-character hook drawing the user into replying, paired with a generated/selected
+  photo, rather than the same static line/image for every user. Not implemented now — tracked so
+  it isn't lost. **Merged `feature/f-001-onboarding` into `master`** (58/58 tests green, per the
+  CLAUDE.md merge rule).
 - **Removed the main menu entirely — explicit product decision: "no menu, ever" (docs-first).** The
   user rejected the `≡ Menu` screen (Choose Lady / Resume chat) outright — one reply-keyboard action
   only: `💋 Choose Lady`. Docs first: `architecture.md` §1.1 (flow diagram no longer has a MENU node;

@@ -14,6 +14,15 @@
 > (architecture.md §3.7). Adult/age-consent gating belongs to the intimate-content feature, not
 > onboarding — F-001 follows the plain reference flow `/start → Welcome → Choose Lady → chat`
 > (architecture.md §1.1).
+>
+> **Known future work (not in this feature's current scope):** the S3 opener (`intro_opener`,
+> FR-001-11) is currently a **static, canned line per persona** ("Hey there 😊 I'm {name}…"), and
+> the S2/S3 photo (FR-001-22) is a static file at a fixed path. Once the Chat LLM is wired up
+> (F-002) and media generation exists (roadmap Phase 2, architecture.md §8), both should become
+> **dynamically generated**: an LLM-written, in-character hook tailored to draw the user into
+> replying (not a fixed template), paired with a freshly generated/selected photo — rather than one
+> static line + one static image reused for every user. Tracked here so it isn't lost; not
+> implemented as part of F-001.
 
 ---
 
