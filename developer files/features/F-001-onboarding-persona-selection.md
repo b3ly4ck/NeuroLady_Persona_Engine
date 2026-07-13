@@ -72,12 +72,11 @@ flowchart TD
 ### Returning user
 ```mermaid
 flowchart TD
-    A[User reopens the bot] --> B[User sends /start]
-    B --> C{Has a prior session?}
-    C -- Yes --> D[Resume with the same persona<br/>reply keyboard restored]
-    C -- No --> E[Show Choose Lady gallery]
-    D --> F[Chat ready]
-    E --> F
+    A[User reopens the bot / sends /start<br/>possibly mid-chat with a persona] --> B{First ever /start?}
+    B -- Yes (brand-new) --> C[Show Welcome screen S1]
+    B -- No (returning) --> D[Go straight to Choose Lady S2<br/>active session preserved, NOT ended]
+    C -->|tap Start| D
+    D -. later, via Menu -> Resume chat .-> E[Return to the active persona]
 ```
 
 ### Switching persona from chat
@@ -135,11 +134,12 @@ Feature: F-001 Onboarding & Persona Selection
     And a reply keyboard with "💋 Choose Lady" and a menu (≡) button is shown
     And the chat is ready for the user to send a message
 
-  Scenario: UC-001-05 Returning user resumes with the same persona
-    Given a user has previously onboarded and has a session with a persona
-    When the user reopens the bot and sends /start
+  Scenario: UC-001-05 /start always goes to Choose Lady, even mid-chat
+    Given a user has previously onboarded and has an active session with a persona
+    When the user sends /start while in that chat
     Then the user record is not duplicated
-    And the user resumes with the same persona and reply keyboard, without repeating onboarding
+    And the user is taken to the Choose Lady screen (not resume-locked into the chat)
+    And the active session is preserved so "Resume chat" in the menu still returns to that persona
 
   Scenario: UC-001-06 Switching persona from within the chat
     Given a user is in a chat with persona X
@@ -213,8 +213,12 @@ Feature: F-001 Onboarding & Persona Selection
 - **FR-001-14** — Selecting a different persona via "Start Chat" must **switch the active session** to
   that persona and send her intro.
 - **FR-001-15** — On `/start` from an **existing** user, the system must **not** create a duplicate
-  `USER` record; a user with a prior session resumes with that persona and keyboard, and a user with
-  no session is shown the gallery.
+  `USER` record and must take the user **straight to the Choose Lady screen (S2)** — a brand-new
+  user (first ever `/start`) sees the Welcome screen (S1); a returning user is dropped directly on
+  the gallery. `/start` **never resume-locks** the user into a chat: **even if they are mid-chat
+  with a persona**, `/start` sends them to the Choose Lady main screen. The active session is
+  **preserved** (not ended), so the user can still return to that persona via the menu's **Resume
+  chat** (FR-001-16); it is simply not what `/start` does.
 - **FR-001-16** — The main menu (≡) must expose at least **Choose Lady** and **Resume chat** actions,
   each reachable in one tap.
 - **FR-001-17** — Repeated taps of **"Start"** or **"Start Chat"** (double-tap / rapid resend) must be

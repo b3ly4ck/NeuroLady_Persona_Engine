@@ -54,9 +54,10 @@ async def test_uc_001_01_start_creates_user_and_shows_welcome(seeded_db):
     assert kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "start"
 
 
-async def test_fr_001_15_02_returning_user_resumes(seeded_db):
-    """TC-FR-001-15-02 — a returning user with an active session resumes (reply keyboard), no re-onboard."""
-    user, _ = await get_or_create_user(seeded_db, 1002, "en")
+async def test_fr_001_15_02_returning_user_start_goes_to_gallery(seeded_db):
+    """TC-FR-001-15-02 — a returning user's /start goes straight to Choose Lady even mid-chat (no
+    resume-lock); the active session is preserved for the menu's Resume."""
+    user, _ = await get_or_create_user(seeded_db, 1002, "en")  # user already exists (returning)
     persona = (await list_gallery_personas(seeded_db, "en"))[0]
     await start_or_switch_session(seeded_db, user.id, persona.id)
     await seeded_db.commit()
@@ -64,9 +65,12 @@ async def test_fr_001_15_02_returning_user_resumes(seeded_db):
     msg = fake_message(1002, lang="en")
     await ob.cmd_start(msg, seeded_db, AsyncMock())
 
-    text = msg.answer.await_args.args[0]
-    assert persona.name in text  # resumed with the same persona
-    assert msg.answer.await_args.kwargs.get("reply_markup") is not None  # reply keyboard
+    assert msg.answer.await_count == 2  # gallery intro + card, not a resume message
+    intro_kwargs = msg.answer.await_args_list[0].kwargs
+    labels = [b.text for row in intro_kwargs["reply_markup"].keyboard for b in row]
+    assert any("Choose Lady" in x for x in labels)
+    active = await get_active_session(seeded_db, user.id)  # session preserved, not ended
+    assert active is not None and active.persona_id == persona.id
 
 
 # ── Start -> S2 gallery (UC-001-02, FR-001-03) ──────────────────────────────────────────────

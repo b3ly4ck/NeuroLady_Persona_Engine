@@ -129,19 +129,17 @@ async def send_persona_intro(
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, db: AsyncSession, bot: Bot) -> None:
-    """FR-001-01/02/15 — create the user once; resume if they have an active session, else Welcome."""
-    user = await _user_from(db, message.from_user)
-    active = await get_active_session(db, user.id)
-    if active is not None:
-        persona = await _persona(db, active.persona_id)
-        if persona is not None:
-            await message.answer(
-                t("resumed", user.locale, name=persona.name),
-                reply_markup=keyboards.reply_kb(user.locale),
-            )
-            return
-    text, kb = views.welcome_view(user.locale)
-    await message.answer(text, reply_markup=kb)
+    """FR-001-01/02/15 — create the user once; new user sees Welcome (S1), a returning user goes
+    straight to Choose Lady (S2). `/start` never resume-locks a mid-chat user; any active session is
+    left intact for `Menu -> Resume chat`."""
+    user, created = await get_or_create_user(
+        db, message.from_user.id, getattr(message.from_user, "language_code", None)
+    )
+    if created:
+        text, kb = views.welcome_view(user.locale)
+        await message.answer(text, reply_markup=kb)
+    else:
+        await _open_gallery(message, db, user, with_intro=True)
 
 
 # ── Start -> S2 gallery ──────────────────────────────────────────────────────────────────────────

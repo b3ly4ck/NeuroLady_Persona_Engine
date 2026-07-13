@@ -2,6 +2,13 @@
 
 ## Recent changes
 
+- **`/start` is now a "home" action — always goes to Choose Lady, never resume-locks (docs-first).**
+  Per the reference, `/start` must take the user to the Choose Lady main screen even mid-chat.
+  Updated docs first (`F-001` FR-001-15 + UC-001-05 + returning-user flow; `architecture.md` §1.1
+  note), then code: `cmd_start` now shows Welcome (S1) only to a **brand-new** user (first ever
+  `/start`) and drops a **returning** user straight onto Choose Lady (S2); it no longer resumes the
+  active chat. The active session is **preserved** (not ended), so `Menu → Resume chat` still returns
+  to that persona. Updated `test_fr_001_15_02` accordingly. **49 tests green.**
 - **Reworked the onboarding screen flow to match the reference design (docs-first).** The user
   supplied reference screenshots defining the canonical screen order S1→S2→S3 and screen contents;
   per the reaffirmed **docs-first rule** (now in CLAUDE.md), documentation was updated *before* code:

@@ -120,7 +120,10 @@ driven; the user should barely need to type commands — inline/reply keyboards 
 **Canonical screen order (this is the exact reference flow — always follow it).** Each screen flows
 from a single specific action on the previous one:
 
-1. **`/start` → Start screen (S1).**
+1. **`/start` → Start screen (S1)** for a brand-new user; a **returning** user's `/start` skips
+   S1 and goes **straight to S2 (Choose Lady)**. `/start` is a "home" action — even **mid-chat** it
+   takes the user to Choose Lady, never resume-locking them into the conversation (the active session
+   is preserved for `Menu → Resume chat`).
 2. **S1, tap `Start` → Choose Lady screen (S2).**
 3. **S2, `◀` / `▶` → S2** (the same screen; the persona card updates in place, one persona per view).
 4. **S2, tap `Start Chat` → Chat screen (S3).**
