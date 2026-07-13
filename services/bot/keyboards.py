@@ -4,7 +4,6 @@
 keyboard carries exactly one persistent action, "💋 Choose Lady".
 
 Callback-data scheme (kept tiny and explicit):
-- ``start``                 — Welcome "Start" -> open gallery at card 0
 - ``card:<index>``          — show the gallery card at <index> (used by ◀/▶ pagination)
 - ``startchat:<persona_id>``— Start Chat with a persona
 - ``noop``                  — inert (the counter button)
@@ -20,13 +19,6 @@ from aiogram.types import (
 
 from services.bot.domain.gallery import counter_label, cyclic_index
 from services.bot.i18n import t
-
-
-def welcome_kb(locale: str) -> InlineKeyboardMarkup:
-    """FR-001-02 — a single full-width 'Start' inline button."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text=t("btn_start", locale), callback_data="start")]]
-    )
 
 
 def card_kb(persona_id: int, index: int, total: int, locale: str) -> InlineKeyboardMarkup:

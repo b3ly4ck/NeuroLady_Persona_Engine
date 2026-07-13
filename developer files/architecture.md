@@ -120,25 +120,21 @@ driven; the user should barely need to type commands — inline/reply keyboards 
 **Canonical screen order (this is the exact reference flow — always follow it).** Each screen flows
 from a single specific action on the previous one:
 
-1. **`/start` → Start screen (S1)** for a brand-new user; a **returning** user's `/start` skips
-   S1 and goes **straight to S2 (Choose Lady)**. `/start` is a "home" action — even **mid-chat** it
-   takes the user to Choose Lady, never resume-locking them into the conversation (the active
-   session is preserved: picking the same persona again on S2 just continues that chat).
-2. **S1, tap `Start` → Choose Lady screen (S2).**
-3. **S2, `◀` / `▶` → S2** (the same screen; the persona card updates in place, one persona per view).
-4. **S2, tap `Start Chat` → Chat screen (S3).**
-5. **S3, reply-keyboard `💋 Choose Lady` → S2** (re-open the gallery). **There is no main menu
+1. **`/start` → Choose Lady screen (S2), directly, for everyone** — a brand-new user (a `USER`
+   record is created) and a returning user alike land straight on S2; there is **no separate
+   Welcome/Start screen and no intermediate "Start" tap** (removed by explicit product decision — a
+   welcome/CTA screen ahead of the gallery was pure friction with nothing the gallery intro doesn't
+   already say). `/start` is a "home" action — even **mid-chat** it takes the user to Choose Lady,
+   never resume-locking them into the conversation (the active session is preserved: picking the
+   same persona again on S2 just continues that chat).
+2. **S2, `◀` / `▶` → S2** (the same screen; the persona card updates in place, one persona per view).
+3. **S2, tap `Start Chat` → Chat screen (S3).**
+4. **S3, reply-keyboard `💋 Choose Lady` → S2** (re-open the gallery). **There is no main menu
    screen and no `≡ Menu` button** — the reply keyboard carries this single action only.
 
 ```mermaid
 flowchart TD
-    START([/start]) --> S1
-
-    subgraph S1["S1 — Start screen"]
-        S1a["header 'NeuroLady AI' + avatar"]
-        S1b["flirty welcome copy"]
-        S1c["inline button: Start (full-width)"]
-    end
+    START([/start]) --> S2
 
     subgraph S2["S2 — Choose Lady screen"]
         S2a["intro message ('Choose the lady... / come back anytime / ready?')<br/>+ persistent reply keyboard: 💋 Choose Lady (only)"]
@@ -152,7 +148,6 @@ flowchart TD
         S3c["chat is READY — F-002 takes over the conversation"]
     end
 
-    S1 -->|"tap Start"| S2
     S2 -->|"◀ / ▶ (card updates in place)"| S2
     S2 -->|"tap Start Chat"| S3
     S3 -->|"reply kb: 💋 Choose Lady"| S2
@@ -164,10 +159,9 @@ flowchart TD
 
 - **Header:** standard Telegram chat header — `‹ Chats` back link, title **"NeuroLady AI"**, and
   the persona/brand avatar (top-right).
-- **S1 — Start screen:** a flirty welcome message (e.g. "Step into a realm of pleasure and
-  desire… Select the woman who captivates you… Tap **Start** to dive in!") followed by a single
-  full-width **`Start`** inline button.
-- **S2 — Choose Lady (persona gallery):** reached by tapping `Start` on S1. It is **two messages**:
+- **S2 — Choose Lady (persona gallery):** reached **directly on `/start`** — for a brand-new user
+  and a returning user alike; there is no separate Welcome/Start screen ahead of it. It is **two
+  messages**:
   1. An **intro message** — a short multi-line invite ("Choose the lady you'd like to chat with from
      the list below. Each one is unique, with her own personality and passions. You can always come
      back and pick another… Ready for some exciting conversations?"). The **persistent reply

@@ -4,7 +4,7 @@ Maps to TC ids for FR-001-02/03/04/05/06/09/12/16 and NFR-001-04 (localization).
 """
 from __future__ import annotations
 
-from aiogram.types import InlineKeyboardMarkup, ReplyKeyboardMarkup
+from aiogram.types import ReplyKeyboardMarkup
 
 from services.bot import views
 from services.bot.models import Persona, PersonaStatus
@@ -20,24 +20,9 @@ def make_persona(**kw) -> Persona:
     return Persona(**base)
 
 
-# ── S1 Welcome (FR-001-02, NFR-001-04) ──────────────────────────────────────────────────────
-
-
-def test_fr_001_02_01_welcome_single_start_button():
-    """TC-FR-001-02-01/02 — Welcome has flirty copy and exactly one 'Start' inline button."""
-    text, kb = views.welcome_view("en")
-    assert "Step into a realm" in text
-    assert isinstance(kb, InlineKeyboardMarkup)
-    assert len(kb.inline_keyboard) == 1 and len(kb.inline_keyboard[0]) == 1
-    assert kb.inline_keyboard[0][0].callback_data == "start"
-
-
-def test_nfr_001_04_01_welcome_localized():
-    """TC-NFR-001-04-01 — RU welcome is Russian, EN welcome is English (no mix)."""
-    ru, _ = views.welcome_view("ru")
-    en, _ = views.welcome_view("en")
-    assert "Погрузись" in ru and "Step into" in en
-    assert "Step into" not in ru
+# FR-001-02 (Welcome screen S1) is DEPRECATED — there is no separate Welcome screen anymore;
+# `/start` renders S2 directly. No `welcome_view`/`welcome_kb` exist to test (see test_f001_handlers
+# for the FR-001-16-style "deprecated feature has no code" assertion pattern).
 
 
 # ── S2 gallery intro + reply keyboard (FR-001-03/12) ────────────────────────────────────────
@@ -51,6 +36,14 @@ def test_fr_001_03_01_gallery_intro_carries_reply_keyboard():
     labels = [b.text for row in kb.keyboard for b in row]
     assert len(labels) == 1
     assert "Choose Lady" in labels[0]
+
+
+def test_nfr_001_04_01_gallery_intro_localized():
+    """TC-NFR-001-04-01 — RU gallery intro is Russian, EN is English (no mix)."""
+    ru, _ = views.gallery_intro_view("ru")
+    en, _ = views.gallery_intro_view("en")
+    assert "Выбери" in ru and "Choose the lady" in en
+    assert "Choose the lady" not in ru
 
 
 # ── S2 persona card (FR-001-04/05/06/09) ────────────────────────────────────────────────────

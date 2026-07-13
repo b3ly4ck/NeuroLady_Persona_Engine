@@ -10,21 +10,8 @@ from services.bot.domain.users import DEFAULT_LOCALE, normalize_locale
 
 # key -> {locale -> text}
 _CATALOG: dict[str, dict[str, str]] = {
-    # ── S1 Start screen ──────────────────────────────────────────────────────────────────────
-    "welcome": {
-        "en": (
-            "🔥 Step into a realm of pleasure and desire…\n\n"
-            "😉 Are you ready to unleash your wildest fantasies?\n"
-            "💋 Select the woman who captivates you, and let's begin an unforgettable journey!\n\n"
-            "Tap <b>Start</b> to dive in!"
-        ),
-        "ru": (
-            "🔥 Погрузись в мир удовольствия и желания…\n\n"
-            "😉 Готов раскрыть свои самые смелые фантазии?\n"
-            "💋 Выбери ту, что покорит тебя, и давай начнём незабываемое путешествие!\n\n"
-            "Жми <b>Начать</b>, чтобы окунуться!"
-        ),
-    },
+    # There is no S1 Welcome screen (removed by explicit product decision, FR-001-02 deprecated):
+    # `/start` renders the S2 Choose Lady screen directly.
     # ── S2 Choose Lady screen ────────────────────────────────────────────────────────────────
     "gallery_intro": {
         "en": (
@@ -51,7 +38,6 @@ _CATALOG: dict[str, dict[str, str]] = {
         "ru": "Привет 😊 Я {name}. Так рада, что ты выбрал меня… расскажи, что у тебя на уме сегодня? 💋",
     },
     # ── Buttons — no menu (architecture.md §1.3: no main menu, ever) ────────────────────────────
-    "btn_start": {"en": "Start", "ru": "Начать"},
     "btn_start_chat": {"en": "💬 Start Chat", "ru": "💬 Начать чат"},
     "btn_choose_lady": {"en": "💋 Choose Lady", "ru": "💋 Выбрать девушку"},
 }

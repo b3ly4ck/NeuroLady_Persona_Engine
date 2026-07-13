@@ -2,6 +2,22 @@
 
 ## Recent changes
 
+- **Removed the Welcome/Start screen (S1) — `/start` now opens Choose Lady directly (docs-first,
+  branch `feature/f-001-onboarding`).** Live testing showed the flirty "Погрузись в мир
+  удовольствия…" welcome screen with a "Начать" button was pure friction ahead of the gallery; the
+  user asked to drop it. Docs updated first, then code:
+  - **architecture.md §1.1/§1.2** — S1 removed from the canonical flow + Mermaid diagram; `/start`
+    goes straight to S2 for a brand-new and a returning user alike.
+  - **F-001 feature** — `FR-001-02` marked `DEPRECATED` (id immutable, not reused, per FR-001-16
+    precedent); FR-001-03/15/17/23 and NFR-001-01 reworded to "`/start` → S2 directly"; UC-001-01
+    rewritten, UC-001-02 deprecated; user stories + flow diagrams updated.
+  - **F-001 test spec** — FR-001-02's 3 tests → `deprecated`; FR-001-03/17/23, NFR-001-01, and the
+    US manual tests reworded; coverage summary updated.
+  - **Code** — `cmd_start` no longer branches on new-vs-returning; it always renders the gallery.
+    Removed `welcome_view`, `welcome_kb`, the `on_start` "start" callback, and the `welcome`/
+    `btn_start` i18n strings. Handler/view tests updated (incl. a `test_fr_001_02_deprecated_*`
+    guard that the Welcome code is gone). **57 F-001 tests pass** (was 58; welcome-specific tests
+    merged/retired, net −1). Live-verified by the user ("работает +- верно").
 - **Wrote the F-006 test spec** (`developer files/tests/F-006-life-engine.md`), the mirror test
   specification for the Life Engine feature, per `test_driven_development.md` §7 and the F-004
   example. Covers **all 21 FR (FR-006-01..21)** and **all 13 NFR (NFR-006-01..13)** at 2-3 tests each

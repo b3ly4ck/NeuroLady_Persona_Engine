@@ -15,11 +15,6 @@ from services.bot.i18n import t
 from services.bot.models import Persona
 
 
-def welcome_view(locale: str) -> tuple[str, InlineKeyboardMarkup]:
-    """S1 / FR-001-02 — Welcome screen: header + flirty copy + single Start button."""
-    return t("welcome", locale), keyboards.welcome_kb(locale)
-
-
 def gallery_intro_view(user_locale: str) -> tuple[str, ReplyKeyboardMarkup]:
     """S2 intro message (FR-001-03) — carries the persistent reply keyboard (💋 Choose Lady only)."""
     return t("gallery_intro", user_locale), keyboards.reply_kb(user_locale)

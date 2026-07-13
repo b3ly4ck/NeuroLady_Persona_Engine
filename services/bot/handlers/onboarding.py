@@ -1,8 +1,10 @@
 """F-001 onboarding handlers — the canonical screen flow (architecture.md §1.1):
 
-    /start -> S1 Welcome -> (Start) -> S2 Choose Lady (intro msg + card) -> (Start Chat) -> S3 Chat.
+    /start -> S2 Choose Lady directly (intro msg + card) -> (Start Chat) -> S3 Chat.
 
-Handlers are thin: parse the update, call the pure domain logic, render via `views`. They are
+There is no separate Welcome/Start screen (removed by explicit product decision, FR-001-02
+deprecated): `/start` renders the Choose Lady screen for a brand-new user and a returning user
+alike. Handlers are thin: parse the update, call the pure domain logic, render via `views`. They are
 module-level functions (also registered on `router`) so tests can call them with mocked aiogram
 objects.
 """
@@ -162,34 +164,23 @@ async def send_persona_intro(
     return "fallback"
 
 
-# ── /start (S1) ─────────────────────────────────────────────────────────────────────────────────
+# ── /start -> S2 directly ───────────────────────────────────────────────────────────────────────
 
 
 @router.message(CommandStart())
 async def cmd_start(message: Message, db: AsyncSession, bot: Bot) -> None:
-    """FR-001-01/02/15 — create the user once; new user sees Welcome (S1), a returning user goes
-    straight to Choose Lady (S2). `/start` never resume-locks a mid-chat user; the active session is
-    left intact — picking that same persona again on S2 just continues the chat (no menu/resume)."""
-    user, created = await get_or_create_user(
+    """FR-001-01/03/15 — create the user once, then render Choose Lady (S2) directly — for a
+    brand-new user and a returning user alike; there is no separate Welcome screen (FR-001-02,
+    deprecated). `/start` never resume-locks a mid-chat user; the active session is left intact —
+    picking that same persona again on S2 just continues the chat (no menu/resume)."""
+    user, _created = await get_or_create_user(
         db, message.from_user.id, getattr(message.from_user, "language_code", None)
     )
-    if created:
-        text, kb = views.welcome_view(user.locale)
-        await message.answer(text, reply_markup=kb)
-    else:
-        await _open_gallery(message, bot, db, user, with_intro=True)
+    await _open_gallery(message, bot, db, user, with_intro=True)
     await _safe_delete_own(message)  # FR-001-23: drop the /start command AFTER responding
 
 
-# ── Start -> S2 gallery ──────────────────────────────────────────────────────────────────────────
-
-
-@router.callback_query(F.data == "start")
-async def on_start(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
-    """FR-001-03 — open S2: intro message (with reply keyboard) + the first persona card."""
-    user = await _user_from(db, cb.from_user)
-    await _open_gallery(cb.message, bot, db, user, with_intro=True)
-    await cb.answer()
+# ── Gallery navigation ───────────────────────────────────────────────────────────────────────────
 
 
 @router.callback_query(F.data.startswith("card:"))
@@ -258,5 +249,5 @@ async def on_choose_lady_text(message: Message, db: AsyncSession, bot: Bot) -> N
 
 # No main menu, ever (architecture.md §1.3): there is no "≡ Menu" button, no menu screen, and no
 # "Resume chat" action. `on_choose_lady_text` above is the only navigation entry point besides
-# the S1/S2/S3 flow itself; resuming a chat is just picking the same persona again on S2
-# (FR-001-10 reuses the active session).
+# the S2/S3 flow itself (there is no S1 — see FR-001-02, deprecated); resuming a chat is just
+# picking the same persona again on S2 (FR-001-10 reuses the active session).
