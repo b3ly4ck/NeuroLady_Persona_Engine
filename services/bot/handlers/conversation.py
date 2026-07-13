@@ -10,6 +10,7 @@ unavailable, so the chat is never left silent — FR-002-19).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from aiogram import Bot, F, Router
@@ -18,6 +19,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient
+from services.bot.domain.humanize import chunk_reply, pacing_delay, parse_settings
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.models import Persona
@@ -25,6 +27,9 @@ from services.bot.orchestrator import handle_turn
 
 log = logging.getLogger(__name__)
 router = Router(name="conversation")
+
+# Indirection so tests can stub out the deliberate pacing sleeps (F-003 pacing is real time).
+_sleep = asyncio.sleep
 
 # Neutral, localized nudge when the user types before choosing a persona (brand voice, not persona
 # voice — no active session means there is no persona to speak in character yet).
@@ -57,4 +62,12 @@ async def on_text(
     await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
     reply = await handle_turn(db, session, persona, message.text, chat_client)
-    await message.answer(reply)
+
+    # F-003 human-likeness delivery: split a long reply into a few short messages and pace each
+    # with a "typing…" indicator + a deliberate, capped pause, so it reads like a real person
+    # texting rather than one instant block. Chunking preserves meaning (FR-003-38).
+    settings = parse_settings(persona)
+    for chunk in chunk_reply(reply, settings):
+        await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
+        await _sleep(pacing_delay(chunk, settings))
+        await message.answer(chunk)

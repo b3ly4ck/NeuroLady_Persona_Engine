@@ -2,6 +2,33 @@
 
 ## Recent changes
 
+- **Etap 3 — F-003 human-likeness slice (delivery pacing + chunking + comm-settings style) on branch
+  `feature/f-002-conversation`.** Layered the "she texts like a real person" behaviour onto the F-002
+  loop; no new infra (pure delivery/style, consistent with the Postgres-only slice). Validated live.
+  - **`services/bot/domain/humanize.py`** — the mechanical half of F-003: `parse_settings` (reads the
+    persona's `comm_settings_json`, defaults when absent/garbled — FR-003-34), `chunk_reply` (splits a
+    wall of text into ≤`MAX_CHUNKS` short messages at sentence boundaries, single/one-sentence replies
+    stay whole, chunks reconstruct the original text so meaning is preserved — FR-003-09/11/14/38),
+    `pacing_delay` (length-scaled, typing-speed-scaled, jittered, **capped at 6 s** — FR-003-01/02/05/06/08).
+  - **`services/bot/handlers/conversation.py`** — delivery now sends `typing…` + a paced pause before
+    each chunk and answers chunk-by-chunk in order (FR-003-03/09/10). `_sleep` indirection lets tests
+    skip the real pauses.
+  - **`services/bot/domain/persona_prompt.py`** — the stylistic half: a style line derived from
+    `comm_settings` (register, emoji frequency, slang, verbosity) is injected into the persona system
+    prompt (architecture.md §4.2 — communication style is part of the prompt), so the model writes
+    in-style (FR-003-16/17/21/24). Content/correctness stays owned by F-002 (FR-003-38).
+  - **`services/bot/personas_seed.py`** — the 6 starter personas now carry distinct `comm_settings`
+    (pacing/verbosity/emoji/register/slang) + `big_five`, so they read as different texters (FR-003-35).
+  - **Tests:** `tests/test_f003_humanize.py` (15) — settings parse/defaults/bad-json, chunking
+    (short→1, long→several, cap, single-long-sentence, meaning preserved), delay bounds/scaling/cap,
+    prompt style directives, and a handler test asserting a long reply is delivered as several ordered
+    messages. Updated the F-002 handler test for the new chunked delivery. **Full suite: 93 passed**
+    (58 F-001 + 20 F-002 + 15 F-003).
+  - **Live check:** Alina's long weekend story split into 4 natural chunks (~4–6 s typing each); Vika
+    (emoji/slang) vs Olivia (gentle, ~no emoji) read as visibly different texters from the same prompt.
+  - **Deferred (next):** F-003's statistical anti-repetition/variability, per-user interaction-style
+    overlay (`USER.interaction_style_json`), and in-exchange follow-up; plus F-004 memory + F-005
+    relationship on the orchestrator TODO hooks.
 - **Etap 2 — F-002 conversation turn (thin vertical slice) wired onto the F-001 bot (branch
   `feature/f-002-conversation`, off `feature/chat-inference`).** The persona now actually talks:
   plain text in an active session → in-character LLM reply, validated end-to-end against the live

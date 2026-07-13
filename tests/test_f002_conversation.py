@@ -277,16 +277,17 @@ async def test_chat_client_is_ready_true_false():
 # ── handler-level (FR-002-01/24) ───────────────────────────────────────────────────────────────
 
 
-async def test_fr_002_24_01_handler_sends_typing_then_reply(db):
+async def test_fr_002_24_01_handler_sends_typing_then_reply(db, monkeypatch):
     """TC-FR-002-24-01 — the handler shows 'typing…' immediately, then answers with the reply."""
+    monkeypatch.setattr(conv, "_sleep", AsyncMock())  # skip the real F-003 pacing pauses
     user, persona, session = await _ready_chat(db)
     bot = MagicMock()
     bot.send_chat_action = AsyncMock()
     msg = fake_message(user.telegram_id, "привет", lang="ru")
     await conv.on_text(msg, db, bot, FakeChatClient(reply="хэй, рада тебя видеть)"))
 
-    bot.send_chat_action.assert_awaited_once()  # typing indicator (immediate ack)
-    msg.answer.assert_awaited_once_with("хэй, рада тебя видеть)")
+    assert bot.send_chat_action.await_count >= 1  # typing indicator shown (ack + per-chunk)
+    msg.answer.assert_awaited_once_with("хэй, рада тебя видеть)")  # short reply → single message
 
 
 async def test_fr_002_01_02_no_active_session_nudges_to_choose(db):
