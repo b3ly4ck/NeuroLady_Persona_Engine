@@ -50,6 +50,12 @@ class FactStatus(str, enum.Enum):
     superseded = "superseded"
 
 
+class GoalStatus(str, enum.Enum):
+    active = "active"
+    completed = "completed"
+    dropped = "dropped"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -161,3 +167,80 @@ class UserFact(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="facts")
+
+
+class DailyPlan(Base):
+    """The persona's morning-authored schedule for one local day (ERD §5.1, F-006 FR-006-01/04).
+
+    No structured slot table — the schedule is **free text** (`plan_text`); current activity is
+    derived from it + the current time (architecture.md §3.5). One row per (persona, date).
+    """
+
+    __tablename__ = "daily_plans"
+    __table_args__ = (UniqueConstraint("persona_id", "date", name="uq_plan_persona_date"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    date: Mapped[str] = mapped_column(String(10), index=True)  # "YYYY-MM-DD" in her local timezone
+    plan_text: Mapped[str] = mapped_column(Text, default="")
+    prompt_version: Mapped[str] = mapped_column(String(32), default="")  # audit (FR-006-19/21)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class Reflection(Base):
+    """A persona's own first-person daily reflection (ERD §5.1 REFLECTION, F-006 FR-006-05/06).
+
+    Shared persona config — about her own life, never a specific user's private facts
+    (FR-006-06). `source_period` records provenance (what it was derived from) for auditability
+    (FR-006-21).
+    """
+
+    __tablename__ = "reflections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    scope: Mapped[str] = mapped_column(String(16), default="day", index=True)  # daily reflections
+    period_key: Mapped[str] = mapped_column(String(10), index=True)  # "YYYY-MM-DD"
+    content: Mapped[str] = mapped_column(Text, default="")
+    source_period: Mapped[str] = mapped_column(Text, default="")  # provenance (FR-006-21)
+    prompt_version: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class BiographyLayer(Base):
+    """A compressed biography layer at week/month/year/epoch scope (ERD §5.1 BIOGRAPHY_LAYER,
+    F-006 FR-006-07/08/09). Authored by the Life Engine, handed to Memory (F-004) for storage +
+    embedding; `embedding_ref` links to the vector point once indexed. `source_period` records what
+    was compressed (provenance — FR-006-21), e.g. the date range or source ids.
+    """
+
+    __tablename__ = "biography_layers"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    scope: Mapped[str] = mapped_column(String(16), index=True)  # epoch|year|month|week
+    period_key: Mapped[str] = mapped_column(String(32), index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    source_period: Mapped[str] = mapped_column(Text, default="")
+    embedding_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    prompt_version: Mapped[str] = mapped_column(String(32), default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class Goal(Base):
+    """A persona's own goal, giving her direction beyond reactivity (ERD §5.1 GOAL, F-006
+    FR-006-11/12/13). Shared persona config, not per-user.
+    """
+
+    __tablename__ = "goals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    description: Mapped[str] = mapped_column(Text)
+    status: Mapped[GoalStatus] = mapped_column(Enum(GoalStatus), default=GoalStatus.active, index=True)
+    priority: Mapped[int] = mapped_column(Integer, default=3)  # 1 (low) .. 5 (high)
+    horizon: Mapped[str] = mapped_column(String(16), default="medium")  # short|medium|long
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )

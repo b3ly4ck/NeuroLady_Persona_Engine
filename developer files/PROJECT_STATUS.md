@@ -2,6 +2,54 @@
 
 ## Recent changes
 
+- **F-006 Life Engine implemented (branch `feature/f-006-life-engine`, off master).** The persona now
+  has her own living loop: morning plan → she "lives" it → end-of-day self-reflection → hierarchical
+  biography compression → goals that feed tomorrow's plan. Deterministic core + LLM steps + full
+  persistence + comprehensive tests, live-verified against the real model.
+  - **`services/bot/domain/life_engine.py`** — pure, config-driven core: `LifeEngineConfig`
+    (compression ratios, schedule hours, prompt versions — all tunable); **timezone-correct**
+    scheduling (`is_local_morning`/`is_local_end_of_day`/`local_date_key`, DST-safe via stdlib
+    `zoneinfo`); **`current_activity`** — parses the free-text plan's embedded time markers (24h or
+    12h AM/PM, ranges or single points) into slots **sorted by actual time** (not text-appearance
+    order) and picks the slot containing "now", with an overnight-wrap default and a graceful
+    whole-text fallback when unparseable (never "no day"); `should_compress`/`lower_scope_of` for the
+    7-daily→weekly/~4-weekly→monthly/12-monthly→yearly/years→epoch pyramid; `fixed_anchors_text`.
+  - **`services/bot/domain/life_engine_llm.py`** — the four external-LLM steps, each from a
+    **versioned prompt asset** (`prompts/{plan_day,reflect_day,compress,update_goals}_v1.txt`):
+    `run_plan_day`, `run_reflect_day`, `run_compress` (all plain first-person text out),
+    `run_update_goals` (strict-JSON progress/complete/drop/add, parsed defensively). None of these
+    builders ever reads `USER_FACT` or per-user conversation — privacy by construction, not just
+    policy (FR-006-06/NFR-006-05). All return `None` on LLM failure (FR-006-20).
+  - **`services/bot/domain/life_engine_store.py`** — persistence + hand-off to Memory: one plan per
+    local day (idempotent), **degrade to the last known plan** when today's isn't ready
+    (`get_current_plan_text`/`get_current_activity`), reflection storage + `uncompressed_daily`/
+    `uncompressed_layers` (find lower-level material not yet folded upward), `store_biography_layer`
+    (persists + hands off to F-004's vector index in a **separate `biography_layers` Qdrant
+    collection**, so persona biography never mixes with any user's private facts — reuses
+    `MemoryIndex.index_fact` generically with `persona_id` as the owner key), goal CRUD.
+  - **models:** `DailyPlan`, `Reflection` (scope="day"), `BiographyLayer` (scope
+    week/month/year/epoch + `embedding_ref`), `Goal` (+ `GoalStatus`) — every layer/reflection
+    carries `source_period` + `prompt_version` for auditability (FR-006-21).
+  - **Orchestrator:** `handle_turn` now exposes her current activity (from the daily plan + now) as
+    a system-context block, so she can mention her own day naturally (FR-006-03) — degrades to
+    nothing if she's never been planned yet; runs off the reply path (the LLM plan/reflect/compress
+    steps are never called inline with a reply — NFR-006-04).
+  - **Bug found live + fixed:** the LLM writes 12-hour "6:00 AM"/"7:00 PM" times; the parser
+    originally read digits literally (treating "7:00 PM" as 07:00), so **every query after 7am
+    incorrectly returned the evening dinner slot**. Fixed by parsing AM/PM into 24h and sorting
+    slots by actual time (not text-appearance order); added a regression test.
+  - **Tests:** `tests/test_f006_life_engine.py` — **one test per declared TC** (all 103:
+    60 FR + 35 NFR + 8 US). **89 real (passing)** across plan/reflection/compression/goals/timezone-
+    DST/privacy-by-construction/degrade/audit/persistence/localization, plus a live-bug regression,
+    and **17 honest `skip`s** for performance/load/statistical/e2e-live/manual TCs. Full project
+    suite: **256 passed, 17 skipped.**
+  - **Live check (real model):** a believable, goal-informed daily plan; correct current-activity
+    across the day after the AM/PM fix; a genuine first-person end-of-day reflection; 7 daily
+    entries compressed into one natural Russian weekly gist; a goal-update that credited real
+    progress ("10 км за неделю") without inventing anything.
+  - **Deferred:** actual batch scheduling infra (§6.1 coordination — infra, not F-006's domain
+    logic), the proactive video-circle media pipeline (consumes F-006's narrative basis, Phase 3),
+    and the 10-persona-roster load/scale tests (need a load harness).
 - **Expanded runnable test coverage toward the declared specs (branch `feature/f-004-memory`).**
   The `tests/` suite grew from **115 → 169** (+54), all green, covering the automatable TC cases the
   specs declared but that weren't yet coded. Added supplementary files:

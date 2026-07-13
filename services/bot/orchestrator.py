@@ -18,6 +18,7 @@ import logging
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
+from services.bot.domain import life_engine_store as life_store
 from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
 from services.bot.domain.fact_extraction import extract_memory_ops
@@ -62,6 +63,16 @@ def _memory_block(facts: list[UserFact], language: str) -> str | None:
     )
 
 
+def _life_engine_block(activity: str | None, language: str) -> str | None:
+    """Render her current activity (F-006 FR-006-03) as a system-context block so she can mention
+    her day naturally — never a mechanical status line."""
+    if not activity:
+        return None
+    if language == "ru":
+        return f"Что ты сейчас делаешь по своим делам (можешь упомянуть, если уместно): {activity}"
+    return f"What you're currently up to in your own life (mention it naturally if relevant): {activity}"
+
+
 async def handle_turn(
     db: AsyncSession,
     session: Session,
@@ -90,6 +101,12 @@ async def handle_turn(
     mem_block = _memory_block(recalled, persona.language)
     if mem_block:
         system_content += "\n\n" + mem_block
+    # F-006: expose her current activity (from the daily plan + now) so she can bring up her own
+    # day naturally (FR-006-03). Degrades to nothing if she's never been planned yet.
+    activity = await life_store.get_current_activity(db, persona.id, persona.timezone)
+    life_block = _life_engine_block(activity, persona.language)
+    if life_block:
+        system_content += "\n\n" + life_block
     # TODO(F-005): append the relationship summary that colors tone.
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     llm_messages += msg_domain.to_openai_messages(history)

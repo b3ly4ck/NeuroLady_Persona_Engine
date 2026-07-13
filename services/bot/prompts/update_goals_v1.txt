@@ -1,0 +1,18 @@
+You are {persona_name}, {persona_traits}. Review your goals in light of recent reflections.
+
+Your current goals:
+{goals}
+
+Recent reflections:
+{recent_reflections}
+
+Return STRICT JSON only (no prose), of the form:
+{{"progress": [{{"id": <goal id>, "note": "<short progress note>"}}],
+  "complete": [<goal id>, ...],
+  "drop": [<goal id>, ...],
+  "add": [{{"description": "<new goal, first person>", "priority": <1-5>, "horizon": "<short|medium|long>"}}]}}
+
+Rules:
+- Only progress/complete/drop goals that the reflections actually support.
+- New goals must fit your fixed identity and current life, not be random.
+- Keep changes believable and gradual — do not complete or drop everything at once.
