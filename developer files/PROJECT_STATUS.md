@@ -2,6 +2,44 @@
 
 ## Recent changes
 
+- **Etap 2 — F-002 conversation turn (thin vertical slice) wired onto the F-001 bot (branch
+  `feature/f-002-conversation`, off `feature/chat-inference`).** The persona now actually talks:
+  plain text in an active session → in-character LLM reply, validated end-to-end against the live
+  chat runner. Scope per the agreed thin slice: one persona, Postgres/SQLite only, memory
+  (F-004)/relationship (F-005)/human-likeness styling (F-003) stubbed with TODO hooks.
+  - **`services/bot/models.py`** — added the `MESSAGE` model + `MessageSender` enum
+    (ERD §5.1 SESSION||--o{MESSAGE); `media_asset_id` nullable now so the media feature needs no
+    migration.
+  - **`services/bot/chat_client.py`** — async OpenAI-compatible client to the runner (§6.2c). Raises
+    `ChatRunnerUnavailable` on transport/timeout/5xx/empty so the Orchestrator can fall back
+    in-character (FR-002-19); `is_ready()` for the cold path (FR-002-24). Optional `transport` hook
+    for tests.
+  - **`services/bot/domain/messages.py`** — persist a turn + `load_recent()` (last-N verbatim window,
+    FR-002-04) + `to_openai_messages()` role mapping (persona→assistant).
+  - **`services/bot/domain/persona_prompt.py`** — builds the persona system prompt (§4.2 part 1):
+    identity + Big Five + self-description + reply-language instruction (FR-002-21) + the hard
+    never-reveal-AI / no-assistant-voice rule (FR-002-08/NFR-002-10).
+  - **`services/bot/orchestrator.py`** — the turn (§3.2/DFD-1): persist user msg first (input never
+    lost on failure) → assemble system + recent raw history → call runner → post-process (strip stray
+    `<think>`) → in-character fallback on failure → persist reply. TODO hooks mark where F-004/F-005/
+    F-003 slot in.
+  - **`services/bot/handlers/conversation.py`** — new router (included *after* onboarding so `/start`,
+    gallery callbacks and the 💋 Choose Lady button keep priority) handling non-command text in an
+    active session: send `typing…` immediately (FR-002-24), run the turn, answer; nudge to Choose Lady
+    if no active session. `ChatClient` injected via dispatcher workflow data.
+  - **Wiring:** `handlers/__init__.py` now a parent router (onboarding → conversation);
+    `app.build_dispatcher` builds/injects the `ChatClient`; `config.chat_base_url` +
+    `.env.example CHAT_BASE_URL` (corrected the stale `CHAT_LLM_BASE_URL:8001` placeholder to the
+    real `:8080`); `pyproject.toml` gains `httpx`.
+  - **Tests:** `tests/test_f002_conversation.py` — 20 tests (context assembly incl. verbatim history,
+    persistence + order, empty-history first turn, post-processing, fallback + input-preserved,
+    persona-prompt in-character rule + language, recent-history helpers, ChatClient wire contract via
+    `httpx.MockTransport`, handler typing-then-reply + no-session nudge). **Full suite: 78 passed**
+    (58 F-001 + 20 F-002). Live end-to-end check confirmed in-character RU replies and that the
+    "are you a bot?" probe does not break character.
+  - **Next:** layer F-004 memory (Postgres + Qdrant) and F-003 styling onto the TODO hooks; live
+    Telegram test needs a fresh `TELEGRAM_BOT_TOKEN` (the earlier one leaked in the public repo and
+    must be revoked via BotFather).
 - **Etap 1 — chat inference reference is live (branch `feature/chat-inference`).** Stood up the
   self-hosted Chat-LLM serving layer (architecture.md §4.1/§6.1/§6.2c) and validated it end-to-end
   on the target GPU (Quadro RTX 8000, 48 GB, Turing sm_75, CUDA 12.1):

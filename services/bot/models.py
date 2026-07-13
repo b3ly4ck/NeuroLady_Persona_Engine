@@ -40,6 +40,11 @@ class SessionState(str, enum.Enum):
     ended = "ended"
 
 
+class MessageSender(str, enum.Enum):
+    user = "user"
+    persona = "persona"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -95,3 +100,26 @@ class Session(Base):
 
     user: Mapped["User"] = relationship(back_populates="sessions")
     persona: Mapped["Persona"] = relationship()
+    messages: Mapped[list["Message"]] = relationship(
+        back_populates="session", order_by="Message.id"
+    )
+
+
+class Message(Base):
+    """One turn's message in a session (ERD §5.1 SESSION ||--o{ MESSAGE).
+
+    F-002 persists both the inbound user message and the persona reply, with the correct `sender`
+    and a monotonic order (FR-002-09). `media_asset_id` is modelled now (nullable) so the later
+    media feature needs no migration; the MEDIA_ASSET table / FK arrives with that feature.
+    """
+
+    __tablename__ = "messages"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("sessions.id"), index=True)
+    sender: Mapped[MessageSender] = mapped_column(Enum(MessageSender), index=True)
+    text: Mapped[str] = mapped_column(Text, default="")
+    media_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    session: Mapped["Session"] = relationship(back_populates="messages")

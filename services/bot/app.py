@@ -14,6 +14,7 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramNetworkError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from services.bot.chat_client import ChatClient
 from services.bot.config import get_settings
 from services.bot.db import init_models, make_engine, make_sessionmaker
 from services.bot.handlers import router
@@ -44,8 +45,12 @@ async def _run_polling_with_reconnect(dp: Dispatcher, bot: Bot) -> None:
             await asyncio.sleep(delay)
 
 
-def build_dispatcher(sessionmaker: async_sessionmaker[AsyncSession]) -> Dispatcher:
-    dp = Dispatcher()
+def build_dispatcher(
+    sessionmaker: async_sessionmaker[AsyncSession],
+    chat_client: ChatClient | None = None,
+) -> Dispatcher:
+    # `chat_client` is injected into handlers by name via workflow data; tests pass a fake.
+    dp = Dispatcher(chat_client=chat_client or ChatClient())
     db_mw = DbSessionMiddleware(sessionmaker)
     dp.message.middleware(db_mw)
     dp.callback_query.middleware(db_mw)
@@ -75,7 +80,7 @@ async def _run() -> None:
         token=settings.telegram_bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
-    dp = build_dispatcher(sessionmaker)
+    dp = build_dispatcher(sessionmaker, ChatClient(settings.chat_base_url))
     try:
         await _run_polling_with_reconnect(dp, bot)
     finally:

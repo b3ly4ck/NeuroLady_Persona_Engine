@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     telegram_bot_token: str = ""
     # Dev default: local SQLite (async). Use a Postgres URL in production.
     database_url: str = "sqlite+aiosqlite:///./neurolady.sqlite3"
+    # Chat-LLM runner (chat/serve.py) OpenAI-compatible endpoint — the F-002 conversation loop
+    # calls this over localhost (architecture.md §6.2c).
+    chat_base_url: str = "http://127.0.0.1:8080"
     env: str = "dev"
     log_level: str = "INFO"
 
