@@ -23,6 +23,7 @@ chat/models/*
 !chat/models/.gitkeep
 image/models/*
 !image/models/.gitkeep
+image/comfyui/          # headless ComfyUI runtime — cloned per-runner, never vendored
 video/models/*
 !video/models/.gitkeep
 

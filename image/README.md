@@ -22,9 +22,10 @@ how we avoid dependency conflicts with the chat/video runners (architecture.md �
 image/
   .venv/            # isolated env (gitignored) — created with: uv venv image/.venv --python 3.11
   models/           # safetensors weights (gitignored) — populated by download_model.py
-  prompts/          # generation-prompt templates (versioned, per-runner — never shared)
+  comfyui/          # headless ComfyUI runtime (gitignored — cloned, not vendored)
+  prompts/          # generation-prompt templates + ComfyUI workflow JSON (versioned, per-runner)
   download_model.py # fetches the selected AIO checkpoint into models/
-  # serve.py        # (TBD) starts the local job-API server behind the fixed contract
+  # serve.py        # (next) thin job-API wrapper in front of headless ComfyUI + LightX2V
 ```
 
 ## Setup (isolated env)
@@ -41,7 +42,24 @@ runner resident/warm by day and only brings up image/video runners at night, onc
 unloaded and the GPU is free. Both the chat and image checkpoints are ~28 GB, so **only one owns
 the 48 GB GPU at a time** — do not load this runner while the chat runner holds the GPU.
 
-## Serving (TBD)
-The AIO checkpoint is a merged (accelerator+VAE+CLIP) safetensors, the format ComfyUI loads
-natively; the runner will expose the fixed media **job API** (§6.2c) in front of the pipeline.
-Serving backend + LightX2V wiring are being finalized — see `serve.py` once added.
+## Serving (decided — build/test at night)
+The AIO checkpoint is a **merged single-file** (accelerator+VAE+CLIP) safetensors in **ComfyUI
+format**. LightX2V's native config-loader wants a base model + separate LoRA/quant configs and does
+**not** ingest the merged AIO file directly, so the runner serves the AIO on a **headless ComfyUI**
+runtime (ComfyUI is its native loader) with **LightX2V acceleration nodes**, all behind our own thin
+**media job-API** (the fixed §6.2c contract: enqueue → generate → write archive). Decision recorded
+in architecture.md §4.3 / §6.2c.
+
+Build steps (run inside this isolated runner; **GPU load-tested only at night** when the chat runner
+has released the 48 GB GPU):
+```bash
+# 1. headless ComfyUI + its deps into the isolated env
+git clone https://github.com/comfyanonymous/ComfyUI image/comfyui
+uv pip install --python image/.venv/bin/python -r image/comfyui/requirements.txt
+# torch built for this GPU (Turing sm_75 / CUDA 12.1):
+uv pip install --python image/.venv/bin/python torch torchvision \
+  --index-url https://download.pytorch.org/whl/cu121
+# 2. LightX2V acceleration nodes (custom_nodes)
+# 3. point ComfyUI at image/models/ (extra_model_paths.yaml) — do NOT copy the 28 GB file
+# 4. image/serve.py — thin job-API wrapper over ComfyUI's /prompt API, warm-gated
+```

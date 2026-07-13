@@ -20,10 +20,18 @@
     `*.safetensors`/`.venv` (layout was pre-planned in §6.3).
   - **Weights download running in the background** (`image/download.log`) via the Xet transport;
     disk-only, does not touch the GPU or disturb the live chat runner. 13 TB free disk.
-  - **Open decision (asked the user):** the **serving backend** for the AIO checkpoint (ComfyUI
-    headless behind the fixed media job-API is the recommended default, since the AIO safetensors is
-    a merged ComfyUI-format checkpoint; diffusers is awkward for merged AIO). `serve.py` + LightX2V
-    wiring land once confirmed — and can only be load-tested at night when the GPU is free.
+  - **Serving backend (decided by the user):** keep the exact **Phr00t AIO** checkpoint the docs
+    name, served on a **headless ComfyUI** runtime (ComfyUI is the native loader for the merged
+    single-file AIO; LightX2V's config-loader does not ingest it directly) with **LightX2V
+    acceleration nodes**, behind our thin **media job-API** (§6.2c). User's call: "надо именно AIO
+    ставить, если он без ComfyUI не запустится — придётся ComfyUI ставить." Recorded in
+    architecture.md §4.3 (serving-backend note) + §6.2c (image runner realizes its job API via
+    headless ComfyUI + LightX2V). `image/serve.py` (thin wrapper over ComfyUI's `/prompt` API,
+    warm-gated) is the next step — **GPU load-test only at night** when chat releases the GPU.
+  - Considered but rejected: a **LightX2V-native** path (base Qwen-Image-Edit-2511 + Lightning
+    4-step distill + NSFW LoRAs via `lora_configs`, FP8/INT8, no ComfyUI) — leaner/faster/lower-VRAM,
+    but it is **not** the documented AIO artifact (it re-creates the NSFW look from separately-loaded
+    community LoRAs), so the user chose to stay on the exact AIO checkpoint instead.
   - **Note:** the working tree also carried **uncommitted F-004 semantic-memory WIP** (Qdrant half:
     `services/bot/domain/embeddings.py`, `vector_store.py`, `tests/test_f004_semantic.py` + edits to
     `orchestrator.py`/`memory.py`/`conversation.py`/`app.py`/`config.py`/`pyproject.toml`) — left

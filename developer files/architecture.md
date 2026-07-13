@@ -520,6 +520,12 @@ video models below, so the night batch fits the sleep window on our own GPU.
   edits). Guided by the day plan + current time (the external LLM writes the generation prompt for
   her current activity/setting, §3.5), it produces **SFW** shots (gym selfie, office photo, …) and
   **intimate** shots → the day's archive.
+  - **Serving backend (decided):** the AIO is a **merged single-file** (accelerator+VAE+CLIP)
+    checkpoint in ComfyUI format, which LightX2V's native config-loader does not ingest directly, so
+    the image runner serves it on a **headless ComfyUI** runtime (native loader for the AIO file)
+    with **LightX2V acceleration nodes**, all behind our own fixed **media job-API** (§6.2c). The
+    runner is a **night-batch** service (§6.1): it is only brought up once the chat LLM has released
+    the GPU, so the ~28 GB image checkpoint and the ~28 GB chat model never contend for the 48 GB.
 - **Video — two separate models for two jobs:**
   - **Intimate / no-speech video → `Wan 2.2` (distilled).** Best-in-class body anatomy and motion
     realism; image+text → video, self-hosted night batch, accelerated by LightX2V's Wan 4-step
@@ -864,7 +870,9 @@ environment would be unresolvable. The rule:
   boundary; `uv` envs are the lightweight local equivalent.
 - **Fixed contracts:** the chat runner exposes an **OpenAI-compatible HTTP** endpoint; the media
   runners expose a **job API** (enqueue → generate → write archive). Swapping a model = rebuilding
-  one runner; callers are untouched.
+  one runner; callers are untouched. The **image runner** realizes its job API with a **headless
+  ComfyUI** runtime + **LightX2V** acceleration nodes behind a thin job-API wrapper (the AIO
+  checkpoint is a merged ComfyUI-format file; ComfyUI is its native loader — §4.3).
 - **GPU ownership via the day/night scheduler (§6.1):** only one heavy runner owns the GPU at a
   time. The scheduler **starts/stops** runners — chat resident and warm by day; image/video runners
   brought up for the night batch, then torn down. Because each runner is a separate process/env,
