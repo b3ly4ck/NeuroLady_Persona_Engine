@@ -2,6 +2,36 @@
 
 ## Recent changes
 
+- **F-005 Relationship System implemented (branch `feature/f-005-relationship`, off master).** The
+  bond with each user now evolves and gates her behaviour. Deterministic core + LLM reflection +
+  full persistence + comprehensive tests.
+  - **`services/bot/domain/relationship.py`** — pure, config-driven core: three 0–100 dimensions
+    (Closeness/Trust/Attraction) → **derived stage** (Stranger→Devoted) with **hysteresis** (advance
+    on gate, regress only a margin below, one step at a time); `apply_deltas` (per-reflection cap,
+    0–100 clamp, breach path for sharper Trust drops, **pacing/consent guard** blocking escalation
+    under pressure); `apply_decay` (Closeness/Attraction drift, Trust slowest); `RelationshipConfig`
+    (all tunables); `stage_behavior_directive` (stage→openness/flirtiness gating). Fully deterministic.
+  - **`services/bot/domain/relationship_reflection.py`** — the external-LLM judgment: builds the
+    prompt from a **versioned asset** (`prompts/relationship_reflection_v1.txt`, FR-005-11) with
+    persona + state + recent convo + hard signals (days-since / msg count / warmth), parses the
+    returned per-dimension deltas+reasons+summary+breach/pushing flags; returns None on failure.
+  - **`services/bot/domain/relationship_store.py`** — persistence (F-004 store): get/create at
+    Stranger baseline, apply a reflection (bounded deltas → clamp → re-derive → persist summary +
+    timestamp + audit log + milestone), decay, milestone clear — all per-(user,persona) isolated.
+  - **models:** `Relationship` (dims + derived stage + summary + pending_milestone + last_interaction)
+    and `RelationshipReflection` (audit log: deltas/reasons/resulting stage/time).
+  - **Orchestrator/handler:** `handle_turn` reads the last persisted state and injects a stage-gated
+    behaviour directive + private summary (+ a milestone acknowledgement cue) into the single system
+    message (FR-005-19/20/22) — never leaking numbers/stage names (NFR-005-10); `update_relationship`
+    runs the reflection **after the reply is sent** (off hot path, NFR-005-03) on the user's **own**
+    conversation only (FR-005-28); on LLM failure the last good state is preserved (FR-005-27).
+  - **Tests:** `tests/test_f005_relationship.py` — **one test per declared TC** (all 110:
+    70 FR + 32 NFR + 8 US). **99 real (passing)** across derivation/hysteresis/cap/clamp/decay/
+    breach/pacing-guard/isolation/persistence/audit/config/degrade/exposure/milestone, and **16
+    honest `skip`s** for the performance/load/statistical/e2e-live/manual-e2e TCs that can't be fast
+    unit tests. Full suite: **268 passed, 16 skipped.**
+- **Merged `feature/f-004-memory` into `master`** (fast-forward) — F-002 conversation + F-003
+  human-likeness + F-004 memory (structured + semantic) are now all in master at 169 tests green.
 - **Expanded runnable test coverage toward the declared specs (branch `feature/f-004-memory`).**
   The `tests/` suite grew from **115 → 169** (+54), all green, covering the automatable TC cases the
   specs declared but that weren't yet coded. Added supplementary files:
