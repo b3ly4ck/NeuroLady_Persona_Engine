@@ -117,19 +117,44 @@ driven; the user should barely need to type commands — inline/reply keyboards 
 
 ### 1.1 Screens & flow
 
+**Canonical screen order (this is the exact reference flow — always follow it).** Each screen flows
+from a single specific action on the previous one:
+
+1. **`/start` → Start screen (S1).**
+2. **S1, tap `Start` → Choose Lady screen (S2).**
+3. **S2, `◀` / `▶` → S2** (the same screen; the persona card updates in place, one persona per view).
+4. **S2, tap `Start Chat` → Chat screen (S3).**
+5. **S3, reply-keyboard `💋 Choose Lady` → S2** (re-open the gallery); **reply-keyboard `≡ Menu` → Main menu**.
+
 ```mermaid
 flowchart TD
-    START[/start] --> WELCOME[Welcome screen: header 'NeuroLady AI'<br/>+ flirty welcome copy + 'Start' inline button]
-    WELCOME -->|tap Start| GALLERY[Choose Lady: intro message +<br/>persona card carousel]
-    GALLERY -->|◀ / ▶ paginate '1/6'| GALLERY
-    GALLERY -->|tap 'Start Chat'| INTRO[Selected persona sends a video-note<br/>Telegram 'circle' intro]
-    INTRO --> CHAT[Conversation screen]
-    CHAT -->|reply keyboard '💋 Choose Lady'| GALLERY
-    CHAT -->|reply keyboard menu ≡| MENU[Main menu]
-    CHAT -->|ask for photo/video| MEDIA[Media Delivery -> photo/video]
-    MENU -->|Subscription| SUBS[Subscription status / upgrade]
-    MENU -->|Choose Lady| GALLERY
-    MENU -->|Resume chat| CHAT
+    START([/start]) --> S1
+
+    subgraph S1["S1 — Start screen"]
+        S1a["header 'NeuroLady AI' + avatar"]
+        S1b["flirty welcome copy"]
+        S1c["inline button: Start (full-width)"]
+    end
+
+    subgraph S2["S2 — Choose Lady screen"]
+        S2a["intro message ('Choose the lady... / come back anytime / ready?')<br/>+ persistent reply keyboard: 💋 Choose Lady, ≡ Menu"]
+        S2b["persona CARD (own message): photo + Name +<br/>Profession: + Age: + first-person Description:"]
+        S2c["inline under card: ◀ N/M ▶  and  Start Chat"]
+    end
+
+    subgraph S3["S3 — Chat screen"]
+        S3a["persona intro: photo (or video-note circle)<br/>+ first-person opener message"]
+        S3b["in-chat reply keyboard: 💋 Choose Lady, ≡ Menu<br/>(🎧 Chat via Audio added in the voice phase)"]
+        S3c["chat is READY — F-002 takes over the conversation"]
+    end
+
+    S1 -->|"tap Start"| S2
+    S2 -->|"◀ / ▶ (card updates in place)"| S2
+    S2 -->|"tap Start Chat"| S3
+    S3 -->|"reply kb: 💋 Choose Lady"| S2
+    S3 -->|"reply kb: ≡ Menu"| MENU["Main menu (Choose Lady / Resume chat)"]
+    MENU -->|"Choose Lady"| S2
+    MENU -->|"Resume chat"| S3
 ```
 
 ### 1.2 UX building blocks
@@ -138,18 +163,27 @@ flowchart TD
 
 - **Header:** standard Telegram chat header — `‹ Chats` back link, title **"NeuroLady AI"**, and
   the persona/brand avatar (top-right).
-- **Welcome screen (Start):** a flirty welcome message (e.g. "Step into a realm of pleasure and
+- **S1 — Start screen:** a flirty welcome message (e.g. "Step into a realm of pleasure and
   desire… Select the woman who captivates you… Tap **Start** to dive in!") followed by a single
   full-width **`Start`** inline button.
-- **Choose Lady (persona gallery) — a paginated card carousel:**
-  - An intro message ("Choose the lady you'd like to chat with… Each one is unique…").
-  - A **persona card** per view: large **photo**, then **Name**, **Profession**, **Age**, and a
-    first-person **Description** teaser (e.g. Olivia, Psychologist, 30).
-  - **Pagination controls**: `◀` / `▶` with a `1/6`-style position counter to browse personas
-    (one card per view).
-  - A **`Start Chat`** inline button under the card to begin talking to the shown persona.
-- **Video-note intro:** on **Start Chat**, the persona sends a Telegram **video note (circle)** as
-  her intro — a first hit of "she's a real person."
+- **S2 — Choose Lady (persona gallery):** reached by tapping `Start` on S1. It is **two messages**:
+  1. An **intro message** — a short multi-line invite ("Choose the lady you'd like to chat with from
+     the list below. Each one is unique, with her own personality and passions. You can always come
+     back and pick another… Ready for some exciting conversations?"). The **persistent reply
+     keyboard appears here** (💋 Choose Lady + ≡ Menu) and stays for the rest of the session.
+  2. A **persona card** (its own message): large **photo** on top, then the card body —
+     **`{Name}`**, **`Profession: {…}`**, **`Age: {…} years`**, and a first-person
+     **`Description: {…}`** (multi-line, her voice). If a persona has no photo yet, the card degrades
+     to a text-only card (same fields). Under the card: an inline row **`◀`  `N/M`  `▶`** and a
+     full-width **`Start Chat`** button.
+  - **Pagination** (`◀` / `▶`) moves one persona per view and **updates the card message in place**
+    (the counter and card content change; a new card is not appended).
+- **S3 — Chat screen (persona intro):** reached by tapping `Start Chat` on S2. The selected persona
+  greets with her **intro** — a **photo** (or a Telegram **video note / circle** when available)
+  **plus a first-person opener message** in her voice (e.g. "Hey there 😊 I'm Olivia… what's on your
+  mind tonight? 💋"). The intro message carries the reply keyboard; **no separate "ready to chat"
+  message is sent** (the opener already invites a reply — see F-001 FR-001-12). After this the chat
+  is ready and **F-002** owns the actual conversation.
 - **Daily video circles:** subscribers receive **proactive daily video notes** of the persona
   sharing stories from her day (a recurring "she's alive" touchpoint, not just the intro). These
   are talking-head circles driven by the schedule/Life Engine (§4.3, §3.5).
@@ -162,7 +196,9 @@ flowchart TD
 - **Keyboards — two kinds, used by situation:**
   - **Reply keyboard** (replaces the typing keyboard) for persistent, session-level operations,
     per the design: a **`💋 Choose Lady`** button (return to persona selection) and a **menu (≡)**
-    button; add `Subscription` / `End chat` as needed.
+    button. It first appears on **S2** (the Choose Lady screen) and persists through the chat. On the
+    chat screen a **`🎧 Chat via Audio`** button is added once the **voice phase** ships (§4.7); it is
+    not part of F-001.
   - **Inline keyboard** (attached to a message) for in-context actions: `Start`, `◀`/`▶`,
     `Start Chat`, and in-chat `📸 photo` / `💳 Subscription`.
 - **Main menu:** reachable from the reply-keyboard menu; check subscription, choose another lady,

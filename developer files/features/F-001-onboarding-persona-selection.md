@@ -59,14 +59,14 @@
 ```mermaid
 flowchart TD
     A[User opens the bot] --> B[User sends /start]
-    B --> C[User record created; Welcome screen shown<br/>header 'NeuroLady AI' + flirty copy + Start button]
-    C -->|tap Start| D[Choose Lady gallery: intro message + first persona card]
-    D -->|◀ / ▶| E[Browse cards, one persona per view, counter '1/N']
-    E --> D
-    D -->|tap Start Chat| F[Session created for user, persona]
-    F --> G[Persona sends video-note circle intro]
-    G --> H[Reply keyboard shown: 💋 Choose Lady + menu ≡]
-    H --> I[Chat is ready — end of F-001, F-002 takes over]
+    B --> C["S1 Start screen: user record created;<br/>header 'NeuroLady AI' + flirty copy + Start button"]
+    C -->|tap Start| D["S2 Choose Lady: intro message + reply keyboard<br/>(💋 Choose Lady, ≡ Menu)"]
+    D --> E["persona card message: photo + Name +<br/>Profession: + Age: + Description:, ◀ N/M ▶, Start Chat"]
+    E -->|◀ / ▶| E2["card updates in place, one persona per view"]
+    E2 --> E
+    E -->|tap Start Chat| F[Session created for user, persona]
+    F --> G["S3 Chat: persona intro = photo (or video-note circle)<br/>+ first-person opener message, carrying the reply keyboard"]
+    G --> I[Chat is ready — end of F-001, F-002 takes over]
 ```
 
 ### Returning user
@@ -178,11 +178,15 @@ Feature: F-001 Onboarding & Persona Selection
   `USER` record (telegram_id, locale, created_at) exactly once.
 - **FR-001-02** — On `/start`, the system must display the Welcome screen: the "NeuroLady AI"
   header/title, the flirty welcome copy, and a single full-width **"Start"** inline button.
-- **FR-001-03** — Tapping **"Start"** must open the "Choose Lady" gallery: an intro message plus the
-  first persona card.
-- **FR-001-04** — Each persona card must display the persona's gallery photo, **name**,
-  **profession**, **age**, and first-person **description** teaser (from the `PERSONA` gallery-card
-  fields).
+- **FR-001-03** — Tapping **"Start"** must open the "Choose Lady" screen (S2) as **two messages**:
+  (a) an **intro message** that also carries the **persistent reply keyboard** (`💋 Choose Lady` +
+  `≡ Menu`), and (b) a separate **persona card** message for the first persona. Navigation later
+  updates the card message **in place** (architecture.md §1.1/§1.2).
+- **FR-001-04** — The persona card must show the persona's **gallery photo** on top (a Telegram photo
+  message; when no photo exists yet it degrades to a text-only card), followed by the card body:
+  **`{Name}`**, a **`Profession: {…}`** line, an **`Age: {…} years`** line, and a first-person
+  **`Description: {…}`** block — the labels and copy in the **persona's own language** (FR-001-08),
+  from the `PERSONA` gallery-card fields.
 - **FR-001-05** — The gallery must show **one persona per view** with a position counter
   (`"<index>/<total>"`) and **◀ / ▶** controls to move between personas.
 - **FR-001-06** — ◀ / ▶ navigation must be **cyclic**: ▶ past the last card wraps to the first, ◀
@@ -195,8 +199,10 @@ Feature: F-001 Onboarding & Persona Selection
 - **FR-001-09** — Each card must carry a **"Start Chat"** inline button.
 - **FR-001-10** — Tapping **"Start Chat"** must create a `SESSION` for `(user, persona)` (or reuse an
   existing one) and set it to the active/started state.
-- **FR-001-11** — On starting a chat, the selected persona must send her intro as a Telegram
-  **video note (circle)** from her stored `intro_videonote_ref`.
+- **FR-001-11** — On starting a chat (S3), the selected persona must send her **intro**: her
+  **photo** (or a Telegram **video note / circle** from `intro_videonote_ref` when available) **plus
+  a first-person opener message** in her voice that invites a reply. The opener and reply keyboard
+  ride on that single intro message (see FR-001-12).
 - **FR-001-12** — After the intro, the system must show a **reply keyboard** containing a
   **"💋 Choose Lady"** button and a **menu (≡)** button, leaving the chat ready for input. The
   keyboard must be attached to the **intro delivery itself** (the video note or the FR-001-18

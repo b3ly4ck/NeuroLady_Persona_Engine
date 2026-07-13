@@ -2,6 +2,20 @@
 
 ## Recent changes
 
+- **Reworked the onboarding screen flow to match the reference design (docs-first).** The user
+  supplied reference screenshots defining the canonical screen order S1→S2→S3 and screen contents;
+  per the reaffirmed **docs-first rule** (now in CLAUDE.md), documentation was updated *before* code:
+  `architecture.md` §1.1 (new S1/S2/S3 flow diagram + explicit "canonical screen order" list) and
+  §1.2 (S2 = intro message carrying the reply keyboard **+** a separate persona-card message with
+  photo + `Profession:`/`Age:`/`Description:`; S3 = photo/video-note + first-person opener; reply
+  keyboard first appears on S2; `🎧 Chat via Audio` deferred to the voice phase), and `F-001`
+  (FR-001-03/04/11, first-time user flow). Then the bot was reimplemented to match: `i18n.py` richer
+  gallery intro + labeled card fields + opener + `resumed` copy (RU/EN); `views.py` `gallery_intro_view`,
+  `card_body` (labeled, persona-language), `CardContent` (photo_ref + body + kb), `intro_opener`;
+  `handlers/onboarding.py` opens S2 as intro+card, paginates by **editing the card in place**, and
+  S3 sends a single opener (photo-caption / text) carrying the reply keyboard (video-note path sends
+  the circle then the opener). **49 tests green.** New docs-first workflow rule + the earlier
+  "no stacked nudges" rule are logged in CLAUDE.md.
 - **Fixed a live-tested UX issue: Start Chat sent two stacked "please write" messages.** Live
   Telegram testing showed the fallback intro ("Hey, it's Sofia 💋 ... write me?") immediately
   followed by a separate "You're all set — say something" message — both nudging the same action,
