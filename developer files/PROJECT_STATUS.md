@@ -2,6 +2,22 @@
 
 ## Recent changes
 
+- **Wrote the F-005 test spec** (`developer files/tests/F-005-relationship-system.md`), the mirror
+  test specification for the Relationship System feature, per `test_driven_development.md` §7 and the
+  F-004 example. Covers **all 28 FR (FR-005-01..28)** and **all 13 NFR (NFR-005-01..13)** at 2-3 tests
+  each (3 for the critical ones: stage derivation FR-005-03, hysteresis FR-005-04, bounded change
+  FR-005-13, asymmetric trust FR-005-16, pacing/consent FR-005-17, exposure FR-005-19, stage-gating
+  FR-005-20, milestones FR-005-22, storage-hand-off FR-005-24, per-user isolation FR-005-25,
+  degrade-on-failure FR-005-27; and NFR-005-01/-02/-04/-05/-06/-11), plus **1 manual real-device
+  acceptance test per user story** (US-005-01..08). Emphasizes the derived-stage table (mirrors the
+  UC-005-03 outline as boundary tests), hysteresis advance/regress margins, bounded per-reflection
+  delta (no stranger→love jump), decay-on-neglect, asymmetric trust, pacing/consent guard (statistical
+  no-escalation), clamp 0-100 always valid, auditability (RELATIONSHIP_REFLECTION logged), per-user
+  isolation, off-hot-path timing, degrade-keep-last-good-state, and no-mechanics-leak. Levels span
+  unit/integration/inter-service/data-flow/component/e2e/performance/load/security/consistency/
+  statistical; cases span happy/negative/boundary/error/idempotency/mapping/localization.
+  **Counts: 70 FR + 32 NFR + 8 US = 110 tests (28/28 FR, 13/13 NFR, 8/8 US — full coverage, in the
+  100-150 band).** Every TC id embeds its `FR-`/`NFR-`/`US-` id. **Next:** the F-006 test spec.
 - **Designed & wrote F-006 — Life Engine** (`developer files/features/F-006-life-engine.md`): the
   persona's *own* living, the sibling of F-005 (F-005 = per-user relationship; F-006 = her own life).
   The living loop: **morning Planner** → `DAILY_PLAN.plan_text` free-text schedule (drives media +
