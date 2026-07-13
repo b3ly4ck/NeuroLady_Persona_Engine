@@ -19,21 +19,25 @@
 | TC-FR-001-01-02 | unit | idempotency | `/start` twice creates one USER | Given a new id; When `/start` sent twice; Then exactly one USER row exists | planned |
 | TC-FR-001-01-03 | integration | error | DB write failure is handled | Given the USER insert fails once; When `/start`; Then it retries and no crash, user still onboarded | planned |
 
-### FR-001-02 — Welcome screen shows header, flirty copy, single "Start" button
+### FR-001-02 — `DEPRECATED`: Welcome screen (S1) with header, flirty copy, single "Start" button
+
+> Removed by explicit product decision — `/start` renders the Choose Lady screen (S2) directly for
+> everyone, no separate Welcome/Start screen or tap (architecture.md §1.1, F-001 FR-001-03/15). IDs
+> are immutable and never reused; these tests are retired, not deleted.
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-001-02-01 | unit | happy | Welcome payload structure | Given `/start`; When welcome is built; Then it has the "NeuroLady AI" header, welcome copy, and exactly one "Start" inline button | planned |
-| TC-FR-001-02-02 | component | boundary | Only one full-width Start button | Given the welcome screen; When rendered; Then there is a single full-width inline button, no extras | planned |
-| TC-FR-001-02-03 | e2e | happy | Scripted `/start` returns welcome | Given an automated client; When it sends `/start`; Then it receives the welcome screen with a Start button | planned |
+| TC-FR-001-02-01 | unit | happy | Welcome payload structure | *(feature removed — no Welcome screen exists)* | deprecated |
+| TC-FR-001-02-02 | component | boundary | Only one full-width Start button | *(feature removed — no Welcome screen exists)* | deprecated |
+| TC-FR-001-02-03 | e2e | happy | Scripted `/start` returns welcome | *(feature removed — `/start` now returns the Choose Lady screen directly, see TC-FR-001-03-03)* | deprecated |
 
-### FR-001-03 — Tapping "Start" opens the Choose Lady gallery (intro + first card)
+### FR-001-03 — `/start` opens the Choose Lady gallery directly (intro + first card)
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-001-03-01 | unit | happy | Start → gallery intro + first card | Given welcome shown; When "Start" tapped; Then an intro message and the first persona card are produced | planned |
-| TC-FR-001-03-02 | integration | happy | Persona Service queried for first active persona | Given active personas exist; When "Start" tapped; Then Persona Service returns the first card's data | planned |
-| TC-FR-001-03-03 | e2e | happy | First card visible after Start | Given a client on welcome; When it taps Start; Then it sees the first persona card | planned |
+| TC-FR-001-03-01 | unit | happy | `/start` → gallery intro + first card | Given a user sends `/start`; When handled; Then an intro message and the first persona card are produced directly, no Welcome screen | planned |
+| TC-FR-001-03-02 | integration | happy | Persona Service queried for first active persona | Given active personas exist; When `/start` is handled; Then Persona Service returns the first card's data | planned |
+| TC-FR-001-03-03 | e2e | happy | First card visible right after `/start` | Given a client; When it sends `/start`; Then it sees the gallery intro and the first persona card immediately | planned |
 
 ### FR-001-04 — Each card shows photo, name, profession, age, first-person description
 
@@ -150,7 +154,7 @@
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
 | TC-FR-001-17-01 | integration | concurrency | Double-tap Start Chat → 1 session, 1 intro | Given a card; When "Start Chat" tapped twice fast; Then one session and one intro result | planned |
-| TC-FR-001-17-02 | integration | concurrency | Double-tap Start → no dup welcome/state | Given welcome; When "Start" tapped twice fast; Then no duplicated state or double gallery | planned |
+| TC-FR-001-17-02 | integration | concurrency | Double `/start` → no dup state | Given a user; When `/start` is sent twice fast; Then no duplicated USER row or double gallery render | planned |
 | TC-FR-001-17-03 | integration | idempotency | Idempotency key dedups replays | Given the same update delivered twice; When processed; Then the second is a no-op | planned |
 
 ### FR-001-18 — Persona without an intro note falls back gracefully
@@ -198,7 +202,7 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-001-23-01 | unit | happy | `/start` deleted after the response is sent | Given `/start`; When the Welcome/gallery response sends successfully; Then the `/start` message is deleted | planned |
+| TC-FR-001-23-01 | unit | happy | `/start` deleted after the response is sent | Given `/start`; When the Choose Lady response sends successfully; Then the `/start` message is deleted | planned |
 | TC-FR-001-23-02 | integration | error | Failed response → `/start` is NOT deleted | Given the response send raises; When `/start` is handled; Then the `/start` message is left in place | planned |
 
 ### FR-001-24 — The "💋 Choose Lady" reply-keyboard tap is deleted only after its response sends
@@ -212,13 +216,13 @@
 
 ## Non-functional requirements
 
-### NFR-001-01 — Welcome delivered under 3 seconds after `/start`
+### NFR-001-01 — Choose Lady screen (S2) delivered under 3 seconds after `/start`
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-NFR-001-01-01 | performance | happy | Welcome latency < 3s | Given a running bot; When `/start`; Then the welcome arrives in < 3s | planned |
-| TC-NFR-001-01-02 | performance | boundary | p95 welcome latency < 3s | Given 1000 `/start` calls; When measured; Then p95 < 3s | planned |
-| TC-NFR-001-01-03 | performance | error | Latency holds under load | Given heavy concurrent `/start`; When measured; Then welcome stays within the agreed degraded budget | planned |
+| TC-NFR-001-01-01 | performance | happy | S2 latency < 3s | Given a running bot; When `/start`; Then the Choose Lady screen arrives in < 3s | planned |
+| TC-NFR-001-01-02 | performance | boundary | p95 S2 latency < 3s | Given 1000 `/start` calls; When measured; Then p95 < 3s | planned |
+| TC-NFR-001-01-03 | performance | error | Latency holds under load | Given heavy concurrent `/start`; When measured; Then S2 delivery stays within the agreed degraded budget | planned |
 
 ### NFR-001-02 — Carousel navigation updates under 1 second
 
@@ -314,15 +318,15 @@ feel fast, warm, simple, believable, continuous).
 
 **TC-US-001-01-01 (manual-e2e) — A1 Gen-Z: fast, shareable first contact**
 - Preconditions: bot deployed; Telegram on your phone.
-- Steps: 1) Open the bot, tap Start. 2) Swipe through a few girls. 3) Tap Start Chat on one.
-- Expected: within seconds you get a video circle that looks real; the whole thing feels fast and
-  worth screenshotting. Status: planned
+- Steps: 1) Open the bot, send `/start`. 2) Swipe through a few girls. 3) Tap Start Chat on one.
+- Expected: you land straight on the gallery (no separate Welcome screen); within seconds you get a
+  video circle that looks real; the whole thing feels fast and worth screenshotting. Status: planned
 
 **TC-US-001-02-01 (manual-e2e) — A2 lonely: warm, personal first contact**
 - Preconditions: bot deployed.
-- Steps: 1) `/start`. 2) Read the welcome. 3) Pick a girl and watch her intro.
-- Expected: the greeting and intro feel warm and personal, like meeting someone — not launching an
-  app. Status: planned
+- Steps: 1) `/start`. 2) Read the gallery intro copy. 3) Pick a girl and watch her intro.
+- Expected: the gallery intro and persona intro feel warm and personal, like meeting someone — not
+  launching an app. Status: planned
 
 **TC-US-001-03-01 (manual-e2e) — A7 older / low tech: dead-simple, no commands**
 - Preconditions: bot deployed; a low-tech-comfort tester.
@@ -356,15 +360,19 @@ feel fast, warm, simple, believable, continuous).
 - **Functional:** FR-001-01..24 — **74 automated tests** across unit / integration / component /
   e2e, spanning happy / negative / boundary / error / concurrency / localization / persistence /
   consistency / idempotency cases. **FR-001-16 is `DEPRECATED`** (main menu removed by explicit user
-  request — architecture.md §1.3); its 3 tests are retained with `Status: deprecated` per the TDD
-  guide (ids immutable, never reused, never deleted). FR-001-21..24 (send-before-delete cleanup,
-  photo wiring) were added after the original spec and are now covered (9 tests). 24/24 FR ids
-  present. ✓
+  request — architecture.md §1.3) and **FR-001-02 is `DEPRECATED`** (the separate Welcome/Start
+  screen (S1) was removed by explicit user request — `/start` now renders Choose Lady directly, see
+  FR-001-03/15 and architecture.md §1.1); both keep their 3 tests each with `Status: deprecated` per
+  the TDD guide (ids immutable, never reused, never deleted). FR-001-21..24 (send-before-delete
+  cleanup, photo wiring) were added after the original spec and are now covered (9 tests). 24/24 FR
+  ids present. ✓
 - **Non-functional:** NFR-001-01..11 — **33 tests** (performance / load / error / usability /
   persistence / security / concurrency), including 1 manual localization check and **NFR-001-11**
   (process self-heals from a Telegram connectivity failure — 3 tests, implemented and passing in
-  `tests/test_f001_reconnect.py`). 11/11 NFR ids present. ✓
+  `tests/test_f001_reconnect.py`). NFR-001-01 reworded to the Choose Lady screen (S2) latency instead
+  of a Welcome-screen latency. 11/11 NFR ids present. ✓
 - **User stories:** US-001-01..06 — **6 manual real-device acceptance tests**, updated to reflect
-  `/start` always landing on Choose Lady (no auto-resume-into-chat) and the no-menu UI. ✓
-- **Total: 113 enumerated tests** (110 active + 3 deprecated) — within the 100-150 target band.
+  `/start` always landing directly on Choose Lady (no Welcome screen, no auto-resume-into-chat) and
+  the no-menu UI. ✓
+- **Total: 113 enumerated tests** (107 active + 6 deprecated) — within the 100-150 target band.
 - Every test ID embeds the `FR-`/`NFR-`/`US-` id it verifies, matching the feature file's IDs.

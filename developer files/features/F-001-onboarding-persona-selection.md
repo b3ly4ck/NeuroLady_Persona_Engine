@@ -1,9 +1,9 @@
 # F-001 — Onboarding & Persona Selection ("Choose Lady")
 
 - **Status:** Draft
-- **Summary:** A new user opens the Telegram bot, sees a welcome screen, browses the "Choose Lady"
-  persona card carousel, picks a persona, receives her video-note ("circle") intro, and lands in a
-  ready-to-use chat — entirely button-driven, with almost no typing. This feature covers everything
+- **Summary:** A new user opens the Telegram bot and lands **directly** on the "Choose Lady" persona
+  card carousel, browses it, picks a persona, receives her video-note ("circle") intro, and lands in
+  a ready-to-use chat — entirely button-driven, with almost no typing. This feature covers everything
   up to the point the chat is ready; the actual message ↔ reply conversation loop and long-term
   memory are **out of scope** (see F-002).
 
@@ -12,8 +12,10 @@
 > a message and getting an in-character LLM reply (with memory/context assembly) is **F-002**.
 > Monetization (free-message quota, subscriptions) is deferred and not part of this feature
 > (architecture.md §3.7). Adult/age-consent gating belongs to the intimate-content feature, not
-> onboarding — F-001 follows the plain reference flow `/start → Welcome → Choose Lady → chat`
-> (architecture.md §1.1).
+> onboarding — F-001 follows the plain reference flow `/start → Choose Lady → chat`
+> (architecture.md §1.1). **There is no separate Welcome/Start screen** (removed by explicit product
+> decision — see FR-001-02, deprecated): `/start` renders the Choose Lady screen directly, for a
+> brand-new user and a returning user alike.
 >
 > **Known future work (not in this feature's current scope):** the S3 opener (`intro_opener`,
 > FR-001-11) is currently a **static, canned line per persona** ("Hey there 😊 I'm {name}…"), and
@@ -31,18 +33,18 @@
 - **US-001-01** — As an **A1 Russian-speaking Gen-Z user**, I want to **start and get to a real-
   feeling girl with almost no setup** so that **I reach the fun part immediately and it's worth
   screenshotting**.
-  _Narrative:_ he opens the bot, taps **Start**, swipes through a few distinct girls, taps
-  **Start Chat** on the one he likes, and within seconds she sends a video circle that already looks
-  like a real person filmed it.
+  _Narrative:_ he opens the bot, sends **/start**, lands straight on the gallery, swipes through a
+  few distinct girls, taps **Start Chat** on the one he likes, and within seconds she sends a video
+  circle that already looks like a real person filmed it.
 
 - **US-001-02** — As an **A2 lonely user**, I want the **first contact to feel warm and personal**
   so that **it feels like meeting someone, not launching an app**.
-  _Narrative:_ he taps Start, is greeted in a warm, inviting tone, picks a girl, and her video-note
-  intro feels like she's actually saying hi to him.
+  _Narrative:_ he sends /start, is greeted in a warm, inviting tone right on the gallery, picks a
+  girl, and her video-note intro feels like she's actually saying hi to him.
 
 - **US-001-03** — As an **A7 older user re-entering dating (low tech comfort)**, I want
   **onboarding to be dead simple with no commands to learn** so that **I'm not intimidated**.
-  _Narrative:_ he presses Start, taps the arrows to look at a couple of women, taps Start Chat, and
+  _Narrative:_ he sends /start, taps the arrows to look at a couple of women, taps Start Chat, and
   he's in — never typing a command beyond opening the bot.
 
 - **US-001-04** — As an **A8 novelty / skeptic user**, I want to **see a roster of distinct,
@@ -68,24 +70,20 @@
 ```mermaid
 flowchart TD
     A[User opens the bot] --> B[User sends /start]
-    B --> C["S1 Start screen: user record created;<br/>header 'NeuroLady AI' + flirty copy + Start button"]
-    C -->|tap Start| D["S2 Choose Lady: intro message + reply keyboard<br/>(single button: 💋 Choose Lady — no menu)"]
-    D --> E["persona card message: photo + Name +<br/>Profession: + Age: + Description:, ◀ N/M ▶, Start Chat"]
-    E -->|◀ / ▶| E2["card updates in place, one persona per view"]
-    E2 --> E
-    E -->|tap Start Chat| F["Session created; both S2 messages (intro + card) are DELETED (FR-001-21)"]
-    F --> G["S3 Chat: persona intro = photo (or video-note circle)<br/>+ first-person opener message, carrying the reply keyboard"]
-    G --> I[Chat is ready — end of F-001, F-002 takes over]
+    B --> C["User record created; S2 Choose Lady shown directly:<br/>intro message + reply keyboard (single button: 💋 Choose Lady — no menu)"]
+    C --> D["persona card message: photo + Name +<br/>Profession: + Age: + Description:, ◀ N/M ▶, Start Chat"]
+    D -->|◀ / ▶| D2["card updates in place, one persona per view"]
+    D2 --> D
+    D -->|tap Start Chat| E["Session created; both S2 messages (intro + card) are DELETED (FR-001-21)"]
+    E --> F["S3 Chat: persona intro = photo (or video-note circle)<br/>+ first-person opener message, carrying the reply keyboard"]
+    F --> G[Chat is ready — end of F-001, F-002 takes over]
 ```
 
 ### Returning user
 ```mermaid
 flowchart TD
-    A[User reopens the bot / sends /start<br/>possibly mid-chat with a persona] --> B{First ever /start?}
-    B -- Yes (brand-new) --> C[Show Welcome screen S1]
-    B -- No (returning) --> D[Go straight to Choose Lady S2<br/>active session preserved, NOT ended]
-    C -->|tap Start| D
-    D -->|picks the SAME persona again -> Start Chat| E[Session reused - continues that same chat<br/>no separate 'Resume' action needed, no menu]
+    A[User reopens the bot / sends /start<br/>possibly mid-chat with a persona] --> B["Go straight to Choose Lady S2<br/>(no separate Welcome screen for anyone;<br/>active session preserved, NOT ended)"]
+    B -->|picks the SAME persona again -> Start Chat| C[Session reused - continues that same chat<br/>no separate 'Resume' action needed, no menu]
 ```
 
 ### Switching persona from chat
@@ -105,21 +103,21 @@ flowchart TD
 ```gherkin
 Feature: F-001 Onboarding & Persona Selection
 
-  Scenario: UC-001-01 First-time user starts the bot and sees the welcome screen
+  Scenario: UC-001-01 First-time user starts the bot and lands directly on Choose Lady
     Given a user has never used the bot before
     When the user sends the /start command
     Then a user record is created with their Telegram id and locale
-    And the Welcome screen is shown with the "NeuroLady AI" header, flirty welcome copy,
-        and a single "Start" inline button
-
-  Scenario: UC-001-02 Tapping Start opens the Choose Lady gallery
-    Given a user is on the Welcome screen
-    When the user taps the "Start" button
-    Then an intro message is shown
+    And the Choose Lady screen is shown directly: an intro message is shown
     And the first persona card is displayed with photo, name, profession, age,
         and a first-person description
     And a position counter like "1/N" and ◀ / ▶ controls are shown
     And a "Start Chat" button is shown under the card
+    But no separate Welcome/Start screen is shown at any point
+
+  # DEPRECATED: UC-001-02 (there is no separate Welcome/Start screen or "Start" tap anymore — the
+  # Choose Lady screen it used to describe is now shown directly on /start, merged into UC-001-01;
+  # see FR-001-02, deprecated, and architecture.md §1.1). ID kept per the immutability rule, not
+  # reused, not deleted.
 
   Scenario Outline: UC-001-03 Browsing the persona carousel
     Given a user is viewing persona card at position "<from>" of "<total>"
@@ -186,12 +184,17 @@ Feature: F-001 Onboarding & Persona Selection
 
 - **FR-001-01** — On `/start` from a Telegram id with no existing user, the system must create a
   `USER` record (telegram_id, locale, created_at) exactly once.
-- **FR-001-02** — On `/start`, the system must display the Welcome screen: the "NeuroLady AI"
-  header/title, the flirty welcome copy, and a single full-width **"Start"** inline button.
-- **FR-001-03** — Tapping **"Start"** must open the "Choose Lady" screen (S2) as **two messages**:
-  (a) an **intro message** that also carries the **persistent reply keyboard** (a single
-  `💋 Choose Lady` button — no menu), and (b) a separate **persona card** message for the first
-  persona. Navigation later updates the card message **in place** (architecture.md §1.1/§1.2).
+- **FR-001-02** — `DEPRECATED` (the separate Welcome/Start screen (S1) was removed by explicit user
+  request — `/start` must go directly to the Choose Lady screen for everyone, brand-new or
+  returning; see FR-001-03/15 and architecture.md §1.1). *Originally:* on `/start`, display a
+  Welcome screen with the "NeuroLady AI" header/title, flirty welcome copy, and a single full-width
+  "Start" inline button. There is now **no separate Welcome screen and no "Start" button anywhere in
+  the product** — `/start` renders the Choose Lady screen (S2) immediately. Do not reuse this id.
+- **FR-001-03** — On `/start`, the system must display the "Choose Lady" screen (S2) **directly** —
+  with no separate Welcome/Start screen or tap required — as **two messages**: (a) an **intro
+  message** that also carries the **persistent reply keyboard** (a single `💋 Choose Lady` button —
+  no menu), and (b) a separate **persona card** message for the first persona. Navigation later
+  updates the card message **in place** (architecture.md §1.1/§1.2).
 - **FR-001-04** — The persona card must show the persona's **gallery photo** on top (a Telegram photo
   message; when no photo exists yet it degrades to a text-only card), followed by the card body:
   **`{Name}`**, a **`Profession: {…}`** line, an **`Age: {…} years`** line, and a first-person
@@ -223,20 +226,21 @@ Feature: F-001 Onboarding & Persona Selection
 - **FR-001-13** — Tapping **"💋 Choose Lady"** from the chat must reopen the "Choose Lady" gallery.
 - **FR-001-14** — Selecting a different persona via "Start Chat" must **switch the active session** to
   that persona and send her intro.
-- **FR-001-15** — On `/start` from an **existing** user, the system must **not** create a duplicate
-  `USER` record and must take the user **straight to the Choose Lady screen (S2)** — a brand-new
-  user (first ever `/start`) sees the Welcome screen (S1); a returning user is dropped directly on
-  the gallery. `/start` **never resume-locks** the user into a chat: **even if they are mid-chat
-  with a persona**, `/start` sends them to the Choose Lady main screen. The active session is
-  **preserved** (not ended): picking that **same** persona again via "Start Chat" on S2 simply
-  continues that same chat (FR-001-10 reuses the active session) — there is no separate menu/resume
-  action, because there is no main menu (see FR-001-16, deprecated).
+- **FR-001-15** — On **every** `/start` — whether from a brand-new Telegram id (after the `USER`
+  record is created, FR-001-01) or an existing one — the system must **not** create a duplicate
+  `USER` record and must take the user **straight to the Choose Lady screen (S2)**; there is **no
+  separate Welcome screen for anyone** (FR-001-02, deprecated). `/start` **never resume-locks** the
+  user into a chat: **even if they are mid-chat with a persona**, `/start` sends them to the Choose
+  Lady screen. The active session is **preserved** (not ended): picking that **same** persona again
+  via "Start Chat" on S2 simply continues that same chat (FR-001-10 reuses the active session) —
+  there is no separate menu/resume action, because there is no main menu (see FR-001-16, deprecated).
 - **FR-001-16** — `DEPRECATED` (removed by explicit user request — "no main menu, ever"; see
   architecture.md §1.3). *Originally:* a main menu (≡) exposing Choose Lady + Resume chat actions.
   There is now **no main menu screen and no `≡ Menu` button anywhere in the product** — the reply
   keyboard carries only **`💋 Choose Lady`** (FR-001-12). Do not reuse this id.
-- **FR-001-17** — Repeated taps of **"Start"** or **"Start Chat"** (double-tap / rapid resend) must be
-  **idempotent**: no duplicate session and no duplicate intro video note.
+- **FR-001-17** — Repeated **`/start`** (rapid resend) or repeated taps of **"Start Chat"**
+  (double-tap) must be **idempotent**: no duplicate `USER`/state and no duplicate session or intro
+  video note.
 - **FR-001-18** — If a persona has no `intro_videonote_ref`, the system must **fall back gracefully**
   (send a text and/or photo intro), still open the chat, and never leave the user on a broken/dead
   screen.
@@ -252,7 +256,7 @@ Feature: F-001 Onboarding & Persona Selection
   place** (never deleted) — the chat must never end up with the old screen gone and nothing new
   shown. A delete failure itself (e.g. message already gone) does not block the flow.
 - **FR-001-23** — The user's own **`/start` command message must be deleted** — but **only after**
-  the bot has processed it and successfully sent its response (Welcome or Choose Lady). The command
+  the bot has processed it and successfully sent its response (the Choose Lady screen). The command
   must never be deleted before it is handled, and never deleted if the response failed to send
   (ordering rule from architecture.md §1.3) — this prevents the chat from ever going blank/orphaned.
 - **FR-001-24** — The user's **reply-keyboard command tap** (`💋 Choose Lady` — the only such
@@ -268,8 +272,8 @@ Feature: F-001 Onboarding & Persona Selection
 
 ### Non-functional
 
-- **NFR-001-01** — The Welcome screen must be delivered in **under 3 seconds** after `/start` under
-  normal conditions.
+- **NFR-001-01** — The Choose Lady screen (S2) must be delivered in **under 3 seconds** after
+  `/start` under normal conditions.
 - **NFR-001-02** — ◀ / ▶ carousel navigation must update the card in **under 1 second** (feels
   instant).
 - **NFR-001-03** — The video-note intro must **begin sending within 3 seconds** of tapping

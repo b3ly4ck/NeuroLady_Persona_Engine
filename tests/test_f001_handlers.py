@@ -48,20 +48,22 @@ def fake_callback(tg_id: int, data: str, lang: str = "en"):
     return cb
 
 
-# ── /start (UC-001-01, FR-001-01/02, FR-001-15) ─────────────────────────────────────────────
+# ── /start -> S2 directly (UC-001-01, FR-001-01/03/15) ──────────────────────────────────────
 
 
-async def test_uc_001_01_start_creates_user_and_shows_welcome(seeded_db):
-    """TC-FR-001-01-03 / TC-FR-001-02-03 — /start creates the user and shows the Welcome screen."""
+async def test_uc_001_01_start_creates_user_and_shows_gallery_directly(seeded_db):
+    """TC-FR-001-01-03 / TC-FR-001-03-01 — /start creates the user and shows Choose Lady (S2)
+    directly: intro message (with reply kb) + the first card. No Welcome screen (FR-001-02,
+    deprecated)."""
     msg = fake_message(1001, lang="en")
     await ob.cmd_start(msg, seeded_db, AsyncMock())
 
     count = (await seeded_db.execute(select(func.count()).select_from(User))).scalar_one()
     assert count == 1
-    msg.answer.assert_awaited_once()
-    text, kwargs = msg.answer.await_args.args[0], msg.answer.await_args.kwargs
-    assert "Step into a realm" in text  # welcome copy
-    assert kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "start"
+    assert msg.answer.await_count == 2  # intro message + card message, not a Welcome screen
+    intro_kwargs = msg.answer.await_args_list[0].kwargs
+    labels = [b.text for row in intro_kwargs["reply_markup"].keyboard for b in row]
+    assert any("Choose Lady" in x for x in labels)  # reply keyboard on the intro
     msg.delete.assert_awaited_once()  # FR-001-23: /start deleted after responding
 
 
@@ -84,20 +86,12 @@ async def test_fr_001_15_02_returning_user_start_goes_to_gallery(seeded_db):
     assert active is not None and active.persona_id == persona.id
 
 
-# ── Start -> S2 gallery (UC-001-02, FR-001-03) ──────────────────────────────────────────────
-
-
-async def test_uc_001_02_start_opens_gallery_intro_and_card(seeded_db):
-    """TC-FR-001-03-01 — tapping Start sends the intro message (with reply kb) + the first card."""
-    await get_or_create_user(seeded_db, 1003, "en")
-    cb = fake_callback(1003, data="start")
-    await ob.on_start(cb, seeded_db, AsyncMock())
-
-    assert cb.message.answer.await_count == 2  # intro message + card message
-    intro_kwargs = cb.message.answer.await_args_list[0].kwargs
-    labels = [b.text for row in intro_kwargs["reply_markup"].keyboard for b in row]
-    assert any("Choose Lady" in x for x in labels)  # reply keyboard on the intro
-    cb.answer.assert_awaited()
+def test_fr_001_02_deprecated_no_welcome_screen_code_exists():
+    """TC-FR-001-02 (deprecated) — the Welcome screen (S1) was removed: no welcome_view/welcome_kb,
+    no 'start' callback handler; `/start` renders Choose Lady directly (see the test above)."""
+    assert not hasattr(ob.views, "welcome_view")
+    assert not hasattr(ob.keyboards, "welcome_kb")
+    assert not hasattr(ob, "on_start")
 
 
 # ── Carousel navigation (UC-001-03, FR-001-05/06) ───────────────────────────────────────────
@@ -172,12 +166,12 @@ async def test_fr_001_21_02_start_chat_deletes_intro_message(seeded_db):
 
 
 async def test_fr_001_03_02_intro_id_tracked_on_open(seeded_db):
-    """The gallery intro message id is remembered on open so it can be deleted on Start Chat."""
-    await get_or_create_user(seeded_db, 1104, "en")
-    cb = fake_callback(1104, data="start")
-    cb.message.answer.return_value = SimpleNamespace(message_id=4242)
-    await ob.on_start(cb, seeded_db, AsyncMock())
-    assert ob._intro_msg_ids.get(cb.message.chat.id) == 4242
+    """The gallery intro message id is remembered on open (via /start) so it can be deleted on
+    Start Chat."""
+    msg = fake_message(1104, lang="en")
+    msg.answer.return_value = SimpleNamespace(message_id=4242)
+    await ob.cmd_start(msg, seeded_db, AsyncMock())
+    assert ob._intro_msg_ids.get(msg.chat.id) == 4242
 
 
 def test_fr_001_16_deprecated_no_menu_handlers_exist():
