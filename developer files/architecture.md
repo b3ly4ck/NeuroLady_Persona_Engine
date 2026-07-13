@@ -221,6 +221,14 @@ flowchart TD
 - Media requests are one tap and feel instant (media is pre-generated — see §4.3).
 - The persona never breaks character in UI copy that "belongs" to her (her messages), while
   system/menu copy is neutral brand voice.
+- **Hide the "bot chrome" — the user should forget they're in a Telegram bot.** Transient,
+  utility messages are **deleted once they have served their purpose**: the user's own slash
+  commands (`/start`, …), their reply-keyboard button taps (their `💋 Choose Lady` / `≡ Menu` text),
+  the gallery **intro message**, and the stale persona **card** on entering the chat. The chat should
+  read like a conversation with a person, not a scrolling log of menus and commands.
+  **Hard rule:** never delete a user's command/message **before it has been processed and the bot
+  has responded** — process first, respond, then delete the now-redundant command. Only her real
+  content (persona messages, media) and the current screen persist.
 
 ---
 

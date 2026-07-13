@@ -36,8 +36,35 @@ router = Router(name="onboarding")
 _CHOOSE_LADY_LABELS = {t("btn_choose_lady", "en"), t("btn_choose_lady", "ru")}
 _MENU_LABELS = {t("btn_menu", "en"), t("btn_menu", "ru")}
 
+# Transient per-chat id of the gallery **intro** message, so we can delete it when entering the chat
+# (FR-001-21). In-memory: fine for the single-process dev bot; a multi-instance gateway would move
+# this to shared state (Redis/FSM), consistent with the stateless-gateway principle (architecture §3.1).
+_intro_msg_ids: dict[int, int] = {}
+
 
 # ── helpers ────────────────────────────────────────────────────────────────────────────────────
+
+
+async def _safe_delete_message(bot: Bot, chat_id: int, message_id: int) -> None:
+    try:
+        await bot.delete_message(chat_id, message_id)
+    except Exception:  # pragma: no cover - message may be gone / too old; harmless
+        log.debug("delete_message(%s, %s) failed", chat_id, message_id, exc_info=True)
+
+
+async def _safe_delete_own(message: Message) -> None:
+    """Delete a message we received (the user's command/tap). Bots may delete incoming messages in
+    private chats. Best-effort — never break the flow if it fails (FR-001-23/24)."""
+    try:
+        await message.delete()
+    except Exception:  # pragma: no cover - defensive
+        log.debug("could not delete user message", exc_info=True)
+
+
+async def _delete_tracked_intro(bot: Bot, chat_id: int) -> None:
+    mid = _intro_msg_ids.pop(chat_id, None)
+    if mid is not None:
+        await _safe_delete_message(bot, chat_id, mid)
 
 
 async def _user_from(db: AsyncSession, tg_user) -> User:
@@ -82,14 +109,23 @@ async def _edit_card(message: Message, card: CardContent) -> None:
         await _send_card(message, card)
 
 
-async def _open_gallery(message: Message, db: AsyncSession, user: User, *, with_intro: bool) -> bool:
-    """Open S2: optionally the intro message (with reply keyboard), then the first persona card."""
+async def _open_gallery(
+    message: Message, bot: Bot, db: AsyncSession, user: User, *, with_intro: bool
+) -> bool:
+    """Open S2: optionally the intro message (with reply keyboard), then the first persona card.
+
+    When it sends the intro, it remembers that message's id (and clears any previous one) so the
+    intro can be deleted on Start Chat (FR-001-21)."""
     personas = await list_gallery_personas(db, user.locale)
     if not personas:
         return False
     if with_intro:
+        await _delete_tracked_intro(bot, message.chat.id)  # clear a stale intro if any
         intro_text, reply_kb = views.gallery_intro_view(user.locale)
-        await message.answer(intro_text, reply_markup=reply_kb)
+        sent = await message.answer(intro_text, reply_markup=reply_kb)
+        mid = getattr(sent, "message_id", None)
+        if mid is not None:
+            _intro_msg_ids[message.chat.id] = mid
     await _send_card(message, views.gallery_card_view(personas[0], 0, len(personas), user.locale))
     return True
 
@@ -139,7 +175,8 @@ async def cmd_start(message: Message, db: AsyncSession, bot: Bot) -> None:
         text, kb = views.welcome_view(user.locale)
         await message.answer(text, reply_markup=kb)
     else:
-        await _open_gallery(message, db, user, with_intro=True)
+        await _open_gallery(message, bot, db, user, with_intro=True)
+    await _safe_delete_own(message)  # FR-001-23: drop the /start command AFTER responding
 
 
 # ── Start -> S2 gallery ──────────────────────────────────────────────────────────────────────────
@@ -149,7 +186,7 @@ async def cmd_start(message: Message, db: AsyncSession, bot: Bot) -> None:
 async def on_start(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
     """FR-001-03 — open S2: intro message (with reply keyboard) + the first persona card."""
     user = await _user_from(db, cb.from_user)
-    await _open_gallery(cb.message, db, user, with_intro=True)
+    await _open_gallery(cb.message, bot, db, user, with_intro=True)
     await cb.answer()
 
 
@@ -188,11 +225,9 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
         return
     chat_id = cb.message.chat.id
     _, is_new_intro = await start_or_switch_session(db, user.id, persona_id)
-    # FR-001-21: remove the now-stale persona-card message (pagination + Start Chat) as we enter S3.
-    try:
-        await cb.message.delete()
-    except Exception:  # pragma: no cover - message may already be gone; the flow continues anyway
-        log.debug("could not delete card message", exc_info=True)
+    # FR-001-21: remove BOTH S2 messages (card + intro) as we enter S3, so no gallery chrome lingers.
+    await _safe_delete_own(cb.message)          # the persona-card message
+    await _delete_tracked_intro(bot, chat_id)   # the gallery intro message
     if is_new_intro:  # FR-001-17: a reused (double-tapped) session does not re-send the intro
         await send_persona_intro(
             bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale)
@@ -207,13 +242,14 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
 async def on_choose_lady_text(message: Message, db: AsyncSession, bot: Bot) -> None:
     """FR-001-13 — '💋 Choose Lady' reopens the gallery (card; the reply keyboard already persists)."""
     user = await _user_from(db, message.from_user)
-    await _open_gallery(message, db, user, with_intro=False)
+    await _open_gallery(message, bot, db, user, with_intro=False)
+    await _safe_delete_own(message)  # FR-001-24: drop the button-tap text after handling
 
 
 @router.callback_query(F.data == "choose_lady")
 async def on_choose_lady_cb(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
     user = await _user_from(db, cb.from_user)
-    await _open_gallery(cb.message, db, user, with_intro=False)
+    await _open_gallery(cb.message, bot, db, user, with_intro=False)
     await cb.answer()
 
 
@@ -223,6 +259,7 @@ async def on_menu_text(message: Message, db: AsyncSession, bot: Bot) -> None:
     user = await _user_from(db, message.from_user)
     text, kb = views.menu_view(user.locale)
     await message.answer(text, reply_markup=kb)
+    await _safe_delete_own(message)  # FR-001-24: drop the button-tap text after handling
 
 
 @router.callback_query(F.data == "resume")
@@ -239,5 +276,5 @@ async def on_resume(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
             )
             await cb.answer()
             return
-    await _open_gallery(cb.message, db, user, with_intro=False)
+    await _open_gallery(cb.message, bot, db, user, with_intro=False)
     await cb.answer()

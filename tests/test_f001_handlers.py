@@ -7,6 +7,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
+import pytest
 from sqlalchemy import func, select
 
 from services.bot.app import build_dispatcher
@@ -15,6 +16,14 @@ from services.bot.domain.sessions import get_active_session, start_or_switch_ses
 from services.bot.domain.users import get_or_create_user
 from services.bot.handlers import onboarding as ob
 from services.bot.models import Session, User
+
+
+@pytest.fixture(autouse=True)
+def _clear_intro_tracking():
+    """The gallery-intro id registry is module-global; isolate it between tests."""
+    ob._intro_msg_ids.clear()
+    yield
+    ob._intro_msg_ids.clear()
 
 
 def fake_message(tg_id: int, lang: str = "en", text: str | None = None):
@@ -53,6 +62,7 @@ async def test_uc_001_01_start_creates_user_and_shows_welcome(seeded_db):
     text, kwargs = msg.answer.await_args.args[0], msg.answer.await_args.kwargs
     assert "Step into a realm" in text  # welcome copy
     assert kwargs["reply_markup"].inline_keyboard[0][0].callback_data == "start"
+    msg.delete.assert_awaited_once()  # FR-001-23: /start deleted after responding
 
 
 async def test_fr_001_15_02_returning_user_start_goes_to_gallery(seeded_db):
@@ -132,6 +142,38 @@ async def test_fr_001_21_01_start_chat_deletes_card_message(seeded_db):
     cb.message.delete.assert_awaited_once()
 
 
+async def test_fr_001_21_02_start_chat_deletes_intro_message(seeded_db):
+    """TC-FR-001-21-02 — Start Chat deletes the tracked gallery intro message (not just the card)."""
+    await get_or_create_user(seeded_db, 1102, "en")
+    persona = (await list_gallery_personas(seeded_db, "en"))[0]
+    bot = AsyncMock()
+    cb = fake_callback(1102, data=f"startchat:{persona.id}")
+    ob._intro_msg_ids[cb.message.chat.id] = 999  # simulate the intro message tracked on open
+    await ob.on_start_chat(cb, seeded_db, bot)
+    cb.message.delete.assert_awaited_once()  # the card
+    bot.delete_message.assert_awaited_once_with(cb.message.chat.id, 999)  # the intro
+
+
+async def test_fr_001_03_02_intro_id_tracked_on_open(seeded_db):
+    """The gallery intro message id is remembered on open so it can be deleted on Start Chat."""
+    await get_or_create_user(seeded_db, 1104, "en")
+    cb = fake_callback(1104, data="start")
+    cb.message.answer.return_value = SimpleNamespace(message_id=4242)
+    await ob.on_start(cb, seeded_db, AsyncMock())
+    assert ob._intro_msg_ids.get(cb.message.chat.id) == 4242
+
+
+async def test_fr_001_24_01_menu_tap_deleted(seeded_db):
+    """TC-FR-001-24-01 — a '≡ Menu' reply-keyboard tap is deleted after the menu is shown."""
+    from services.bot.i18n import t
+
+    await get_or_create_user(seeded_db, 1103, "en")
+    msg = fake_message(1103, lang="en", text=t("btn_menu", "en"))
+    await ob.on_menu_text(msg, seeded_db, AsyncMock())
+    msg.answer.assert_awaited_once()  # menu shown
+    msg.delete.assert_awaited_once()  # tap deleted
+
+
 async def test_fr_001_22_01_photo_on_card_and_opener(seeded_db, tmp_path):
     """TC-FR-001-22-01 — when a real photo file exists, the card and the opener are sent as photos."""
     img = tmp_path / "card.jpg"
@@ -189,6 +231,7 @@ async def test_fr_001_13_01_choose_lady_reopens_gallery(seeded_db):
     msg = fake_message(1008, lang="en", text=t("btn_choose_lady", "en"))
     await ob.on_choose_lady_text(msg, seeded_db, AsyncMock())
     msg.answer.assert_awaited_once()  # a fresh card message (reply keyboard already persists)
+    msg.delete.assert_awaited_once()  # FR-001-24: the button-tap text is deleted after handling
 
 
 # ── send_persona_intro fallback (FR-001-18) ─────────────────────────────────────────────────

@@ -2,6 +2,19 @@
 
 ## Recent changes
 
+- **"Hide the bot chrome" — delete transient/utility messages so the chat reads like a real
+  conversation (docs-first).** New UX principle in `architecture.md` §1.3 (delete the user's slash
+  commands, reply-keyboard button taps, the gallery intro, and stale cards once they've served their
+  purpose; **hard rule: never delete a user's command before it has been processed/responded to**).
+  In `F-001`: extended **FR-001-21** (Start Chat now deletes **both** S2 messages — card **and**
+  intro) and added **FR-001-23** (delete the `/start` message, only *after* responding) and
+  **FR-001-24** (delete `💋 Choose Lady` / `≡ Menu` reply-keyboard taps after handling). Then
+  implemented: `_open_gallery` tracks the intro message id (in-memory `_intro_msg_ids`, per chat;
+  noted as dev-single-process — Redis/FSM for multi-instance); `on_start_chat` deletes the card +
+  tracked intro; `cmd_start` deletes `/start` after the response; `on_choose_lady_text`/`on_menu_text`
+  delete the tap. All deletes are best-effort (`_safe_delete_*`). **57 tests green** (added intro-
+  delete, intro-tracking, and menu-tap-delete tests; asserted /start and Choose-Lady taps are
+  deleted).
 - **Bot process now self-heals from Telegram network blips instead of crashing (docs-first).** The
   process died 3× during live testing with `OSError [WinError 121] semaphore timeout` connecting to
   `api.telegram.org` — a flaky-network issue (matches the user's own reported internet drops), but
