@@ -2,6 +2,36 @@
 
 ## Recent changes
 
+- **Etap 1 — chat inference reference is live (branch `feature/chat-inference`).** Stood up the
+  self-hosted Chat-LLM serving layer (architecture.md §4.1/§6.1/§6.2c) and validated it end-to-end
+  on the target GPU (Quadro RTX 8000, 48 GB, Turing sm_75, CUDA 12.1):
+  - **Backend:** `llama-cpp-python[server]` (prebuilt cu121 wheel, CUDA offload confirmed), installed
+    into the isolated `chat/.venv` only. Exposes the fixed **OpenAI-compatible** contract
+    `POST 127.0.0.1:8080/v1/chat/completions` the Orchestrator (F-002) will call.
+  - **`chat/serve.py`** — supervisor that launches the server with tuned defaults (full GPU offload
+    `--n_gpu_layers -1`, `--n_ctx 16384`, `--flash_attn`, prompt cache), waits until the model is
+    loaded, fires a **warm-up inference**, then writes `chat/.runner_ready` + logs `READY: model
+    warm` — the readiness gate from §4.1 (never "process started", always "model warm"). All knobs
+    are env-overridable (documented in the file header).
+  - **Reasoning disabled by default.** This Qwen3.5-A3B GGUF is a *reasoning* model: its chat
+    template opens a `<think>` block at every turn, so out of the box it emitted a long
+    "Thinking Process: …" chain-of-thought that ate the whole token budget and >5 s of latency
+    before any reply. Fixed by passing `--chat_template_kwargs '{"enable_thinking": false}'` at model
+    load (env toggle `CHAT_ENABLE_THINKING=1` to re-enable). With thinking off the model answers
+    directly and in-character.
+  - **`chat/smoke.py`** — the reference benchmark (latency + tok/s). Measured on this box:
+    weights **28 GB / 48 GB** VRAM (≈20 GB headroom for KV cache), warm-up **0.34 s**, warm replies
+    **~0.8–1.0 s** for short texts (~40–65 tok/s), comfortably under the F-002 `NFR-002-01` <5 s
+    budget. Output is clean, in-character, natural Russian.
+  - **`chat/prompts/context_assembly.md`** — versioned prompt asset describing the F-002 context
+    bundle priority order (§4.2); notes the thin-slice assembly (persona system prompt + recent raw
+    history + current message) with memory/relationship layers added later without changing the
+    contract.
+  - `chat/README.md` Serving section updated to the real install/run commands (docs-first).
+  - **Next (Etap 2):** extend the existing F-001 bot with the F-002 conversation turn — add a
+    `MESSAGE` model, a chat-runner client, an Orchestrator (assemble persona system prompt + last-N
+    raw history → call the endpoint → reply), and a plain-text handler. One persona (Alina), Postgres
+    only (Qdrant/F-004 deferred), per the agreed thin vertical slice.
 - **Wrote the F-006 test spec** (`developer files/tests/F-006-life-engine.md`), the mirror test
   specification for the Life Engine feature, per `test_driven_development.md` §7 and the F-004
   example. Covers **all 21 FR (FR-006-01..21)** and **all 13 NFR (NFR-006-01..13)** at 2-3 tests each

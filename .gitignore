@@ -43,3 +43,6 @@ uv.lock
 *.egg-info/
 build/
 dist/
+
+# chat runner readiness marker (runtime only)
+chat/.runner_ready
