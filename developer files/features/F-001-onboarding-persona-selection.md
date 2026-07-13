@@ -64,7 +64,7 @@ flowchart TD
     D --> E["persona card message: photo + Name +<br/>Profession: + Age: + Description:, ◀ N/M ▶, Start Chat"]
     E -->|◀ / ▶| E2["card updates in place, one persona per view"]
     E2 --> E
-    E -->|tap Start Chat| F[Session created for user, persona]
+    E -->|tap Start Chat| F["Session created; the persona-card message is DELETED (FR-001-21)"]
     F --> G["S3 Chat: persona intro = photo (or video-note circle)<br/>+ first-person opener message, carrying the reply keyboard"]
     G --> I[Chat is ready — end of F-001, F-002 takes over]
 ```
@@ -230,6 +230,16 @@ Feature: F-001 Onboarding & Persona Selection
   `/start`** — every step is a tap on an inline/reply button.
 - **FR-001-20** — The video note (or fallback media) delivered on "Start Chat" must belong to the
   **selected** persona (correct persona ↔ media linkage).
+- **FR-001-21** — On tapping **"Start Chat"**, the system must **delete the persona-card message**
+  (the one carrying the `◀ N/M ▶` + `Start Chat` inline keyboard) as it transitions to S3, so the
+  now-stale gallery card does not linger above the chat. If the delete fails (e.g. message already
+  gone), the flow must continue regardless.
+- **FR-001-22** — Both the **S2 persona card** (the "choose a girl" moment) and the **S3 first
+  message** (the persona's opener) must **include the persona's photo** when one exists in her media
+  library: the card as a photo message with the card body as its caption, and the opener as a photo
+  with the opener text as its caption (falling back to text-only when no photo exists yet —
+  FR-001-18). Photos are stored under `media/<persona_slug>/…` (architecture.md §5.1/§6.3) and
+  referenced by `PERSONA.gallery_photo_ref`.
 
 ### Non-functional
 

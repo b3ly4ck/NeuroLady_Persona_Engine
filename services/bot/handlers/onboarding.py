@@ -186,10 +186,16 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
     if persona is None:
         await cb.answer()
         return
+    chat_id = cb.message.chat.id
     _, is_new_intro = await start_or_switch_session(db, user.id, persona_id)
+    # FR-001-21: remove the now-stale persona-card message (pagination + Start Chat) as we enter S3.
+    try:
+        await cb.message.delete()
+    except Exception:  # pragma: no cover - message may already be gone; the flow continues anyway
+        log.debug("could not delete card message", exc_info=True)
     if is_new_intro:  # FR-001-17: a reused (double-tapped) session does not re-send the intro
         await send_persona_intro(
-            bot, cb.message.chat.id, persona, reply_markup=keyboards.reply_kb(user.locale)
+            bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale)
         )
     await cb.answer()
 

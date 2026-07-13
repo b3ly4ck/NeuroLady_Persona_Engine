@@ -181,12 +181,15 @@ flowchart TD
      full-width **`Start Chat`** button.
   - **Pagination** (`◀` / `▶`) moves one persona per view and **updates the card message in place**
     (the counter and card content change; a new card is not appended).
-- **S3 — Chat screen (persona intro):** reached by tapping `Start Chat` on S2. The selected persona
-  greets with her **intro** — a **photo** (or a Telegram **video note / circle** when available)
-  **plus a first-person opener message** in her voice (e.g. "Hey there 😊 I'm Olivia… what's on your
-  mind tonight? 💋"). The intro message carries the reply keyboard; **no separate "ready to chat"
-  message is sent** (the opener already invites a reply — see F-001 FR-001-12). After this the chat
-  is ready and **F-002** owns the actual conversation.
+- **S3 — Chat screen (persona intro):** reached by tapping `Start Chat` on S2. On the transition the
+  **persona-card message is deleted** (F-001 FR-001-21) so the stale gallery card doesn't linger.
+  The selected persona greets with her **intro** — her **photo** (or a Telegram **video note /
+  circle** when available) **plus a first-person opener message** in her voice (e.g. "Hey there 😊
+  I'm Olivia… what's on your mind tonight? 💋"; the photo carries the opener as its caption). The
+  intro carries the reply keyboard; **no separate "ready to chat" message is sent** (the opener
+  already invites a reply — F-001 FR-001-12). Photos also appear on the **S2 card** (the "choose a
+  girl" moment); both are `PERSONA.gallery_photo_ref` media (§5.1/§6.3), degrading to text-only until
+  real images exist. After this the chat is ready and **F-002** owns the conversation.
 - **Daily video circles:** subscribers receive **proactive daily video notes** of the persona
   sharing stories from her day (a recurring "she's alive" touchpoint, not just the intro). These
   are talking-head circles driven by the schedule/Life Engine (§4.3, §3.5).

@@ -26,6 +26,7 @@ def fake_message(tg_id: int, lang: str = "en", text: str | None = None):
     m.answer = AsyncMock()
     m.answer_photo = AsyncMock()
     m.edit_text = AsyncMock()
+    m.delete = AsyncMock()
     return m
 
 
@@ -120,6 +121,37 @@ async def test_uc_001_04_start_chat_single_opener_with_keyboard(seeded_db):
     bot.send_video_note.assert_not_awaited()        # FR-001-18 graceful fallback
     assert bot.send_message.await_args.kwargs.get("reply_markup") is not None  # keyboard on opener
     cb.message.answer.assert_not_awaited()          # no second/duplicate message
+
+
+async def test_fr_001_21_01_start_chat_deletes_card_message(seeded_db):
+    """TC-FR-001-21-01 — tapping Start Chat deletes the stale gallery-card message."""
+    await get_or_create_user(seeded_db, 1009, "en")
+    persona = (await list_gallery_personas(seeded_db, "en"))[0]
+    cb = fake_callback(1009, data=f"startchat:{persona.id}")
+    await ob.on_start_chat(cb, seeded_db, AsyncMock())
+    cb.message.delete.assert_awaited_once()
+
+
+async def test_fr_001_22_01_photo_on_card_and_opener(seeded_db, tmp_path):
+    """TC-FR-001-22-01 — when a real photo file exists, the card and the opener are sent as photos."""
+    img = tmp_path / "card.jpg"
+    img.write_bytes(b"\xff\xd8\xff\xd9")  # minimal dummy jpeg bytes
+    persona = (await list_gallery_personas(seeded_db, "en"))[0]
+    persona.gallery_photo_ref = str(img)
+
+    # S2 card as a photo message
+    msg = fake_message(1010, "en")
+    card = ob.views.gallery_card_view(persona, 0, 1, "en")
+    await ob._send_card(msg, card)
+    msg.answer_photo.assert_awaited_once()
+    msg.answer.assert_not_awaited()
+
+    # S3 opener as a photo message
+    bot = AsyncMock()
+    kind = await ob.send_persona_intro(bot, 1010, persona)
+    assert kind == "photo"
+    bot.send_photo.assert_awaited_once()
+    bot.send_message.assert_not_awaited()
 
 
 async def test_fr_001_17_01_double_tap_start_chat_single_intro(seeded_db):

@@ -2,6 +2,16 @@
 
 ## Recent changes
 
+- **Final F-001 polish: delete the stale card on Start Chat + wire persona photos (docs-first).**
+  Added `F-001` **FR-001-21** (on Start Chat, delete the persona-card message so it doesn't linger)
+  and **FR-001-22** (S2 card and S3 opener include the persona's photo when one exists), updated the
+  flow diagram + `architecture.md` §1.1/§1.2, then implemented: `on_start_chat` deletes `cb.message`
+  (the card) before sending the opener; `personas_seed` sets each persona's `gallery_photo_ref` to
+  `media/<slug>/gallery/card.jpg` (helpers `persona_slug` / `gallery_photo_path`). The photo path was
+  already supported by `_send_card` (photo message + caption) and `send_persona_intro` (photo opener);
+  it stays a graceful text fallback until a real image is dropped at that path (`media/` is
+  git-ignored; per-persona `gallery/` folders created locally). **51 tests green** (added
+  `test_fr_001_21_01` card-delete and `test_fr_001_22_01` photo-on-card-and-opener using a temp file).
 - **`/start` is now a "home" action — always goes to Choose Lady, never resume-locks (docs-first).**
   Per the reference, `/start` must take the user to the Choose Lady main screen even mid-chat.
   Updated docs first (`F-001` FR-001-15 + UC-001-05 + returning-user flow; `architecture.md` §1.1
