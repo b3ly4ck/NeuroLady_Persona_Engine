@@ -2,6 +2,33 @@
 
 ## Recent changes
 
+- **Etap 5 (start) — image generation runner scaffolded + weights download kicked off (branch
+  `feature/image-runner`).** Standing up the `image/` self-hosted model runner (architecture.md
+  §4.3/§6.2b/§6.2c/§6.3), the media-phase sibling of the `chat/` runner. This is **infra
+  foundation only** (like Etap 1 for chat) — no serving/inference yet; the GPU is currently held by
+  the resident chat runner (28 GB used / 20.5 GB free on the 48 GB Quadro RTX 8000), and image is a
+  **night-batch** service, so it cannot be loaded while chat is warm.
+  - **Model selected & confirmed against the docs:** `Phr00t/Qwen-Image-Edit-Rapid-AIO` — **v23
+    NSFW** checkpoint (`v23/Qwen-Rapid-AIO-NSFW-v23.safetensors`, ~28.4 GB). All-In-One (accelerator
+    + VAE + CLIP merged), FP8-quantized, on top of Qwen-Image-Edit-2511, 4-8 steps / CFG 1, tuned
+    for character consistency — exactly the model named in §4.3/§6.2b. Accelerated by LightX2V.
+  - **`image/` scaffold (mirrors `chat/`):** `download_model.py` (fetches the selected AIO checkpoint
+    via `huggingface_hub` into `image/models/`; `--version`/`--variant NSFW|SFW` overridable),
+    `README.md` (model card + isolated-runner setup + GPU day/night scheduling note + serving-TBD
+    note), `models/.gitkeep`, `prompts/.gitkeep`. Isolated env `image/.venv` (uv, Python 3.11) with
+    `huggingface_hub` + `hf_transfer` installed. `.gitignore` already protected `image/models/*` and
+    `*.safetensors`/`.venv` (layout was pre-planned in §6.3).
+  - **Weights download running in the background** (`image/download.log`) via the Xet transport;
+    disk-only, does not touch the GPU or disturb the live chat runner. 13 TB free disk.
+  - **Open decision (asked the user):** the **serving backend** for the AIO checkpoint (ComfyUI
+    headless behind the fixed media job-API is the recommended default, since the AIO safetensors is
+    a merged ComfyUI-format checkpoint; diffusers is awkward for merged AIO). `serve.py` + LightX2V
+    wiring land once confirmed — and can only be load-tested at night when the GPU is free.
+  - **Note:** the working tree also carried **uncommitted F-004 semantic-memory WIP** (Qdrant half:
+    `services/bot/domain/embeddings.py`, `vector_store.py`, `tests/test_f004_semantic.py` + edits to
+    `orchestrator.py`/`memory.py`/`conversation.py`/`app.py`/`config.py`/`pyproject.toml`) — left
+    untouched; only the `image/` scaffold + docs were committed here.
+
 - **Etap 4 — F-004 memory (Postgres-only slice): she remembers what you told her (branch
   `feature/f-004-memory`, off `feature/f-003-human-likeness`).** Wired structured user-fact memory
   into the F-002 loop; the semantic/Qdrant half + biography pyramid are deferred (biography belongs
