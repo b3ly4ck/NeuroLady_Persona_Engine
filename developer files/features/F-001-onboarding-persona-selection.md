@@ -263,3 +263,7 @@ Feature: F-001 Onboarding & Persona Selection
   cross-user data access or leakage, and the Telegram id/update must be validated as authentic.
 - **NFR-001-10** — Carousel navigation must be **stateless-safe / idempotent**: rapidly repeated ◀/▶
   taps must never desync the displayed card from its counter.
+- **NFR-001-11** — The bot process must **survive a transient Telegram connectivity failure at
+  startup** (e.g. a DNS/network blip on the initial `getMe` check) by **retrying with capped
+  exponential backoff indefinitely**, rather than crashing and exiting — generalizes NFR-001-06 to
+  the process level (architecture.md §6.1).

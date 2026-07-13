@@ -2,6 +2,17 @@
 
 ## Recent changes
 
+- **Bot process now self-heals from Telegram network blips instead of crashing (docs-first).** The
+  process died 3× during live testing with `OSError [WinError 121] semaphore timeout` connecting to
+  `api.telegram.org` — a flaky-network issue (matches the user's own reported internet drops), but
+  the process had no retry around the initial `getMe()` check, so it exited and needed a manual
+  restart every time. Added **NFR-001-11** to `F-001` and a matching "Bot Gateway resilience to
+  network blips" note to `architecture.md` §6.1 (retry with capped exponential backoff
+  indefinitely, never crash-exit), then implemented `_run_polling_with_reconnect` in `app.py`
+  (wraps `dp.start_polling`, catches `TelegramNetworkError`/`OSError`, backs off 1→2→4→8→16→30→60s
+  capped, retries forever) and wired it into `main()`. Added `tests/test_f001_reconnect.py` (3
+  tests: retries-then-succeeds, raw `OSError` also retried, backoff grows and is capped).
+  **54 tests green.**
 - **Final F-001 polish: delete the stale card on Start Chat + wire persona photos (docs-first).**
   Added `F-001` **FR-001-21** (on Start Chat, delete the persona-card message so it doesn't linger)
   and **FR-001-22** (S2 card and S3 opener include the persona's photo when one exists), updated the

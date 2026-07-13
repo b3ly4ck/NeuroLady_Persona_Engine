@@ -786,6 +786,13 @@ flowchart LR
   the model is still loading, the Bot Gateway/Orchestrator immediately sends a "typing…" indicator
   (and/or a short in-character holding line) and delivers the reply once ready. Observability
   (§6.4) alerts if the model is not warm at the start of the serving window.
+- **Bot Gateway resilience to network blips (Telegram connectivity):** the Bot Gateway process must
+  **not crash and exit** on a transient network failure to `api.telegram.org` (DNS hiccup, dropped
+  connection, local network flap) — this includes the very first connectivity check at startup
+  (`getMe`), not just steady-state polling. On such a failure the process must **retry with capped
+  exponential backoff indefinitely** (never give up and die) and log each attempt, so it self-heals
+  the moment connectivity returns, without requiring a manual restart. This generalizes F-001's
+  NFR-001-06 (retry a single send) to the **process level**.
 
 ### 6.2 Data stores
 - **Relational DB** (e.g. PostgreSQL) for structured entities (§5.1).
