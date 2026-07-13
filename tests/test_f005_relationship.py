@@ -196,6 +196,39 @@ async def test_tc_fr_005_06_03(db):
     assert rel.closeness > C.baseline_closeness
 
 
+async def test_tc_fr_005_06_03c_naive_last_interaction_no_crash(db):
+    """Regression (live-caught) — a naive last_interaction_at (as SQLite returns) must not crash the
+    days-since computation (was: can't subtract offset-naive and offset-aware datetimes)."""
+    u, p = await _user(db, 701), await _persona(db)
+    sess, _ = await start_or_switch_session(db, u.id, p.id)
+    rel = await rs.get_or_create(db, u.id, p.id)
+    rel.last_interaction_at = datetime(2026, 7, 1, 12, 0, 0)  # naive, no tzinfo
+    await db.flush()
+    from services.bot.domain import messages as md
+    from services.bot.models import MessageSender
+    await md.append_message(db, sess.id, MessageSender.user, "спасибо, рад")
+    rel = await update_relationship(db, sess, p, ReflectClient(dc=4, dt=2, da=2), C)
+    assert rel.closeness > C.baseline_closeness  # reflection applied, no crash
+
+
+async def test_tc_fr_005_06_03b_reflection_sends_a_user_message(db):
+    """Regression (live-caught) — the reflection call must carry a user-role message; the chat
+    template 500s on a system-only message ("No user query found in messages")."""
+    u, p = await _user(db, 700), await _persona(db)
+    sess, _ = await start_or_switch_session(db, u.id, p.id)
+    roles = {}
+
+    class Cap:
+        async def is_ready(self): return True
+        async def complete(self, messages, **kw):
+            roles["has_user"] = any(m["role"] == "user" for m in messages)
+            return json.dumps({"deltas": {"closeness": 0, "trust": 0, "attraction": 0},
+                               "reasons": {}, "summary": "s", "breach": False, "pushing_fast": False})
+
+    await update_relationship(db, sess, p, Cap(), C)
+    assert roles.get("has_user") is True
+
+
 # FR-005-07 — trigger configurable + off hot path
 def test_tc_fr_005_07_01():
     """TC-FR-005-07-01 — reflection cadence is config-driven (a tunable, not hard-coded)."""

@@ -190,8 +190,10 @@ async def update_relationship(
         conversation = "\n".join(
             f"{'he' if m.sender == MessageSender.user else 'you'}: {m.text}" for m in history)
         now = _now()
-        days_since = ((now - rel.last_interaction_at).total_seconds() / 86400.0
-                      if rel.last_interaction_at else 0.0)
+        last = rel.last_interaction_at
+        if last is not None and last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)  # SQLite returns naive datetimes
+        days_since = ((now - last).total_seconds() / 86400.0) if last else 0.0
         signals = HardSignals(days_since=days_since, msg_count=len(history),
                               warmth=compute_warmth(conversation))
         result = await run_reflection(
