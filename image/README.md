@@ -63,3 +63,33 @@ uv pip install --python image/.venv/bin/python torch torchvision \
 # 3. point ComfyUI at image/models/ (extra_model_paths.yaml) — do NOT copy the 28 GB file
 # 4. image/serve.py — thin job-API wrapper over ComfyUI's /prompt API, warm-gated
 ```
+
+## Quality A/B evaluation (planned — run at night on the free GPU)
+We keep the **AIO** as the default, but — because quality is eye-of-the-beholder and both candidates
+share the **same base** (Qwen-Image-Edit-2511) — the final pick is decided by looking at real output,
+not theory. Two serving stacks are benched **side-by-side** and the winner is locked in
+architecture.md §4.3.
+
+**Candidates**
+- **(A) Phr00t AIO v23 NSFW via ComfyUI + LightX2V** — the merged, community-tuned FP8 checkpoint
+  (`image/models/v23/…`). Turnkey NSFW realism at 4–8 steps; least tuning.
+- **(B) LightX2V-native** — original base `Qwen/Qwen-Image-Edit-2511` + `lightx2v/`
+  `Qwen-Image-Edit-2511-Lightning` (4-step distill LoRA) + NSFW LoRAs (`snofs`, `qwen4play`, …) stacked
+  via `lora_configs` (`image/models/native/…`). More control / higher ceiling; more setup.
+
+**Controlled inputs (identical for both)**
+- Same persona **reference image** (`media/<slug>/reference/face.png`), same generation **prompt**
+  (one SFW "office selfie" + one intimate prompt), same **seed**, same target resolution.
+- Match step budget where possible (4-step distill on both) for the speed-parity run; then an
+  **unbudgeted "hero" run** ((B) at 20–40 steps / higher precision) to probe (B)'s quality ceiling.
+
+**Judged on** — identity consistency vs the reference (the #1 product requirement), skin/realism
+(not "plastic"), anatomy correctness, artifact rate, prompt adherence; plus **speed** (s/image) and
+**peak VRAM**. Record a small results table (candidate × metric) + the sample images.
+
+**Turing caveat (this GPU, sm_75):** the Quadro RTX 8000 has **no native FP8 tensor cores**, so for
+(B) prefer LightX2V's **INT8** quant kernels (`int8-vllm` / `int8-sgl` / `int8-torchao`) over `fp8-*`;
+(A)'s FP8 runs via ComfyUI casting. Note this when reading the speed numbers.
+
+**Decision & rollback** — lock the winner in architecture.md §4.3 + PROJECT_STATUS; the fixed
+job-API (§6.2c) means the loser is swapped out without touching any caller.

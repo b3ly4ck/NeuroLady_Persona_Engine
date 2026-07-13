@@ -28,10 +28,20 @@
     architecture.md §4.3 (serving-backend note) + §6.2c (image runner realizes its job API via
     headless ComfyUI + LightX2V). `image/serve.py` (thin wrapper over ComfyUI's `/prompt` API,
     warm-gated) is the next step — **GPU load-test only at night** when chat releases the GPU.
-  - Considered but rejected: a **LightX2V-native** path (base Qwen-Image-Edit-2511 + Lightning
-    4-step distill + NSFW LoRAs via `lora_configs`, FP8/INT8, no ComfyUI) — leaner/faster/lower-VRAM,
-    but it is **not** the documented AIO artifact (it re-creates the NSFW look from separately-loaded
-    community LoRAs), so the user chose to stay on the exact AIO checkpoint instead.
+  - **Quality A/B (documented now, run later at night):** rather than decide AIO-vs-native on
+    theory, both stacks will be benched side-by-side on an identical persona reference + prompt when
+    the GPU is free — **(A)** Phr00t AIO via ComfyUI+LightX2V (default) vs **(B)** LightX2V-native
+    (base Qwen-Image-Edit-2511 + Lightning 4-step distill + NSFW LoRAs via `lora_configs`,
+    INT8-preferred on Turing sm_75). Both share the base, so the pick is by output (identity
+    consistency, skin/realism, anatomy, artifacts, prompt adherence) + speed/VRAM. Full method in
+    `image/README.md` ("Quality A/B evaluation"); note in architecture.md §4.3. Winner locked there;
+    the fixed job-API means the loser swaps out without touching callers.
+  - **Candidate (B) downloads queued behind (A):** `image/download_native.py` (base 2511 +
+    `lightx2v/Qwen-Image-Edit-2511-Lightning` distill LoRA → `image/models/native/`) and a LightX2V
+    clone are wrapped in `image/_queue_native.sh`, which **waits for the AIO download to finish**
+    (so the network isn't thrashed), then pulls them. Running in the background now (idle-waiting).
+    NSFW LoRAs (snofs/qwen4play, Civitai) are added by hand at bench time. LightX2V kernel build +
+    the bench itself are the night step.
   - **Note:** the working tree also carried **uncommitted F-004 semantic-memory WIP** (Qdrant half:
     `services/bot/domain/embeddings.py`, `vector_store.py`, `tests/test_f004_semantic.py` + edits to
     `orchestrator.py`/`memory.py`/`conversation.py`/`app.py`/`config.py`/`pyproject.toml`) — left

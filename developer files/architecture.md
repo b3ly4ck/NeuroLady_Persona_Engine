@@ -526,6 +526,13 @@ video models below, so the night batch fits the sleep window on our own GPU.
     with **LightX2V acceleration nodes**, all behind our own fixed **media job-API** (§6.2c). The
     runner is a **night-batch** service (§6.1): it is only brought up once the chat LLM has released
     the GPU, so the ~28 GB image checkpoint and the ~28 GB chat model never contend for the 48 GB.
+  - **Quality A/B (planned, deferred):** because both candidates share the **same base**
+    (Qwen-Image-Edit-2511), the final look is decided by output, not theory. Two stacks will be
+    benched side-by-side on an identical persona reference + prompt at night (free GPU): **(A)** the
+    Phr00t AIO via ComfyUI+LightX2V (default), vs **(B)** a **LightX2V-native** stack (base 2511 +
+    Lightning 4-step distill + NSFW LoRAs via `lora_configs`, INT8/FP8). Winner is locked here; the
+    fixed job-API means the loser can be swapped out without touching callers. Full method +
+    criteria live in `image/README.md`; the (B) artifacts are queued for download behind (A).
 - **Video — two separate models for two jobs:**
   - **Intimate / no-speech video → `Wan 2.2` (distilled).** Best-in-class body anatomy and motion
     realism; image+text → video, self-hosted night batch, accelerated by LightX2V's Wan 4-step

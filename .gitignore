@@ -24,6 +24,7 @@ chat/models/*
 image/models/*
 !image/models/.gitkeep
 image/comfyui/          # headless ComfyUI runtime — cloned per-runner, never vendored
+image/lightx2v/         # LightX2V framework (A/B candidate B) — cloned, never vendored
 video/models/*
 !video/models/.gitkeep
 
