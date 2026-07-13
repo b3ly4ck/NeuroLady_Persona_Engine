@@ -2,6 +2,29 @@
 
 ## Recent changes
 
+- **Expanded runnable test coverage toward the declared specs (branch `feature/f-004-memory`).**
+  The `tests/` suite grew from **115 → 169** (+54), all green, covering the automatable TC cases the
+  specs declared but that weren't yet coded. Added supplementary files:
+  - `test_f001_coverage.py` (+26): gallery active-only / stable order / deactivation, locale-appropriate
+    personas + normalization, cyclic-pagination boundaries + never-out-of-range, session
+    create/reuse/switch, no-duplicate-user, **restart persistence** (disk sqlite), tap-only flow
+    (only `/start` is a command), single back-path keyboard.
+  - `test_f002_coverage.py` (+8): empty/blank/None input handled, recent-history window bounded +
+    trim keeps most-recent-in-order, valid context with no facts, **in-character fallback (RU/EN)**
+    with a whole-word system-tell guard, fallback strings never system voice.
+  - `test_f003_coverage.py` (+13): pacing randomized-within-band + deterministic-with-fixed-rng +
+    always in [0.3, cap], chunk sentence-boundaries + order/content integrity, verbosity-driven
+    chunking, prompt style directives (no-bullets, casual register, low-vs-high emoji), distinct
+    per-persona style lines, typing-per-chunk in the handler.
+  - `test_f004_coverage.py` (+7): recency ranking, confidence persisted, faithful verbatim recall,
+    **superseded fact never resurfaces** (repeated recalls) + one-active-per-subject, **facts survive
+    a restart**, recall invents nothing.
+  - **Honest ceiling:** declared specs total ~521 TCs for F-001..F-004; ~169 are now runnable
+    (~30%+). The remaining declared TCs are **performance/load** (need a load harness),
+    **statistical** (need volume/labeled sets), **manual real-device e2e** (human-judged), and
+    **live-model-quality** (checked by hand against the real model) — these are not fast unit tests
+    by design (the TDD guide categorizes them as manual/perf). The automatable functional/logic/
+    isolation/error/persistence layer is now broadly covered.
 - **F-004 semantic half — Qdrant + embeddings (branch `feature/f-004-memory`).** Completed the
   memory system's vector side: recall now finds facts by **meaning**, not literal words. Validated
   live against the real embedding model.
