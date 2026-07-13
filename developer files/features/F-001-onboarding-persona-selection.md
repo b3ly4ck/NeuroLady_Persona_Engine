@@ -232,14 +232,19 @@ Feature: F-001 Onboarding & Persona Selection
   **selected** persona (correct persona ↔ media linkage).
 - **FR-001-21** — On tapping **"Start Chat"**, the system must **delete both S2 messages** as it
   transitions to S3: the persona-**card** message (the one carrying the `◀ N/M ▶` + `Start Chat`
-  inline keyboard) **and the gallery intro message**, so no stale gallery chrome lingers above the
-  chat. If a delete fails (e.g. message already gone), the flow must continue regardless.
+  inline keyboard) **and the gallery intro message**. Per the **send-before-delete** rule
+  (architecture.md §1.3): the S3 opener must be **sent successfully first**; the S2 messages are
+  deleted **only after** that send succeeds. If the S3 send fails, the S2 messages are **left in
+  place** (never deleted) — the chat must never end up with the old screen gone and nothing new
+  shown. A delete failure itself (e.g. message already gone) does not block the flow.
 - **FR-001-23** — The user's own **`/start` command message must be deleted** — but **only after**
-  the bot has processed it and sent its response (Welcome or Choose Lady). The command must never be
-  deleted before it is handled (ordering rule from architecture.md §1.3).
+  the bot has processed it and successfully sent its response (Welcome or Choose Lady). The command
+  must never be deleted before it is handled, and never deleted if the response failed to send
+  (ordering rule from architecture.md §1.3) — this prevents the chat from ever going blank/orphaned.
 - **FR-001-24** — The user's **reply-keyboard command taps** (`💋 Choose Lady`, `≡ Menu`) — which
-  arrive as ordinary text messages — must be **deleted after they are handled**, so button-press text
-  does not clutter the chat.
+  arrive as ordinary text messages — must be **deleted only after** the corresponding response has
+  been successfully sent (same send-before-delete rule), so button-press text does not clutter the
+  chat and the chat is never left blank if the response fails.
 - **FR-001-22** — Both the **S2 persona card** (the "choose a girl" moment) and the **S3 first
   message** (the persona's opener) must **include the persona's photo** when one exists in her media
   library: the card as a photo message with the card body as its caption, and the opener as a photo

@@ -133,6 +133,23 @@ async def test_uc_001_04_start_chat_single_opener_with_keyboard(seeded_db):
     cb.message.answer.assert_not_awaited()          # no second/duplicate message
 
 
+async def test_fr_001_21_03_send_before_delete_failed_send_keeps_old_screen(seeded_db):
+    """TC-FR-001-21-03 — if the S3 send fails, the S2 card/intro are NOT deleted (no blank chat)."""
+    await get_or_create_user(seeded_db, 1101, "en")
+    persona = (await list_gallery_personas(seeded_db, "en"))[0]
+    bot = AsyncMock()
+    bot.send_message.side_effect = RuntimeError("network hiccup")
+    cb = fake_callback(1101, data=f"startchat:{persona.id}")
+    ob._intro_msg_ids[cb.message.chat.id] = 555
+
+    with pytest.raises(RuntimeError):
+        await ob.on_start_chat(cb, seeded_db, bot)
+
+    cb.message.delete.assert_not_awaited()        # card NOT deleted
+    bot.delete_message.assert_not_awaited()        # intro NOT deleted
+    cb.answer.assert_awaited_once()                # callback still acknowledged (finally)
+
+
 async def test_fr_001_21_01_start_chat_deletes_card_message(seeded_db):
     """TC-FR-001-21-01 — tapping Start Chat deletes the stale gallery-card message."""
     await get_or_create_user(seeded_db, 1009, "en")

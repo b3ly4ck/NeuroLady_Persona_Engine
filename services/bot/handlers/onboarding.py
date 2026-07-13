@@ -114,18 +114,21 @@ async def _open_gallery(
 ) -> bool:
     """Open S2: optionally the intro message (with reply keyboard), then the first persona card.
 
-    When it sends the intro, it remembers that message's id (and clears any previous one) so the
-    intro can be deleted on Start Chat (FR-001-21)."""
+    Send-before-delete (architecture.md §1.3): the *new* intro is sent first and only then is any
+    stale, previously-tracked intro deleted — so a send failure never leaves the chat without any
+    intro at all. The new message's id is tracked for the later Start Chat deletion (FR-001-21)."""
     personas = await list_gallery_personas(db, user.locale)
     if not personas:
         return False
     if with_intro:
-        await _delete_tracked_intro(bot, message.chat.id)  # clear a stale intro if any
         intro_text, reply_kb = views.gallery_intro_view(user.locale)
-        sent = await message.answer(intro_text, reply_markup=reply_kb)
+        sent = await message.answer(intro_text, reply_markup=reply_kb)  # send new intro FIRST
+        stale_mid = _intro_msg_ids.get(message.chat.id)
         mid = getattr(sent, "message_id", None)
         if mid is not None:
             _intro_msg_ids[message.chat.id] = mid
+        if stale_mid is not None and stale_mid != mid:
+            await _safe_delete_message(bot, message.chat.id, stale_mid)  # THEN drop the old one
     await _send_card(message, views.gallery_card_view(personas[0], 0, len(personas), user.locale))
     return True
 
@@ -216,7 +219,13 @@ async def on_noop(cb: CallbackQuery) -> None:
 
 @router.callback_query(F.data.startswith("startchat:"))
 async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
-    """FR-001-10/11/12/14/17 — create/reuse/switch session, send one intro (once) with the keyboard."""
+    """FR-001-10/11/12/14/17/21 — create/reuse/switch session, send the S3 opener, THEN clean up S2.
+
+    Send-before-delete (architecture.md §1.3): if `is_new_intro`, the opener is sent and must
+    succeed before the S2 card + intro are deleted. If sending raises, the S2 messages are left in
+    place (not deleted) and the exception propagates (logged by aiogram) rather than silently
+    leaving the chat blank; `cb.answer()` still fires via `finally` so the tap doesn't spin forever.
+    """
     user = await _user_from(db, cb.from_user)
     persona_id = int(cb.data.split(":", 1)[1])
     persona = await _persona(db, persona_id)
@@ -225,14 +234,16 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
         return
     chat_id = cb.message.chat.id
     _, is_new_intro = await start_or_switch_session(db, user.id, persona_id)
-    # FR-001-21: remove BOTH S2 messages (card + intro) as we enter S3, so no gallery chrome lingers.
-    await _safe_delete_own(cb.message)          # the persona-card message
-    await _delete_tracked_intro(bot, chat_id)   # the gallery intro message
-    if is_new_intro:  # FR-001-17: a reused (double-tapped) session does not re-send the intro
-        await send_persona_intro(
-            bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale)
-        )
-    await cb.answer()
+    try:
+        if is_new_intro:  # FR-001-17: a reused (double-tapped) session does not re-send the intro
+            await send_persona_intro(
+                bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale)
+            )
+        # Only reached if the send above succeeded (or wasn't needed) — now safe to tidy up S2.
+        await _safe_delete_own(cb.message)          # the persona-card message
+        await _delete_tracked_intro(bot, chat_id)    # the gallery intro message
+    finally:
+        await cb.answer()
 
 
 # ── Reply keyboard + menu navigation ─────────────────────────────────────────────────────────────

@@ -226,9 +226,14 @@ flowchart TD
   commands (`/start`, …), their reply-keyboard button taps (their `💋 Choose Lady` / `≡ Menu` text),
   the gallery **intro message**, and the stale persona **card** on entering the chat. The chat should
   read like a conversation with a person, not a scrolling log of menus and commands.
-  **Hard rule:** never delete a user's command/message **before it has been processed and the bot
-  has responded** — process first, respond, then delete the now-redundant command. Only her real
-  content (persona messages, media) and the current screen persist.
+  **Hard rule — send-before-delete, always:** whenever a screen transition both *sends new content*
+  and *deletes old content*, the new content must be **sent (and the send must succeed) before**
+  the old content is deleted — never the reverse, and never delete-then-send. Concretely: a user's
+  command/message is only deleted **after** the bot's response to it has been sent; a stale
+  screen's messages (card, intro) are only deleted **after** the next screen's message has actually
+  landed. If sending the replacement fails, the old content is **left in place** — the chat must
+  never be silently left blank/orphaned by a delete that outran (or substituted for) a failed send.
+  Only her real content (persona messages, media) and the current screen persist long-term.
 
 ---
 

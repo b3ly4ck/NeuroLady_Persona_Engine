@@ -2,6 +2,20 @@
 
 ## Recent changes
 
+- **Fixed a live-tested bug: Start Chat deleted the S2 screen and sent nothing (docs-first).** The
+  prior implementation deleted the card + intro *before* sending the S3 opener; if that send raised
+  (e.g. a transient network error — the unwrapped photo/text send paths in `send_persona_intro` had
+  no try/except), the exception aborted the handler after the deletes but before anything new
+  landed, leaving the chat blank. Root-caused to a missing **send-before-delete** ordering guarantee.
+  Fixed the **general rule** first: `architecture.md` §1.3 now states it explicitly (new content
+  must be sent, and the send must succeed, *before* old content is deleted — never the reverse; on
+  a failed send, old content stays); `F-001` **FR-001-21/23/24** reworded to require this ordering.
+  Then code: `on_start_chat` now sends the S3 opener **first**, and only deletes the S2 card/intro
+  **after** that succeeds (wrapped so `cb.answer()` still fires via `finally` even on failure, and
+  the exception still propagates/logs rather than being swallowed); `_open_gallery` likewise sends
+  the new intro before deleting any stale tracked one. Added
+  `test_fr_001_21_03_send_before_delete_failed_send_keeps_old_screen` (asserts nothing is deleted
+  when the send raises). **58 tests green.**
 - **"Hide the bot chrome" — delete transient/utility messages so the chat reads like a real
   conversation (docs-first).** New UX principle in `architecture.md` §1.3 (delete the user's slash
   commands, reply-keyboard button taps, the gallery intro, and stale cards once they've served their
