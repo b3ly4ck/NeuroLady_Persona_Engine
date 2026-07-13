@@ -2,6 +2,39 @@
 
 ## Recent changes
 
+- **Etap 4 — F-004 memory (Postgres-only slice): she remembers what you told her (branch
+  `feature/f-004-memory`, off `feature/f-003-human-likeness`).** Wired structured user-fact memory
+  into the F-002 loop; the semantic/Qdrant half + biography pyramid are deferred (biography belongs
+  to the Life Engine / F-006 anyway). Validated live against the real model.
+  - **`services/bot/models.py`** — added the `USER_FACT` model + `FactStatus` enum (ERD §5.1):
+    `category`, `content`, `status` (active|superseded), `superseded_by`, `confidence`,
+    `embedding_ref` (nullable, reserved for the future Qdrant half), timestamps.
+  - **`services/bot/domain/fact_extraction.py`** — one off-hot-path LLM call takes the user's
+    message + his stored active facts and returns memory ops: new facts (categorized + confidence)
+    to `add` and existing fact ids to `supersede` (contradiction/update). Strict-JSON prompt, parsed
+    defensively; empty ops on any failure (never breaks the turn). FR-004-06/07/11/14/15.
+  - **`services/bot/domain/memory.py`** — the relational store/recall: `active_facts`,
+    `apply_memory_ops` (insert + dedup + supersede, all scoped to the acting user), and
+    `recall_facts` (rank active facts by keyword-overlap + recency + confidence, bounded to 6 —
+    FR-004-09/13/25/26/36).
+  - **`services/bot/orchestrator.py`** — `handle_turn` now recalls the user's relevant facts and
+    fuses them into the **single** system message (FR-002-13/14, FR-004-24/28); new
+    `update_user_memory` extracts + stores facts **after the reply is sent** (off hot path,
+    FR-004-42/43). `conversation.py` calls it post-delivery.
+  - **Bug found live + fixed:** the Qwen chat template rejects a second system message
+    ("System message must be at the beginning" → HTTP 500). The first cut added memory as a separate
+    system turn, so replies 500'd once any fact existed. Fixed by concatenating memory into the one
+    system message; added a **regression test** asserting exactly one system message.
+  - **Tests:** `tests/test_f004_memory.py` (18) — store/categorize, active-only recall excluding
+    superseded, relevance ranking, bounded recall, supersession (+ retained row), dedup, per-user
+    isolation (recall + supersede), extraction JSON parsing/fallback, and orchestrator integration
+    (fused recall single-system-message regression, store-after-turn, supersede-after-turn).
+    **Full suite: 109 passed** (57 F-001 + 20 F-002 + 15 F-003 + 17 F-004... 18 counting the added
+    regression). Live check: she recalled the sister's wedding + his job unprompted across turns and
+    superseded his job when it changed, with no 500s.
+  - **Deferred (next memory phase):** Qdrant embeddings + semantic recall (FR-004-08/10/19),
+    biography time-pyramid (FR-004-16..23, Life Engine), reconciliation (FR-004-35), export/delete
+    from both stores (FR-004-38/39), a real background queue for extraction.
 - **Removed the Welcome/Start screen (S1) — `/start` now opens Choose Lady directly (docs-first,
   branch `feature/f-001-onboarding`, merged into `master`).** Live testing showed the flirty
   "Погрузись в мир удовольствия…" welcome screen with a "Начать" button was pure friction ahead of

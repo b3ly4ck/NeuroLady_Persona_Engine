@@ -45,6 +45,11 @@ class MessageSender(str, enum.Enum):
     persona = "persona"
 
 
+class FactStatus(str, enum.Enum):
+    active = "active"
+    superseded = "superseded"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -57,6 +62,7 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     sessions: Mapped[list["Session"]] = relationship(back_populates="user")
+    facts: Mapped[list["UserFact"]] = relationship(back_populates="user")
 
 
 class Persona(Base):
@@ -123,3 +129,35 @@ class Message(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
     session: Mapped["Session"] = relationship(back_populates="messages")
+
+
+class UserFact(Base):
+    """A categorized fact the user revealed about himself (ERD §5.1 USER ||--o{ USER_FACT, F-004).
+
+    Structured (relational) half of the memory system. A fact carries a `category`, its `content`,
+    a `status` (active|superseded) with `superseded_by` so a contradicted fact is soft-superseded
+    and kept for history (FR-004-11/12), and a `confidence` so hedged remarks aren't recalled as
+    certain (FR-004-14). `embedding_ref` is modelled now (nullable) for the future Qdrant/semantic
+    half (FR-004-08) — unused in the Postgres-only slice.
+    """
+
+    __tablename__ = "user_facts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    category: Mapped[str] = mapped_column(String(32), index=True)  # family|work|preferences|...
+    content: Mapped[str] = mapped_column(Text)
+    status: Mapped[FactStatus] = mapped_column(
+        Enum(FactStatus), default=FactStatus.active, index=True
+    )
+    superseded_by: Mapped[int | None] = mapped_column(
+        ForeignKey("user_facts.id"), nullable=True
+    )
+    confidence: Mapped[float] = mapped_column(default=1.0)  # 0..1, how firmly asserted (FR-004-14)
+    embedding_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)  # future Qdrant
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+    user: Mapped["User"] = relationship(back_populates="facts")

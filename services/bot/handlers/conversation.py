@@ -23,7 +23,7 @@ from services.bot.domain.humanize import chunk_reply, pacing_delay, parse_settin
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.models import Persona
-from services.bot.orchestrator import handle_turn
+from services.bot.orchestrator import handle_turn, update_user_memory
 
 log = logging.getLogger(__name__)
 router = Router(name="conversation")
@@ -71,3 +71,8 @@ async def on_text(
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
         await _sleep(pacing_delay(chunk, settings))
         await message.answer(chunk)
+
+    # F-004: extract + store the user's salient facts AFTER the reply is delivered, so this LLM
+    # extraction never delays what he sees (FR-004-42/43). The DB session commits when the handler
+    # returns. (Production would move this to a proper background queue.)
+    await update_user_memory(db, user.id, message.text, chat_client)
