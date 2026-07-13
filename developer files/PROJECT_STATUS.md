@@ -2,6 +2,24 @@
 
 ## Recent changes
 
+- **Wrote the F-006 test spec** (`developer files/tests/F-006-life-engine.md`), the mirror test
+  specification for the Life Engine feature, per `test_driven_development.md` §7 and the F-004
+  example. Covers **all 21 FR (FR-006-01..21)** and **all 13 NFR (NFR-006-01..13)** at 2-3 tests each
+  (3 for the critical ones: daily plan FR-006-01, plan-inputs FR-006-02, self-reflection FR-006-05/-06,
+  compression pyramid FR-006-07/-08, aging-up FR-006-09, layer-consistency FR-006-10, goals
+  FR-006-11/-12/-13, fixed-anchor immutability FR-006-14, self-consistency FR-006-15, timezone
+  FR-006-16, hand-off FR-006-17, versioned prompts FR-006-19, degrade FR-006-20, auditability
+  FR-006-21; and NFR-006-01/-03/-04/-05/-06/-07/-08/-09/-10), plus **1 manual real-device acceptance
+  test per user story** (US-006-01..08). Emphasizes the daily-plan free-text schedule + current-activity
+  derivation, first-person self-reflection with no user-fact leak, the hierarchical compression
+  (7 daily→weekly→monthly→yearly→epoch, mirroring the UC-006-04 outline), gist-not-detail aging,
+  fixed-anchor immutability + no self-contradiction under probing, goals progress/feed-plan, timezone
+  correctness (different zones + DST), off-hot-path batch, degrade-keep-last-good-state (never "no
+  day"), bounded storage, auditability, and RU/EN localization. Levels span unit/integration/
+  inter-service/data-flow/component/e2e/performance/load/security/consistency/statistical.
+  **Counts: 60 FR + 35 NFR + 8 US = 103 tests (21/21 FR, 13/13 NFR, 8/8 US — full coverage, in the
+  100-150 band).** Every TC id embeds its `FR-`/`NFR-`/`US-` id. Life Engine (F-005 + F-006) now has
+  both feature files and both mirror test specs.
 - **Wrote the F-005 test spec** (`developer files/tests/F-005-relationship-system.md`), the mirror
   test specification for the Relationship System feature, per `test_driven_development.md` §7 and the
   F-004 example. Covers **all 28 FR (FR-005-01..28)** and **all 13 NFR (NFR-005-01..13)** at 2-3 tests
