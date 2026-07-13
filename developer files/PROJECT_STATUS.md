@@ -2,6 +2,23 @@
 
 ## Recent changes
 
+- **Designed & wrote F-006 — Life Engine** (`developer files/features/F-006-life-engine.md`): the
+  persona's *own* living, the sibling of F-005 (F-005 = per-user relationship; F-006 = her own life).
+  The living loop: **morning Planner** → `DAILY_PLAN.plan_text` free-text schedule (drives media +
+  "what she's doing now"); **end-of-day self-Reflector** → first-person daily `REFLECTION`;
+  **hierarchical compression** 7 daily→weekly→~4 weekly→monthly→12 monthly→yearly→epochs, each an LLM
+  prompt, stored as `BIOGRAPHY_LAYER` handed to Memory (F-004) for embedding; **goals** that progress/
+  add/complete and feed the plan. Key design points: **fixed anchors** (name/core values/Big Five/
+  epochs) immutable & never contradicted vs **evolving** recent life; **aging up** (old detail → gist,
+  bounded storage); **timezone-driven** scheduling coordinated with the day/night compute window;
+  **persona-shared, not per-user** (no user-specific facts leak into the shared biography — privacy);
+  degrade-on-LLM-failure (keep last good state, never "no day"). Includes a **Design model** section +
+  **8 US / 13 UC / 21 FR / 13 NFR**. **Scope boundary:** F-006 authors her inner life; F-005 owns the
+  relationship reflection, F-004 stores the rows, media pipeline generates the pixels/circles (F-006
+  gives the "story from her day" basis), F-002 consumes her current activity/biography, Persona Studio
+  authors initial identity. **Architecture synced:** §3.5 (F-006 spec pointer), §4.5 (authored-by
+  note), §5.1 `GOAL` gains `status enum`/`horizon`/`created_at`. Life Engine subsystem (§3.5) now
+  fully specced across F-005 + F-006. **Next:** test specs for F-005 and F-006.
 - **Designed & wrote F-005 — Relationship System** (`developer files/features/F-005-relationship-system.md`),
   fulfilling architecture.md §4.6's "relationship scale is a design deliverable". **Design:** per
   `(user, persona)`, three configurable 0–100 dimensions **Closeness / Trust / Attraction** (the

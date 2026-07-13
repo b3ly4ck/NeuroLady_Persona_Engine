@@ -393,7 +393,9 @@ Engine, §3.5) — the Life Engine hands produced layers to Memory via `POST /me
   are private and per-user isolated.
 
 ### 3.5 Life Engine (persona "living" — highest-value subsystem)
-Runs the persona's simulated life on a schedule. Components:
+Runs the persona's simulated life on a schedule. **Full spec: feature `F-006`** (daily plan,
+self-reflection, biography compression, goals); the per-user **relationship reflection** below is
+**`F-005`**. Components:
 - **Planner:** at a set time (e.g. early morning) sends a system prompt to the reflection LLM
   ("You are Alina, characteristics …, plan your day") → produces a **daily plan with a schedule
   written as free text** (activities across the day with rough times/locations), stored in
@@ -552,6 +554,7 @@ video models below, so the night batch fits the sleep window on our own GPU.
 - Goal: maximally flexible, no-code persona creation, runnable locally first.
 
 ### 4.5 Biography as a time pyramid (persona memory of *herself*)
+> Authored by the Life Engine (feature **`F-006`**); stored/served by Memory (`F-004`).
 - Layers from coarse to fine: **epochs** (childhood/youth/current) → **years** → **months** →
   **weeks** → **days**. Fine layers are generated live (plan + reflection) and **compressed
   upward** over time (§3.5). This gives a consistent, evolving, queryable life story.
@@ -697,8 +700,10 @@ erDiagram
         id PK
         persona_id FK
         description
-        status
+        status "active|done|dropped (F-006)"
         priority
+        horizon "short|long-term (F-006)"
+        created_at
         updated_at
     }
     RELATIONSHIP {
