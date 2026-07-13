@@ -18,6 +18,21 @@ Whenever the user asks to **code, implement, build, or start developing** anythi
 Do not start implementing from memory — reload these each time so the work follows the agreed
 format (feature documented → requirements with IDs → full set of tests → then code).
 
+### Docs-first, always (change requests too)
+
+When the user requests a **new behavior, UX change, or fix** to how something already works, the
+order is **always: update the documentation first, then implement from it** — never patch the code
+directly and backfill the docs (or skip them). Concretely, for any such request:
+
+1. **Refine the docs to capture the request precisely** — the relevant part of `architecture.md`
+   (e.g. the UX flow in §1), the affected `developer files/features/F-<NNN>-*.md` (user flows,
+   Gherkin, `FR-`/`NFR-` requirements), and the test spec. Encode exact screen order, transitions,
+   screen contents, and copy so the doc alone is enough to build from.
+2. **Then implement to match the updated docs**, and update the runnable tests accordingly.
+
+The documentation is the source of truth; code follows the docs, not the other way around. This
+applies even to small tweaks — write the intended behavior down first, then make the code match it.
+
 ## Git workflow: commit and push after every change
 
 After **any** change made to the project (new file, code edit, config change, etc.),
@@ -178,3 +193,11 @@ explicitly asks for it elsewhere.
   the feature (not a minimal set). More detail in the feature spec is wanted, especially for the
   important features. (This is about spec thoroughness; the ~2-3-tests-per-requirement rule above
   still governs test count — more requirements simply yield more tests overall.)
+- [2026-07-12] Don't stack two consecutive bot messages that both nudge the user toward the same
+  action (e.g. an intro line asking "write me?" immediately followed by a separate "ready — say
+  something" message). It reads as robotic/redundant. Combine into one message and attach whatever
+  keyboard/markup is needed directly to it, rather than sending a second follow-up text.
+- [2026-07-13] **Docs-first workflow (reaffirmed by the user):** on any behavior/UX/fix request,
+  first update the documentation (architecture §1 UX flow, the feature file, tests) to capture the
+  exact screen order/transitions/contents, then implement strictly from the updated docs. Never code
+  first and document after. See "Docs-first, always" above.

@@ -117,19 +117,45 @@ driven; the user should barely need to type commands — inline/reply keyboards 
 
 ### 1.1 Screens & flow
 
+**Canonical screen order (this is the exact reference flow — always follow it).** Each screen flows
+from a single specific action on the previous one:
+
+1. **`/start` → Start screen (S1)** for a brand-new user; a **returning** user's `/start` skips
+   S1 and goes **straight to S2 (Choose Lady)**. `/start` is a "home" action — even **mid-chat** it
+   takes the user to Choose Lady, never resume-locking them into the conversation (the active
+   session is preserved: picking the same persona again on S2 just continues that chat).
+2. **S1, tap `Start` → Choose Lady screen (S2).**
+3. **S2, `◀` / `▶` → S2** (the same screen; the persona card updates in place, one persona per view).
+4. **S2, tap `Start Chat` → Chat screen (S3).**
+5. **S3, reply-keyboard `💋 Choose Lady` → S2** (re-open the gallery). **There is no main menu
+   screen and no `≡ Menu` button** — the reply keyboard carries this single action only.
+
 ```mermaid
 flowchart TD
-    START[/start] --> WELCOME[Welcome screen: header 'NeuroLady AI'<br/>+ flirty welcome copy + 'Start' inline button]
-    WELCOME -->|tap Start| GALLERY[Choose Lady: intro message +<br/>persona card carousel]
-    GALLERY -->|◀ / ▶ paginate '1/6'| GALLERY
-    GALLERY -->|tap 'Start Chat'| INTRO[Selected persona sends a video-note<br/>Telegram 'circle' intro]
-    INTRO --> CHAT[Conversation screen]
-    CHAT -->|reply keyboard '💋 Choose Lady'| GALLERY
-    CHAT -->|reply keyboard menu ≡| MENU[Main menu]
-    CHAT -->|ask for photo/video| MEDIA[Media Delivery -> photo/video]
-    MENU -->|Subscription| SUBS[Subscription status / upgrade]
-    MENU -->|Choose Lady| GALLERY
-    MENU -->|Resume chat| CHAT
+    START([/start]) --> S1
+
+    subgraph S1["S1 — Start screen"]
+        S1a["header 'NeuroLady AI' + avatar"]
+        S1b["flirty welcome copy"]
+        S1c["inline button: Start (full-width)"]
+    end
+
+    subgraph S2["S2 — Choose Lady screen"]
+        S2a["intro message ('Choose the lady... / come back anytime / ready?')<br/>+ persistent reply keyboard: 💋 Choose Lady (only)"]
+        S2b["persona CARD (own message): photo + Name +<br/>Profession: + Age: + first-person Description:"]
+        S2c["inline under card: ◀ N/M ▶  and  Start Chat"]
+    end
+
+    subgraph S3["S3 — Chat screen"]
+        S3a["persona intro: photo (or video-note circle)<br/>+ first-person opener message"]
+        S3b["in-chat reply keyboard: 💋 Choose Lady (only)<br/>(🎧 Chat via Audio added in the voice phase)"]
+        S3c["chat is READY — F-002 takes over the conversation"]
+    end
+
+    S1 -->|"tap Start"| S2
+    S2 -->|"◀ / ▶ (card updates in place)"| S2
+    S2 -->|"tap Start Chat"| S3
+    S3 -->|"reply kb: 💋 Choose Lady"| S2
 ```
 
 ### 1.2 UX building blocks
@@ -138,18 +164,31 @@ flowchart TD
 
 - **Header:** standard Telegram chat header — `‹ Chats` back link, title **"NeuroLady AI"**, and
   the persona/brand avatar (top-right).
-- **Welcome screen (Start):** a flirty welcome message (e.g. "Step into a realm of pleasure and
+- **S1 — Start screen:** a flirty welcome message (e.g. "Step into a realm of pleasure and
   desire… Select the woman who captivates you… Tap **Start** to dive in!") followed by a single
   full-width **`Start`** inline button.
-- **Choose Lady (persona gallery) — a paginated card carousel:**
-  - An intro message ("Choose the lady you'd like to chat with… Each one is unique…").
-  - A **persona card** per view: large **photo**, then **Name**, **Profession**, **Age**, and a
-    first-person **Description** teaser (e.g. Olivia, Psychologist, 30).
-  - **Pagination controls**: `◀` / `▶` with a `1/6`-style position counter to browse personas
-    (one card per view).
-  - A **`Start Chat`** inline button under the card to begin talking to the shown persona.
-- **Video-note intro:** on **Start Chat**, the persona sends a Telegram **video note (circle)** as
-  her intro — a first hit of "she's a real person."
+- **S2 — Choose Lady (persona gallery):** reached by tapping `Start` on S1. It is **two messages**:
+  1. An **intro message** — a short multi-line invite ("Choose the lady you'd like to chat with from
+     the list below. Each one is unique, with her own personality and passions. You can always come
+     back and pick another… Ready for some exciting conversations?"). The **persistent reply
+     keyboard appears here** (a single **💋 Choose Lady** button — no menu) and stays for the rest of
+     the session.
+  2. A **persona card** (its own message): large **photo** on top, then the card body —
+     **`{Name}`**, **`Profession: {…}`**, **`Age: {…} years`**, and a first-person
+     **`Description: {…}`** (multi-line, her voice). If a persona has no photo yet, the card degrades
+     to a text-only card (same fields). Under the card: an inline row **`◀`  `N/M`  `▶`** and a
+     full-width **`Start Chat`** button.
+  - **Pagination** (`◀` / `▶`) moves one persona per view and **updates the card message in place**
+    (the counter and card content change; a new card is not appended).
+- **S3 — Chat screen (persona intro):** reached by tapping `Start Chat` on S2. On the transition the
+  **persona-card message is deleted** (F-001 FR-001-21) so the stale gallery card doesn't linger.
+  The selected persona greets with her **intro** — her **photo** (or a Telegram **video note /
+  circle** when available) **plus a first-person opener message** in her voice (e.g. "Hey there 😊
+  I'm Olivia… what's on your mind tonight? 💋"; the photo carries the opener as its caption). The
+  intro carries the reply keyboard; **no separate "ready to chat" message is sent** (the opener
+  already invites a reply — F-001 FR-001-12). Photos also appear on the **S2 card** (the "choose a
+  girl" moment); both are `PERSONA.gallery_photo_ref` media (§5.1/§6.3), degrading to text-only until
+  real images exist. After this the chat is ready and **F-002** owns the conversation.
 - **Daily video circles:** subscribers receive **proactive daily video notes** of the persona
   sharing stories from her day (a recurring "she's alive" touchpoint, not just the intro). These
   are talking-head circles driven by the schedule/Life Engine (§4.3, §3.5).
@@ -160,14 +199,16 @@ flowchart TD
   the user needs a subscription (metered by Billing, §3.7). Photo access can be bought separately
   (daily/weekly/monthly) or via a tier.
 - **Keyboards — two kinds, used by situation:**
-  - **Reply keyboard** (replaces the typing keyboard) for persistent, session-level operations,
-    per the design: a **`💋 Choose Lady`** button (return to persona selection) and a **menu (≡)**
-    button; add `Subscription` / `End chat` as needed.
+  - **Reply keyboard** (replaces the typing keyboard) for the one persistent, session-level action:
+    a **`💋 Choose Lady`** button (return to persona selection) — **that is the only button on it**.
+    There is **no main menu and no `≡ Menu` button** — deliberately removed to keep the chat feeling
+    like a real conversation, not an app with a settings screen. It first appears on **S2** (the
+    Choose Lady screen) and persists through the chat. On the chat screen a **`🎧 Chat via Audio`**
+    button is added once the **voice phase** ships (§4.7); it is not part of F-001.
   - **Inline keyboard** (attached to a message) for in-context actions: `Start`, `◀`/`▶`,
     `Start Chat`, and in-chat `📸 photo` / `💳 Subscription`.
-- **Main menu:** reachable from the reply-keyboard menu; check subscription, choose another lady,
-  or resume. Simple, few options, always reachable.
-- **Subscription screen:** current tier, what's unlocked, upgrade CTA (ties into Billing, §3).
+- **Subscription screen:** current tier, what's unlocked, upgrade CTA (ties into Billing, §3) —
+  reached from a persona's own in-chat `💳 Subscription` prompt, not from any menu (there is none).
 
 > Reference design: Figma "🧠 AIT". This section is the behavioral spec the bot must implement;
 > exact copy and keyboard layouts are refined per-screen during feature work
@@ -175,10 +216,24 @@ flowchart TD
 
 ### 1.3 UX principles
 - Minimize free-text commands; prefer taps.
-- Every screen has an obvious way back to the main menu.
+- **No main menu.** There is deliberately no menu screen and no `≡ Menu` button — one reply-keyboard
+  action only (`💋 Choose Lady`). Every screen's one-tap "way back" is Choose Lady, not a menu.
 - Media requests are one tap and feel instant (media is pre-generated — see §4.3).
 - The persona never breaks character in UI copy that "belongs" to her (her messages), while
   system/menu copy is neutral brand voice.
+- **Hide the "bot chrome" — the user should forget they're in a Telegram bot.** Transient,
+  utility messages are **deleted once they have served their purpose**: the user's own slash
+  commands (`/start`, …), their reply-keyboard button taps (their **`💋 Choose Lady`** text), the
+  gallery **intro message**, and the stale persona **card** on entering the chat. The chat should
+  read like a conversation with a person, not a scrolling log of menus and commands.
+  **Hard rule — send-before-delete, always:** whenever a screen transition both *sends new content*
+  and *deletes old content*, the new content must be **sent (and the send must succeed) before**
+  the old content is deleted — never the reverse, and never delete-then-send. Concretely: a user's
+  command/message is only deleted **after** the bot's response to it has been sent; a stale
+  screen's messages (card, intro) are only deleted **after** the next screen's message has actually
+  landed. If sending the replacement fails, the old content is **left in place** — the chat must
+  never be silently left blank/orphaned by a delete that outran (or substituted for) a failed send.
+  Only her real content (persona messages, media) and the current screen persist long-term.
 
 ---
 
@@ -744,6 +799,13 @@ flowchart LR
   the model is still loading, the Bot Gateway/Orchestrator immediately sends a "typing…" indicator
   (and/or a short in-character holding line) and delivers the reply once ready. Observability
   (§6.4) alerts if the model is not warm at the start of the serving window.
+- **Bot Gateway resilience to network blips (Telegram connectivity):** the Bot Gateway process must
+  **not crash and exit** on a transient network failure to `api.telegram.org` (DNS hiccup, dropped
+  connection, local network flap) — this includes the very first connectivity check at startup
+  (`getMe`), not just steady-state polling. On such a failure the process must **retry with capped
+  exponential backoff indefinitely** (never give up and die) and log each attempt, so it self-heals
+  the moment connectivity returns, without requiring a manual restart. This generalizes F-001's
+  NFR-001-06 (retry a single send) to the **process level**.
 
 ### 6.2 Data stores
 - **Relational DB** (e.g. PostgreSQL) for structured entities (§5.1).

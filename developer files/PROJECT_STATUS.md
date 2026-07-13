@@ -2,6 +2,139 @@
 
 ## Recent changes
 
+- **F-001 live-tested and approved by the user; noted a future-work item.** User confirmed the
+  reworked onboarding flow works correctly end-to-end in live Telegram testing. Logged a **known
+  future work** note in `F-001`'s Scope boundary: the S3 opener (`intro_opener`) and the S2/S3 photo
+  are currently **static** (one canned line + one fixed image per persona); once the Chat LLM (F-002)
+  and media generation (roadmap Phase 2) exist, both should become **dynamically generated** — an
+  LLM-written, in-character hook drawing the user into replying, paired with a generated/selected
+  photo, rather than the same static line/image for every user. Not implemented now — tracked so
+  it isn't lost. **Merged `feature/f-001-onboarding` into `master`** (58/58 tests green, per the
+  CLAUDE.md merge rule).
+- **Removed the main menu entirely — explicit product decision: "no menu, ever" (docs-first).** The
+  user rejected the `≡ Menu` screen (Choose Lady / Resume chat) outright — one reply-keyboard action
+  only: `💋 Choose Lady`. Docs first: `architecture.md` §1.1 (flow diagram no longer has a MENU node;
+  canonical order note updated), §1.2 (reply keyboard = single Choose Lady button; dropped the "Main
+  menu" bullet), §1.3 (new "No main menu" principle). `F-001`: **FR-001-16 marked `DEPRECATED`** (ids
+  are immutable — never deleted/reused, per `feature_description_guide.md`); FR-001-12/03/15/24 and
+  NFR-001-07 reworded to drop all menu/resume wording; user flows and UC-001-04/05 updated (resuming
+  is now just "pick the same persona again on Choose Lady" via FR-001-10's session reuse — no
+  separate resume action). While in the file, also **backfilled test-spec coverage that had drifted
+  out of sync** with the feature file: added missing FR-001-21/22/23/24 and NFR-001-11 sections
+  (were added to the feature earlier but never given tests in the spec), updated FR-001-15/16 tests
+  and the US-001-05 manual test for current behavior. Test spec now 113 tests (110 active + 3
+  deprecated), 24/24 FR + 11/11 NFR + 6/6 US ids present.
+  Code: removed `keyboards.menu_kb`, `views.menu_view`, `i18n` menu/resume/resumed keys,
+  `on_choose_lady_cb`/`on_menu_text`/`on_resume` handlers, `_MENU_LABELS`, and the now-unused
+  `get_active_session` import; `reply_kb` now renders a single button. Updated/added tests
+  accordingly (incl. a guard test asserting the menu handlers no longer exist). **58 tests green.**
+- **Fixed a live-tested bug: Start Chat deleted the S2 screen and sent nothing (docs-first).** The
+  prior implementation deleted the card + intro *before* sending the S3 opener; if that send raised
+  (e.g. a transient network error — the unwrapped photo/text send paths in `send_persona_intro` had
+  no try/except), the exception aborted the handler after the deletes but before anything new
+  landed, leaving the chat blank. Root-caused to a missing **send-before-delete** ordering guarantee.
+  Fixed the **general rule** first: `architecture.md` §1.3 now states it explicitly (new content
+  must be sent, and the send must succeed, *before* old content is deleted — never the reverse; on
+  a failed send, old content stays); `F-001` **FR-001-21/23/24** reworded to require this ordering.
+  Then code: `on_start_chat` now sends the S3 opener **first**, and only deletes the S2 card/intro
+  **after** that succeeds (wrapped so `cb.answer()` still fires via `finally` even on failure, and
+  the exception still propagates/logs rather than being swallowed); `_open_gallery` likewise sends
+  the new intro before deleting any stale tracked one. Added
+  `test_fr_001_21_03_send_before_delete_failed_send_keeps_old_screen` (asserts nothing is deleted
+  when the send raises). **58 tests green.**
+- **"Hide the bot chrome" — delete transient/utility messages so the chat reads like a real
+  conversation (docs-first).** New UX principle in `architecture.md` §1.3 (delete the user's slash
+  commands, reply-keyboard button taps, the gallery intro, and stale cards once they've served their
+  purpose; **hard rule: never delete a user's command before it has been processed/responded to**).
+  In `F-001`: extended **FR-001-21** (Start Chat now deletes **both** S2 messages — card **and**
+  intro) and added **FR-001-23** (delete the `/start` message, only *after* responding) and
+  **FR-001-24** (delete `💋 Choose Lady` / `≡ Menu` reply-keyboard taps after handling). Then
+  implemented: `_open_gallery` tracks the intro message id (in-memory `_intro_msg_ids`, per chat;
+  noted as dev-single-process — Redis/FSM for multi-instance); `on_start_chat` deletes the card +
+  tracked intro; `cmd_start` deletes `/start` after the response; `on_choose_lady_text`/`on_menu_text`
+  delete the tap. All deletes are best-effort (`_safe_delete_*`). **57 tests green** (added intro-
+  delete, intro-tracking, and menu-tap-delete tests; asserted /start and Choose-Lady taps are
+  deleted).
+- **Bot process now self-heals from Telegram network blips instead of crashing (docs-first).** The
+  process died 3× during live testing with `OSError [WinError 121] semaphore timeout` connecting to
+  `api.telegram.org` — a flaky-network issue (matches the user's own reported internet drops), but
+  the process had no retry around the initial `getMe()` check, so it exited and needed a manual
+  restart every time. Added **NFR-001-11** to `F-001` and a matching "Bot Gateway resilience to
+  network blips" note to `architecture.md` §6.1 (retry with capped exponential backoff
+  indefinitely, never crash-exit), then implemented `_run_polling_with_reconnect` in `app.py`
+  (wraps `dp.start_polling`, catches `TelegramNetworkError`/`OSError`, backs off 1→2→4→8→16→30→60s
+  capped, retries forever) and wired it into `main()`. Added `tests/test_f001_reconnect.py` (3
+  tests: retries-then-succeeds, raw `OSError` also retried, backoff grows and is capped).
+  **54 tests green.**
+- **Final F-001 polish: delete the stale card on Start Chat + wire persona photos (docs-first).**
+  Added `F-001` **FR-001-21** (on Start Chat, delete the persona-card message so it doesn't linger)
+  and **FR-001-22** (S2 card and S3 opener include the persona's photo when one exists), updated the
+  flow diagram + `architecture.md` §1.1/§1.2, then implemented: `on_start_chat` deletes `cb.message`
+  (the card) before sending the opener; `personas_seed` sets each persona's `gallery_photo_ref` to
+  `media/<slug>/gallery/card.jpg` (helpers `persona_slug` / `gallery_photo_path`). The photo path was
+  already supported by `_send_card` (photo message + caption) and `send_persona_intro` (photo opener);
+  it stays a graceful text fallback until a real image is dropped at that path (`media/` is
+  git-ignored; per-persona `gallery/` folders created locally). **51 tests green** (added
+  `test_fr_001_21_01` card-delete and `test_fr_001_22_01` photo-on-card-and-opener using a temp file).
+- **`/start` is now a "home" action — always goes to Choose Lady, never resume-locks (docs-first).**
+  Per the reference, `/start` must take the user to the Choose Lady main screen even mid-chat.
+  Updated docs first (`F-001` FR-001-15 + UC-001-05 + returning-user flow; `architecture.md` §1.1
+  note), then code: `cmd_start` now shows Welcome (S1) only to a **brand-new** user (first ever
+  `/start`) and drops a **returning** user straight onto Choose Lady (S2); it no longer resumes the
+  active chat. The active session is **preserved** (not ended), so `Menu → Resume chat` still returns
+  to that persona. Updated `test_fr_001_15_02` accordingly. **49 tests green.**
+- **Reworked the onboarding screen flow to match the reference design (docs-first).** The user
+  supplied reference screenshots defining the canonical screen order S1→S2→S3 and screen contents;
+  per the reaffirmed **docs-first rule** (now in CLAUDE.md), documentation was updated *before* code:
+  `architecture.md` §1.1 (new S1/S2/S3 flow diagram + explicit "canonical screen order" list) and
+  §1.2 (S2 = intro message carrying the reply keyboard **+** a separate persona-card message with
+  photo + `Profession:`/`Age:`/`Description:`; S3 = photo/video-note + first-person opener; reply
+  keyboard first appears on S2; `🎧 Chat via Audio` deferred to the voice phase), and `F-001`
+  (FR-001-03/04/11, first-time user flow). Then the bot was reimplemented to match: `i18n.py` richer
+  gallery intro + labeled card fields + opener + `resumed` copy (RU/EN); `views.py` `gallery_intro_view`,
+  `card_body` (labeled, persona-language), `CardContent` (photo_ref + body + kb), `intro_opener`;
+  `handlers/onboarding.py` opens S2 as intro+card, paginates by **editing the card in place**, and
+  S3 sends a single opener (photo-caption / text) carrying the reply keyboard (video-note path sends
+  the circle then the opener). **49 tests green.** New docs-first workflow rule + the earlier
+  "no stacked nudges" rule are logged in CLAUDE.md.
+- **Fixed a live-tested UX issue: Start Chat sent two stacked "please write" messages.** Live
+  Telegram testing showed the fallback intro ("Hey, it's Sofia 💋 ... write me?") immediately
+  followed by a separate "You're all set — say something" message — both nudging the same action,
+  reading as robotic/redundant. Fix: `send_persona_intro` now accepts a `reply_markup` and the
+  keyboard is attached directly to the single intro message (video note or fallback text); the
+  `on_start_chat` handler no longer sends a second `chat_ready_view` message. Updated `F-001`
+  **FR-001-12** to state this explicitly (keyboard attached to the intro delivery, no separate
+  follow-up), and logged the general pattern as a dated CLAUDE.md preference ("don't stack two
+  consecutive nudge messages"). Updated `test_uc_001_04_...` accordingly. **48/48 tests still
+  green.** (The `/start` resume path and the menu's "Resume chat" still show a single
+  `chat_ready_view` message each — those are not stacked with anything, so unaffected.)
+- **F-001 implementation complete on `feature/f-001-onboarding` — 48 tests green.** Added the
+  Telegram I/O layer (aiogram 3): `keyboards.py` (welcome Start button; ◀ counter ▶ + Start Chat
+  card kb; persistent reply kb 💋 Choose Lady + ≡ Menu; menu kb), `views.py` (pure `(text, keyboard)`
+  builders — system copy in user locale, card copy in the persona's language), `handlers/onboarding.py`
+  (/start → Welcome or resume; Start → gallery; card:<i> cyclic nav; startchat:<id> → session +
+  intro-once + reply kb; Choose Lady / Menu / Resume), `middlewares.py` (per-update DB session),
+  `app.py` + `__main__.py` (build_dispatcher + polling entrypoint; refuses to start without a token).
+  Intro delivery sends a video note from `intro_videonote_ref` when present, else a graceful text
+  fallback (FR-001-18). Tests: `test_f001_views.py` (9) + `test_f001_handlers.py` (10, handlers
+  driven with mocked aiogram objects over a real in-memory DB) on top of the 29 domain tests =
+  **48 passing**, covering FR-001-01..20 and NFR-001-04/09/10 behaviors. Remaining: **manual
+  real-device acceptance (TC-US-001-*)** in Telegram — needs the regenerated bot token — then merge
+  to `master`.
+- **Started F-001 implementation (branch `feature/f-001-onboarding`) — domain foundation, 29 tests
+  green.** Stack: Python 3.11+, **aiogram 3.x**, **SQLAlchemy 2 async** + aiosqlite (dev). Added
+  `pyproject.toml`, `services/bot/` package: `config.py` (env/.env via pydantic-settings, no
+  hard-coded secrets), `db.py` (async engine/sessionmaker/init), `models.py` (USER/PERSONA/SESSION —
+  a faithful subset of the §5.1 ERD, extra later-feature fields modelled up front), `i18n.py`
+  (RU/EN copy catalog), `personas_seed.py` (starter roster: 3 RU + 3 EN), and pure **domain** logic
+  (`domain/users.py` get-or-create; `domain/gallery.py` active/locale-filtered + cyclic pagination;
+  `domain/sessions.py` create/reuse/switch with one-active-session invariant). Repo-root `tests/`
+  with `conftest.py` (in-memory async SQLite) + `test_f001_onboarding_domain.py`: **29 passing**
+  tests traced to TC ids covering FR-001-01/05/06/07/08/10/14/15/17/20 and NFR-001-10. Env note: the
+  Git-Bash `python` is a MinGW build with no PyPI wheels; the venv must be built from the python.org
+  CPython (`AppData/Local/Programs/Python/Python312`). **Next:** aiogram handlers + keyboards +
+  entrypoint (the Telegram I/O layer) and their tests, then run end-to-end and merge to master once
+  all `tests/` pass.
 - **SECURITY: scrubbed a real Telegram bot token from `.env.example`.** A real token had been placed
   in the tracked template `.env.example` (which is intentionally NOT git-ignored) and pushed in
   commit `69782ba` — i.e. exposed in the public repo. Restored the placeholder (`TELEGRAM_BOT_TOKEN=`

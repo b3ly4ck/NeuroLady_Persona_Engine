@@ -102,11 +102,11 @@
 | TC-FR-001-11-02 | integration | happy | Correct stored circle fetched | Given P's stored intro; When intro is delivered; Then the media resolved matches P's intro_videonote_ref path | planned |
 | TC-FR-001-11-03 | e2e | happy | User receives a circle | Given a client; When it taps Start Chat; Then it receives a video note (circle) | planned |
 
-### FR-001-12 — Reply keyboard with "💋 Choose Lady" + menu (≡) appears after intro
+### FR-001-12 — Reply keyboard with a single "💋 Choose Lady" button appears after intro (no menu)
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-001-12-01 | unit | happy | Keyboard contains both buttons | Given intro sent; When the keyboard is built; Then it has "💋 Choose Lady" and a menu (≡) button | planned |
+| TC-FR-001-12-01 | unit | happy | Keyboard has exactly one button | Given intro sent; When the keyboard is built; Then it has exactly the "💋 Choose Lady" button and no menu/other button | planned |
 | TC-FR-001-12-02 | e2e | happy | Keyboard visible after intro | Given a client just onboarded; When the intro arrives; Then the reply keyboard is shown | planned |
 | TC-FR-001-12-03 | integration | state | Keyboard persists across the session | Given the reply keyboard shown; When the user sends further updates; Then the keyboard remains attached | planned |
 
@@ -131,16 +131,19 @@
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
 | TC-FR-001-15-01 | unit | idempotency | No duplicate USER on repeat `/start` | Given an existing user; When `/start`; Then no new USER row is created | planned |
-| TC-FR-001-15-02 | unit | state | Prior session → resume same persona | Given a user with a session for P; When `/start`; Then they resume with P and the reply keyboard | planned |
+| TC-FR-001-15-02 | unit | state | Existing user with an active session → straight to gallery, session preserved | Given a user with a session for P; When `/start`; Then the Choose Lady gallery is shown (not a resume-into-chat), and the session for P remains active/untouched | planned |
 | TC-FR-001-15-03 | unit | empty | No session → show gallery | Given a known user with no session; When `/start`; Then the Choose Lady gallery is shown | planned |
 
-### FR-001-16 — Main menu (≡) exposes Choose Lady + Resume chat in one tap
+### FR-001-16 — `DEPRECATED`: main menu (≡) exposing Choose Lady + Resume chat
+
+> Removed by explicit user request — there is no main menu, ever (architecture.md §1.3). IDs are
+> immutable and never reused; these tests are retired, not deleted.
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-001-16-01 | unit | happy | Menu lists required actions | Given the menu; When opened; Then it exposes at least "Choose Lady" and "Resume chat" | planned |
-| TC-FR-001-16-02 | e2e | happy | Each action reachable in one tap | Given a client; When it opens the menu; Then each action triggers in a single tap | planned |
-| TC-FR-001-16-03 | integration | happy | Resume chat returns to active persona | Given a user with an active session for P; When "Resume chat" tapped; Then the chat with P is restored | planned |
+| TC-FR-001-16-01 | unit | happy | Menu lists required actions | *(feature removed — no main menu screen exists)* | deprecated |
+| TC-FR-001-16-02 | e2e | happy | Each action reachable in one tap | *(feature removed — no main menu screen exists)* | deprecated |
+| TC-FR-001-16-03 | integration | happy | Resume chat returns to active persona | *(feature removed — resuming is now: pick the same persona again on Choose Lady, FR-001-10)* | deprecated |
 
 ### FR-001-17 — Repeated "Start" / "Start Chat" taps are idempotent
 
@@ -174,6 +177,36 @@
 | TC-FR-001-20-01 | unit | happy | Media persona_id == selected | Given "Start Chat" on P; When media is delivered; Then its persona_id equals P | planned |
 | TC-FR-001-20-02 | integration | negative | Switch sends new persona's media | Given switch X→Y; When Y's intro delivers; Then it is Y's media, never X's | planned |
 | TC-FR-001-20-03 | integration | consistency | No cross-persona media mixup under load | Given many concurrent Start Chats; When intros deliver; Then each user gets their own selected persona's media | planned |
+
+### FR-001-21 — Start Chat deletes both S2 messages, only after the S3 opener sends (send-before-delete)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-001-21-01 | unit | happy | Card deleted after Start Chat | Given "Start Chat"; When the opener sends successfully; Then the persona-card message is deleted | planned |
+| TC-FR-001-21-02 | unit | happy | Tracked intro deleted after Start Chat | Given a tracked S2 intro message id; When "Start Chat" succeeds; Then that intro message is also deleted | planned |
+| TC-FR-001-21-03 | integration | error | Failed opener send → nothing deleted | Given the opener send raises; When "Start Chat" is tapped; Then neither the card nor the intro is deleted (old screen stays, no blank chat) | planned |
+
+### FR-001-22 — S2 card and S3 opener include the persona's photo when available
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-001-22-01 | unit | happy | Card sent as photo when a real file exists | Given a persona with a real gallery_photo_ref file; When the card renders; Then it is sent as a photo message with the card body as caption | planned |
+| TC-FR-001-22-02 | unit | happy | Opener sent as photo when a real file exists | Given the same persona; When the S3 opener is sent; Then it is a photo message with the opener text as caption | planned |
+| TC-FR-001-22-03 | unit | empty | No photo file → text-only fallback | Given no real photo file at the ref (or ref is None); When card/opener render; Then both degrade to text-only (FR-001-18) | planned |
+
+### FR-001-23 — `/start` command deleted only after a successful response (send-before-delete)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-001-23-01 | unit | happy | `/start` deleted after the response is sent | Given `/start`; When the Welcome/gallery response sends successfully; Then the `/start` message is deleted | planned |
+| TC-FR-001-23-02 | integration | error | Failed response → `/start` is NOT deleted | Given the response send raises; When `/start` is handled; Then the `/start` message is left in place | planned |
+
+### FR-001-24 — The "💋 Choose Lady" reply-keyboard tap is deleted only after its response sends
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-001-24-01 | unit | happy | Tap deleted after the gallery is shown | Given a "💋 Choose Lady" tap; When the gallery card sends successfully; Then the tap message is deleted | planned |
+| TC-FR-001-24-02 | integration | error | Failed response → tap is NOT deleted | Given the gallery send raises; When the tap is handled; Then the tap message is left in place | planned |
 
 ---
 
@@ -236,9 +269,9 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-NFR-001-07-01 | usability | happy | Every screen has a back-to-gallery/menu path | Given each onboarding screen; When inspected; Then a one-tap route to gallery or menu exists | planned |
+| TC-NFR-001-07-01 | usability | happy | Every screen has a back-to-gallery path | Given each onboarding screen; When inspected; Then a one-tap "💋 Choose Lady" route to the gallery exists (no menu) | planned |
 | TC-NFR-001-07-02 | e2e | negative | No dead-ends | Given the flow; When walked; Then no screen traps the user with no forward/back control | planned |
-| TC-NFR-001-07-03 | usability | boundary | Menu reachable from every state | Given any onboarding/chat state; When the user wants the menu; Then it is reachable in one tap | planned |
+| TC-NFR-001-07-03 | usability | boundary | Choose Lady reachable from every chat state | Given any active chat state; When the user wants to browse personas; Then "💋 Choose Lady" is reachable in one tap | planned |
 
 ### NFR-001-08 — `USER`/`SESSION` state survives a service restart
 
@@ -263,6 +296,14 @@
 | TC-NFR-001-10-01 | concurrency | race | Rapid ◀/▶ keeps card == counter | Given rapid repeated nav taps; When processed; Then the shown card always matches its counter | planned |
 | TC-NFR-001-10-02 | concurrency | race | Stale callback ignored | Given an out-of-order/stale nav callback; When it arrives; Then it is ignored, no desync | planned |
 | TC-NFR-001-10-03 | concurrency | race | Start Chat during nav is consistent | Given a Start Chat tapped amid rapid nav; When processed; Then the persona started matches the card actually shown | planned |
+
+### NFR-001-11 — Process self-heals from a Telegram connectivity failure at startup (never crash-exit)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-NFR-001-11-01 | integration | error | Retries after a network failure, then succeeds | Given `start_polling` raises `TelegramNetworkError` once; When retried; Then it retries with backoff and succeeds, no crash | passing |
+| TC-NFR-001-11-02 | integration | error | Raw `OSError` (e.g. WinError 121) is retried too | Given `start_polling` raises a raw `OSError`; When retried; Then it is treated the same as a network error, not fatal | passing |
+| TC-NFR-001-11-03 | integration | boundary | Backoff grows and is capped | Given repeated failures; When retried; Then delays are non-decreasing and stay within (0, 60] seconds | passing |
 
 ---
 
@@ -295,11 +336,13 @@ feel fast, warm, simple, believable, continuous).
 - Expected: personas read as genuinely different people; the video-note intro survives a skeptic's
   first look. Status: planned
 
-**TC-US-001-05-01 (manual-e2e) — Returning user resumes with the same girl**
-- Preconditions: an already-onboarded account.
-- Steps: 1) Close the bot. 2) Reopen the next day and `/start`.
-- Expected: you resume with the same persona and keyboard, not thrown back into onboarding.
-  Status: planned
+**TC-US-001-05-01 (manual-e2e) — Returning user continues with the same girl**
+- Preconditions: an already-onboarded account with an active chat with persona P.
+- Steps: 1) Close the bot. 2) Reopen the next day and send `/start`. 3) On the Choose Lady screen,
+  pick P again and tap "Start Chat".
+- Expected: `/start` takes you to Choose Lady (not straight back into the old chat); picking P again
+  continues that same relationship/session, not a fresh onboarding — no separate "Resume" menu step
+  is needed (there is no main menu). Status: planned
 
 **TC-US-001-06-01 (manual-e2e) — Switch persona mid-chat**
 - Preconditions: onboarded, in a chat with persona X.
@@ -310,12 +353,18 @@ feel fast, warm, simple, believable, continuous).
 
 ## Coverage summary
 
-- **Functional:** FR-001-01..20 — **64 automated tests** (3-4 per requirement) across unit /
-  integration / component / e2e, spanning happy / negative / boundary / error / concurrency /
-  localization / persistence / consistency / idempotency cases. ✓
-- **Non-functional:** NFR-001-01..10 — **30 tests** (performance / load / error / usability /
-  persistence / security / concurrency), 3 per requirement, including 1 manual localization check. ✓
-- **User stories:** US-001-01..06 — **6 manual real-device acceptance tests**. ✓
-- **Total: 100 enumerated tests** — in the 100-150 target band for a finely-scoped feature,
-  favoring meaningful case variety over padding.
+- **Functional:** FR-001-01..24 — **74 automated tests** across unit / integration / component /
+  e2e, spanning happy / negative / boundary / error / concurrency / localization / persistence /
+  consistency / idempotency cases. **FR-001-16 is `DEPRECATED`** (main menu removed by explicit user
+  request — architecture.md §1.3); its 3 tests are retained with `Status: deprecated` per the TDD
+  guide (ids immutable, never reused, never deleted). FR-001-21..24 (send-before-delete cleanup,
+  photo wiring) were added after the original spec and are now covered (9 tests). 24/24 FR ids
+  present. ✓
+- **Non-functional:** NFR-001-01..11 — **33 tests** (performance / load / error / usability /
+  persistence / security / concurrency), including 1 manual localization check and **NFR-001-11**
+  (process self-heals from a Telegram connectivity failure — 3 tests, implemented and passing in
+  `tests/test_f001_reconnect.py`). 11/11 NFR ids present. ✓
+- **User stories:** US-001-01..06 — **6 manual real-device acceptance tests**, updated to reflect
+  `/start` always landing on Choose Lady (no auto-resume-into-chat) and the no-menu UI. ✓
+- **Total: 113 enumerated tests** (110 active + 3 deprecated) — within the 100-150 target band.
 - Every test ID embeds the `FR-`/`NFR-`/`US-` id it verifies, matching the feature file's IDs.
