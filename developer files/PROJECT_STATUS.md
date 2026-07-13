@@ -2,6 +2,26 @@
 
 ## Recent changes
 
+- **Designed & wrote F-005 — Relationship System** (`developer files/features/F-005-relationship-system.md`),
+  fulfilling architecture.md §4.6's "relationship scale is a design deliverable". **Design:** per
+  `(user, persona)`, three configurable 0–100 dimensions **Closeness / Trust / Attraction** (the
+  owner's "significance / trust / (third)" — chose Attraction over the vague "intention" for the
+  flirt→love arc) + a **derived stage** `Stranger→Acquaintance→Friend→Flirting→Romance→Love→Devoted`
+  (highest gate met, with **hysteresis**). Evolves via a **relationship reflection**: the Life Engine
+  hands the external LLM the current state + recent conversation + hard signals (days since contact,
+  frequency, warmth) → bounded per-dimension deltas + rewritten summary → clamp 0–100, per-reflection
+  cap (gradual, no jumps), re-derive stage, log a `RELATIONSHIP_REFLECTION`. Guardrails: neglect
+  **decay**, **asymmetric trust** (slow up, faster breach), **pacing/consent** (pushing fast at low
+  trust doesn't escalate and can lower trust — A4 safety), gentle regression, per-user isolation,
+  degrade-on-LLM-failure (keep last good state). State is fed into every reply (F-002 §4.2) and
+  **gates the persona's openness/flirtiness/intimacy by stage** — the progression is *felt*.
+  Includes a **Design model** section + **8 US / 13 UC / 28 FR / 13 NFR**. **Scope boundary:** F-005
+  owns the model + evolution; F-002 generates replies (consumes the state), F-004 stores the rows,
+  the sibling Life Engine feature (F-006, next) owns her *own* self-reflection/biography/goals/daily
+  plan; intimate-media *paywall* is separate/deferred. **Architecture synced:** §4.6 (concrete
+  relationship model), §5.1 `RELATIONSHIP` entity (`scale_json` → `stage`/`closeness`/`trust`/
+  `attraction`/`summary`/`last_interaction_at`), §3.5 relationship-reflection bullet. **Next:** the
+  F-005 test spec, and F-006 (Life Engine: daily plan, self-reflection, biography pyramid, goals).
 - **F-001 live-tested and approved by the user; noted a future-work item.** User confirmed the
   reworked onboarding flow works correctly end-to-end in live Telegram testing. Logged a **known
   future work** note in `F-001`'s Scope boundary: the S3 opener (`intro_opener`) and the S2/S3 photo
