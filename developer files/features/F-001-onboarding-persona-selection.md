@@ -60,7 +60,7 @@
 flowchart TD
     A[User opens the bot] --> B[User sends /start]
     B --> C["S1 Start screen: user record created;<br/>header 'NeuroLady AI' + flirty copy + Start button"]
-    C -->|tap Start| D["S2 Choose Lady: intro message + reply keyboard<br/>(💋 Choose Lady, ≡ Menu)"]
+    C -->|tap Start| D["S2 Choose Lady: intro message + reply keyboard<br/>(single button: 💋 Choose Lady — no menu)"]
     D --> E["persona card message: photo + Name +<br/>Profession: + Age: + Description:, ◀ N/M ▶, Start Chat"]
     E -->|◀ / ▶| E2["card updates in place, one persona per view"]
     E2 --> E
@@ -76,7 +76,7 @@ flowchart TD
     B -- Yes (brand-new) --> C[Show Welcome screen S1]
     B -- No (returning) --> D[Go straight to Choose Lady S2<br/>active session preserved, NOT ended]
     C -->|tap Start| D
-    D -. later, via Menu -> Resume chat .-> E[Return to the active persona]
+    D -->|picks the SAME persona again -> Start Chat| E[Session reused - continues that same chat<br/>no separate 'Resume' action needed, no menu]
 ```
 
 ### Switching persona from chat
@@ -131,7 +131,7 @@ Feature: F-001 Onboarding & Persona Selection
     When the user taps "Start Chat"
     Then a session is created (or reused) for that user and persona
     And the persona sends her intro as a Telegram video note (circle)
-    And a reply keyboard with "💋 Choose Lady" and a menu (≡) button is shown
+    And a reply keyboard with a single "💋 Choose Lady" button is shown (no menu button)
     And the chat is ready for the user to send a message
 
   Scenario: UC-001-05 /start always goes to Choose Lady, even mid-chat
@@ -139,7 +139,8 @@ Feature: F-001 Onboarding & Persona Selection
     When the user sends /start while in that chat
     Then the user record is not duplicated
     And the user is taken to the Choose Lady screen (not resume-locked into the chat)
-    And the active session is preserved so "Resume chat" in the menu still returns to that persona
+    And the active session is preserved, so picking that same persona again on Choose Lady
+        continues the same chat (there is no separate "Resume" menu action)
 
   Scenario: UC-001-06 Switching persona from within the chat
     Given a user is in a chat with persona X
@@ -179,9 +180,9 @@ Feature: F-001 Onboarding & Persona Selection
 - **FR-001-02** — On `/start`, the system must display the Welcome screen: the "NeuroLady AI"
   header/title, the flirty welcome copy, and a single full-width **"Start"** inline button.
 - **FR-001-03** — Tapping **"Start"** must open the "Choose Lady" screen (S2) as **two messages**:
-  (a) an **intro message** that also carries the **persistent reply keyboard** (`💋 Choose Lady` +
-  `≡ Menu`), and (b) a separate **persona card** message for the first persona. Navigation later
-  updates the card message **in place** (architecture.md §1.1/§1.2).
+  (a) an **intro message** that also carries the **persistent reply keyboard** (a single
+  `💋 Choose Lady` button — no menu), and (b) a separate **persona card** message for the first
+  persona. Navigation later updates the card message **in place** (architecture.md §1.1/§1.2).
 - **FR-001-04** — The persona card must show the persona's **gallery photo** on top (a Telegram photo
   message; when no photo exists yet it degrades to a text-only card), followed by the card body:
   **`{Name}`**, a **`Profession: {…}`** line, an **`Age: {…} years`** line, and a first-person
@@ -203,12 +204,13 @@ Feature: F-001 Onboarding & Persona Selection
   **photo** (or a Telegram **video note / circle** from `intro_videonote_ref` when available) **plus
   a first-person opener message** in her voice that invites a reply. The opener and reply keyboard
   ride on that single intro message (see FR-001-12).
-- **FR-001-12** — After the intro, the system must show a **reply keyboard** containing a
-  **"💋 Choose Lady"** button and a **menu (≡)** button, leaving the chat ready for input. The
-  keyboard must be attached to the **intro delivery itself** (the video note or the FR-001-18
-  fallback message) — the system must **not** send a second, separate "ready to chat" text right
-  after the intro, since the intro already invites a reply; stacking two consecutive nudge
-  messages reads as unnatural/robotic (see `user_metrics.md` conversational-realism bar).
+- **FR-001-12** — After the intro, the system must show a **reply keyboard** containing a single
+  **"💋 Choose Lady"** button (**no menu button — there is no main menu**, architecture.md §1.3),
+  leaving the chat ready for input. The keyboard must be attached to the **intro delivery itself**
+  (the video note or the FR-001-18 fallback message) — the system must **not** send a second,
+  separate "ready to chat" text right after the intro, since the intro already invites a reply;
+  stacking two consecutive nudge messages reads as unnatural/robotic (see `user_metrics.md`
+  conversational-realism bar).
 - **FR-001-13** — Tapping **"💋 Choose Lady"** from the chat must reopen the "Choose Lady" gallery.
 - **FR-001-14** — Selecting a different persona via "Start Chat" must **switch the active session** to
   that persona and send her intro.
@@ -217,10 +219,13 @@ Feature: F-001 Onboarding & Persona Selection
   user (first ever `/start`) sees the Welcome screen (S1); a returning user is dropped directly on
   the gallery. `/start` **never resume-locks** the user into a chat: **even if they are mid-chat
   with a persona**, `/start` sends them to the Choose Lady main screen. The active session is
-  **preserved** (not ended), so the user can still return to that persona via the menu's **Resume
-  chat** (FR-001-16); it is simply not what `/start` does.
-- **FR-001-16** — The main menu (≡) must expose at least **Choose Lady** and **Resume chat** actions,
-  each reachable in one tap.
+  **preserved** (not ended): picking that **same** persona again via "Start Chat" on S2 simply
+  continues that same chat (FR-001-10 reuses the active session) — there is no separate menu/resume
+  action, because there is no main menu (see FR-001-16, deprecated).
+- **FR-001-16** — `DEPRECATED` (removed by explicit user request — "no main menu, ever"; see
+  architecture.md §1.3). *Originally:* a main menu (≡) exposing Choose Lady + Resume chat actions.
+  There is now **no main menu screen and no `≡ Menu` button anywhere in the product** — the reply
+  keyboard carries only **`💋 Choose Lady`** (FR-001-12). Do not reuse this id.
 - **FR-001-17** — Repeated taps of **"Start"** or **"Start Chat"** (double-tap / rapid resend) must be
   **idempotent**: no duplicate session and no duplicate intro video note.
 - **FR-001-18** — If a persona has no `intro_videonote_ref`, the system must **fall back gracefully**
@@ -241,10 +246,10 @@ Feature: F-001 Onboarding & Persona Selection
   the bot has processed it and successfully sent its response (Welcome or Choose Lady). The command
   must never be deleted before it is handled, and never deleted if the response failed to send
   (ordering rule from architecture.md §1.3) — this prevents the chat from ever going blank/orphaned.
-- **FR-001-24** — The user's **reply-keyboard command taps** (`💋 Choose Lady`, `≡ Menu`) — which
-  arrive as ordinary text messages — must be **deleted only after** the corresponding response has
-  been successfully sent (same send-before-delete rule), so button-press text does not clutter the
-  chat and the chat is never left blank if the response fails.
+- **FR-001-24** — The user's **reply-keyboard command tap** (`💋 Choose Lady` — the only such
+  button) — which arrives as an ordinary text message — must be **deleted only after** the
+  corresponding response has been successfully sent (same send-before-delete rule), so button-press
+  text does not clutter the chat and the chat is never left blank if the response fails.
 - **FR-001-22** — Both the **S2 persona card** (the "choose a girl" moment) and the **S3 first
   message** (the persona's opener) must **include the persona's photo** when one exists in her media
   library: the card as a photo message with the card body as its caption, and the opener as a photo
@@ -267,7 +272,7 @@ Feature: F-001 Onboarding & Persona Selection
 - **NFR-001-06** — If a Telegram send fails, the system must **retry with backoff** and not crash;
   the user must still reach the next screen.
 - **NFR-001-07** — Onboarding must be **fully button/tap-driven**, and every screen must offer a
-  one-tap path back to the gallery or main menu.
+  one-tap path back to the gallery (`💋 Choose Lady`) — there is no main menu to fall back to.
 - **NFR-001-08** — `USER` and `SESSION` state must **survive a service restart** so a returning user
   is recognized and resumes (persistence).
 - **NFR-001-09** — Onboarding actions must affect **only the acting user's** own records; no

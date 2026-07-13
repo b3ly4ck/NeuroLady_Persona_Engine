@@ -21,7 +21,7 @@ def welcome_view(locale: str) -> tuple[str, InlineKeyboardMarkup]:
 
 
 def gallery_intro_view(user_locale: str) -> tuple[str, ReplyKeyboardMarkup]:
-    """S2 intro message (FR-001-03) — carries the persistent reply keyboard (💋 Choose Lady + ≡ Menu)."""
+    """S2 intro message (FR-001-03) — carries the persistent reply keyboard (💋 Choose Lady only)."""
     return t("gallery_intro", user_locale), keyboards.reply_kb(user_locale)
 
 
@@ -55,8 +55,3 @@ def gallery_card_view(persona: Persona, index: int, total: int, user_locale: str
 def intro_opener(persona: Persona) -> str:
     """S3 first-person opener message (FR-001-11), in the persona's language."""
     return t("intro_opener", persona.language, name=persona.name)
-
-
-def menu_view(user_locale: str) -> tuple[str, InlineKeyboardMarkup]:
-    """FR-001-16 — main menu."""
-    return t("menu_title", user_locale), keyboards.menu_kb(user_locale)

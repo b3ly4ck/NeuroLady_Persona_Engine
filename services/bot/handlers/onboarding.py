@@ -24,7 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot import keyboards, views
 from services.bot.domain.gallery import list_gallery_personas
-from services.bot.domain.sessions import get_active_session, start_or_switch_session
+from services.bot.domain.sessions import start_or_switch_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.i18n import t
 from services.bot.models import Persona, User
@@ -34,7 +34,6 @@ log = logging.getLogger(__name__)
 router = Router(name="onboarding")
 
 _CHOOSE_LADY_LABELS = {t("btn_choose_lady", "en"), t("btn_choose_lady", "ru")}
-_MENU_LABELS = {t("btn_menu", "en"), t("btn_menu", "ru")}
 
 # Transient per-chat id of the gallery **intro** message, so we can delete it when entering the chat
 # (FR-001-21). In-memory: fine for the single-process dev bot; a multi-instance gateway would move
@@ -169,8 +168,8 @@ async def send_persona_intro(
 @router.message(CommandStart())
 async def cmd_start(message: Message, db: AsyncSession, bot: Bot) -> None:
     """FR-001-01/02/15 — create the user once; new user sees Welcome (S1), a returning user goes
-    straight to Choose Lady (S2). `/start` never resume-locks a mid-chat user; any active session is
-    left intact for `Menu -> Resume chat`."""
+    straight to Choose Lady (S2). `/start` never resume-locks a mid-chat user; the active session is
+    left intact — picking that same persona again on S2 just continues the chat (no menu/resume)."""
     user, created = await get_or_create_user(
         db, message.from_user.id, getattr(message.from_user, "language_code", None)
     )
@@ -257,35 +256,7 @@ async def on_choose_lady_text(message: Message, db: AsyncSession, bot: Bot) -> N
     await _safe_delete_own(message)  # FR-001-24: drop the button-tap text after handling
 
 
-@router.callback_query(F.data == "choose_lady")
-async def on_choose_lady_cb(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
-    user = await _user_from(db, cb.from_user)
-    await _open_gallery(cb.message, bot, db, user, with_intro=False)
-    await cb.answer()
-
-
-@router.message(F.text.in_(_MENU_LABELS))
-async def on_menu_text(message: Message, db: AsyncSession, bot: Bot) -> None:
-    """FR-001-16 — open the main menu."""
-    user = await _user_from(db, message.from_user)
-    text, kb = views.menu_view(user.locale)
-    await message.answer(text, reply_markup=kb)
-    await _safe_delete_own(message)  # FR-001-24: drop the button-tap text after handling
-
-
-@router.callback_query(F.data == "resume")
-async def on_resume(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
-    """FR-001-16 — 'Resume chat' returns to the active persona (or the gallery if none)."""
-    user = await _user_from(db, cb.from_user)
-    active = await get_active_session(db, user.id)
-    if active is not None:
-        persona = await _persona(db, active.persona_id)
-        if persona is not None:
-            await cb.message.answer(
-                t("resumed", user.locale, name=persona.name),
-                reply_markup=keyboards.reply_kb(user.locale),
-            )
-            await cb.answer()
-            return
-    await _open_gallery(cb.message, bot, db, user, with_intro=False)
-    await cb.answer()
+# No main menu, ever (architecture.md §1.3): there is no "≡ Menu" button, no menu screen, and no
+# "Resume chat" action. `on_choose_lady_text` above is the only navigation entry point besides
+# the S1/S2/S3 flow itself; resuming a chat is just picking the same persona again on S2
+# (FR-001-10 reuses the active session).

@@ -122,12 +122,13 @@ from a single specific action on the previous one:
 
 1. **`/start` → Start screen (S1)** for a brand-new user; a **returning** user's `/start` skips
    S1 and goes **straight to S2 (Choose Lady)**. `/start` is a "home" action — even **mid-chat** it
-   takes the user to Choose Lady, never resume-locking them into the conversation (the active session
-   is preserved for `Menu → Resume chat`).
+   takes the user to Choose Lady, never resume-locking them into the conversation (the active
+   session is preserved: picking the same persona again on S2 just continues that chat).
 2. **S1, tap `Start` → Choose Lady screen (S2).**
 3. **S2, `◀` / `▶` → S2** (the same screen; the persona card updates in place, one persona per view).
 4. **S2, tap `Start Chat` → Chat screen (S3).**
-5. **S3, reply-keyboard `💋 Choose Lady` → S2** (re-open the gallery); **reply-keyboard `≡ Menu` → Main menu**.
+5. **S3, reply-keyboard `💋 Choose Lady` → S2** (re-open the gallery). **There is no main menu
+   screen and no `≡ Menu` button** — the reply keyboard carries this single action only.
 
 ```mermaid
 flowchart TD
@@ -140,14 +141,14 @@ flowchart TD
     end
 
     subgraph S2["S2 — Choose Lady screen"]
-        S2a["intro message ('Choose the lady... / come back anytime / ready?')<br/>+ persistent reply keyboard: 💋 Choose Lady, ≡ Menu"]
+        S2a["intro message ('Choose the lady... / come back anytime / ready?')<br/>+ persistent reply keyboard: 💋 Choose Lady (only)"]
         S2b["persona CARD (own message): photo + Name +<br/>Profession: + Age: + first-person Description:"]
         S2c["inline under card: ◀ N/M ▶  and  Start Chat"]
     end
 
     subgraph S3["S3 — Chat screen"]
         S3a["persona intro: photo (or video-note circle)<br/>+ first-person opener message"]
-        S3b["in-chat reply keyboard: 💋 Choose Lady, ≡ Menu<br/>(🎧 Chat via Audio added in the voice phase)"]
+        S3b["in-chat reply keyboard: 💋 Choose Lady (only)<br/>(🎧 Chat via Audio added in the voice phase)"]
         S3c["chat is READY — F-002 takes over the conversation"]
     end
 
@@ -155,9 +156,6 @@ flowchart TD
     S2 -->|"◀ / ▶ (card updates in place)"| S2
     S2 -->|"tap Start Chat"| S3
     S3 -->|"reply kb: 💋 Choose Lady"| S2
-    S3 -->|"reply kb: ≡ Menu"| MENU["Main menu (Choose Lady / Resume chat)"]
-    MENU -->|"Choose Lady"| S2
-    MENU -->|"Resume chat"| S3
 ```
 
 ### 1.2 UX building blocks
@@ -173,7 +171,8 @@ flowchart TD
   1. An **intro message** — a short multi-line invite ("Choose the lady you'd like to chat with from
      the list below. Each one is unique, with her own personality and passions. You can always come
      back and pick another… Ready for some exciting conversations?"). The **persistent reply
-     keyboard appears here** (💋 Choose Lady + ≡ Menu) and stays for the rest of the session.
+     keyboard appears here** (a single **💋 Choose Lady** button — no menu) and stays for the rest of
+     the session.
   2. A **persona card** (its own message): large **photo** on top, then the card body —
      **`{Name}`**, **`Profession: {…}`**, **`Age: {…} years`**, and a first-person
      **`Description: {…}`** (multi-line, her voice). If a persona has no photo yet, the card degrades
@@ -200,16 +199,16 @@ flowchart TD
   the user needs a subscription (metered by Billing, §3.7). Photo access can be bought separately
   (daily/weekly/monthly) or via a tier.
 - **Keyboards — two kinds, used by situation:**
-  - **Reply keyboard** (replaces the typing keyboard) for persistent, session-level operations,
-    per the design: a **`💋 Choose Lady`** button (return to persona selection) and a **menu (≡)**
-    button. It first appears on **S2** (the Choose Lady screen) and persists through the chat. On the
-    chat screen a **`🎧 Chat via Audio`** button is added once the **voice phase** ships (§4.7); it is
-    not part of F-001.
+  - **Reply keyboard** (replaces the typing keyboard) for the one persistent, session-level action:
+    a **`💋 Choose Lady`** button (return to persona selection) — **that is the only button on it**.
+    There is **no main menu and no `≡ Menu` button** — deliberately removed to keep the chat feeling
+    like a real conversation, not an app with a settings screen. It first appears on **S2** (the
+    Choose Lady screen) and persists through the chat. On the chat screen a **`🎧 Chat via Audio`**
+    button is added once the **voice phase** ships (§4.7); it is not part of F-001.
   - **Inline keyboard** (attached to a message) for in-context actions: `Start`, `◀`/`▶`,
     `Start Chat`, and in-chat `📸 photo` / `💳 Subscription`.
-- **Main menu:** reachable from the reply-keyboard menu; check subscription, choose another lady,
-  or resume. Simple, few options, always reachable.
-- **Subscription screen:** current tier, what's unlocked, upgrade CTA (ties into Billing, §3).
+- **Subscription screen:** current tier, what's unlocked, upgrade CTA (ties into Billing, §3) —
+  reached from a persona's own in-chat `💳 Subscription` prompt, not from any menu (there is none).
 
 > Reference design: Figma "🧠 AIT". This section is the behavioral spec the bot must implement;
 > exact copy and keyboard layouts are refined per-screen during feature work
@@ -217,14 +216,15 @@ flowchart TD
 
 ### 1.3 UX principles
 - Minimize free-text commands; prefer taps.
-- Every screen has an obvious way back to the main menu.
+- **No main menu.** There is deliberately no menu screen and no `≡ Menu` button — one reply-keyboard
+  action only (`💋 Choose Lady`). Every screen's one-tap "way back" is Choose Lady, not a menu.
 - Media requests are one tap and feel instant (media is pre-generated — see §4.3).
 - The persona never breaks character in UI copy that "belongs" to her (her messages), while
   system/menu copy is neutral brand voice.
 - **Hide the "bot chrome" — the user should forget they're in a Telegram bot.** Transient,
   utility messages are **deleted once they have served their purpose**: the user's own slash
-  commands (`/start`, …), their reply-keyboard button taps (their `💋 Choose Lady` / `≡ Menu` text),
-  the gallery **intro message**, and the stale persona **card** on entering the chat. The chat should
+  commands (`/start`, …), their reply-keyboard button taps (their **`💋 Choose Lady`** text), the
+  gallery **intro message**, and the stale persona **card** on entering the chat. The chat should
   read like a conversation with a person, not a scrolling log of menus and commands.
   **Hard rule — send-before-delete, always:** whenever a screen transition both *sends new content*
   and *deletes old content*, the new content must be **sent (and the send must succeed) before**

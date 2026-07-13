@@ -180,15 +180,12 @@ async def test_fr_001_03_02_intro_id_tracked_on_open(seeded_db):
     assert ob._intro_msg_ids.get(cb.message.chat.id) == 4242
 
 
-async def test_fr_001_24_01_menu_tap_deleted(seeded_db):
-    """TC-FR-001-24-01 — a '≡ Menu' reply-keyboard tap is deleted after the menu is shown."""
-    from services.bot.i18n import t
-
-    await get_or_create_user(seeded_db, 1103, "en")
-    msg = fake_message(1103, lang="en", text=t("btn_menu", "en"))
-    await ob.on_menu_text(msg, seeded_db, AsyncMock())
-    msg.answer.assert_awaited_once()  # menu shown
-    msg.delete.assert_awaited_once()  # tap deleted
+def test_fr_001_16_deprecated_no_menu_handlers_exist():
+    """TC-FR-001-16 (deprecated) — no main menu: there is no menu/resume handler in the module."""
+    assert not hasattr(ob, "on_menu_text")
+    assert not hasattr(ob, "on_resume")
+    assert not hasattr(ob, "on_choose_lady_cb")
+    assert not hasattr(ob, "_MENU_LABELS")
 
 
 async def test_fr_001_22_01_photo_on_card_and_opener(seeded_db, tmp_path):

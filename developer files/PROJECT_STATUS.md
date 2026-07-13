@@ -2,6 +2,23 @@
 
 ## Recent changes
 
+- **Removed the main menu entirely — explicit product decision: "no menu, ever" (docs-first).** The
+  user rejected the `≡ Menu` screen (Choose Lady / Resume chat) outright — one reply-keyboard action
+  only: `💋 Choose Lady`. Docs first: `architecture.md` §1.1 (flow diagram no longer has a MENU node;
+  canonical order note updated), §1.2 (reply keyboard = single Choose Lady button; dropped the "Main
+  menu" bullet), §1.3 (new "No main menu" principle). `F-001`: **FR-001-16 marked `DEPRECATED`** (ids
+  are immutable — never deleted/reused, per `feature_description_guide.md`); FR-001-12/03/15/24 and
+  NFR-001-07 reworded to drop all menu/resume wording; user flows and UC-001-04/05 updated (resuming
+  is now just "pick the same persona again on Choose Lady" via FR-001-10's session reuse — no
+  separate resume action). While in the file, also **backfilled test-spec coverage that had drifted
+  out of sync** with the feature file: added missing FR-001-21/22/23/24 and NFR-001-11 sections
+  (were added to the feature earlier but never given tests in the spec), updated FR-001-15/16 tests
+  and the US-001-05 manual test for current behavior. Test spec now 113 tests (110 active + 3
+  deprecated), 24/24 FR + 11/11 NFR + 6/6 US ids present.
+  Code: removed `keyboards.menu_kb`, `views.menu_view`, `i18n` menu/resume/resumed keys,
+  `on_choose_lady_cb`/`on_menu_text`/`on_resume` handlers, `_MENU_LABELS`, and the now-unused
+  `get_active_session` import; `reply_kb` now renders a single button. Updated/added tests
+  accordingly (incl. a guard test asserting the menu handlers no longer exist). **58 tests green.**
 - **Fixed a live-tested bug: Start Chat deleted the S2 screen and sent nothing (docs-first).** The
   prior implementation deleted the card + intro *before* sending the S3 opener; if that send raised
   (e.g. a transient network error — the unwrapped photo/text send paths in `send_persona_intro` had

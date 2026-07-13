@@ -50,17 +50,10 @@ _CATALOG: dict[str, dict[str, str]] = {
         "en": "Hey there 😊 I'm {name}. So glad you picked me… tell me, what's on your mind tonight? 💋",
         "ru": "Привет 😊 Я {name}. Так рада, что ты выбрал меня… расскажи, что у тебя на уме сегодня? 💋",
     },
-    "resumed": {
-        "en": "You're back with {name} 💋 Say something!",
-        "ru": "Ты снова с {name} 💋 Напиши ей!",
-    },
-    # ── Buttons / menu ───────────────────────────────────────────────────────────────────────
+    # ── Buttons — no menu (architecture.md §1.3: no main menu, ever) ────────────────────────────
     "btn_start": {"en": "Start", "ru": "Начать"},
     "btn_start_chat": {"en": "💬 Start Chat", "ru": "💬 Начать чат"},
     "btn_choose_lady": {"en": "💋 Choose Lady", "ru": "💋 Выбрать девушку"},
-    "btn_menu": {"en": "≡ Menu", "ru": "≡ Меню"},
-    "btn_resume": {"en": "Resume chat", "ru": "Вернуться в чат"},
-    "menu_title": {"en": "Main menu", "ru": "Главное меню"},
 }
 
 

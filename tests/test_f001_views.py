@@ -44,13 +44,13 @@ def test_nfr_001_04_01_welcome_localized():
 
 
 def test_fr_001_03_01_gallery_intro_carries_reply_keyboard():
-    """TC-FR-001-03-01 — the S2 intro message carries the reply keyboard (Choose Lady + Menu)."""
+    """TC-FR-001-03-01 — the S2 intro message carries the reply keyboard (Choose Lady only, no menu)."""
     text, kb = views.gallery_intro_view("en")
     assert "Choose the lady" in text
     assert isinstance(kb, ReplyKeyboardMarkup)
     labels = [b.text for row in kb.keyboard for b in row]
-    assert any("Choose Lady" in x for x in labels)
-    assert any("Menu" in x or "≡" in x for x in labels)
+    assert len(labels) == 1
+    assert "Choose Lady" in labels[0]
 
 
 # ── S2 persona card (FR-001-04/05/06/09) ────────────────────────────────────────────────────
@@ -98,7 +98,7 @@ def test_fr_001_08_04_card_copy_in_persona_language():
     assert "Описание:" in body and "Слушаю лучше всех." in body
 
 
-# ── S3 opener + menu (FR-001-11/16) ─────────────────────────────────────────────────────────
+# ── S3 opener (FR-001-11) ────────────────────────────────────────────────────────────────────
 
 
 def test_fr_001_11_01_intro_opener_names_persona():
@@ -106,8 +106,11 @@ def test_fr_001_11_01_intro_opener_names_persona():
     assert "Olivia" in views.intro_opener(make_persona())
 
 
-def test_fr_001_16_01_menu_actions():
-    """TC-FR-001-16-01 — menu exposes Choose Lady and Resume, one tap each."""
-    _, kb = views.menu_view("en")
-    callbacks = [b.callback_data for row in kb.inline_keyboard for b in row]
-    assert "choose_lady" in callbacks and "resume" in callbacks
+def test_fr_001_12_04_reply_kb_has_only_choose_lady():
+    """TC-FR-001-12-01 — the reply keyboard has exactly one button: 💋 Choose Lady (no menu)."""
+    from services.bot import keyboards
+
+    kb = keyboards.reply_kb("en")
+    buttons = [b.text for row in kb.keyboard for b in row]
+    assert len(buttons) == 1
+    assert "Choose Lady" in buttons[0]

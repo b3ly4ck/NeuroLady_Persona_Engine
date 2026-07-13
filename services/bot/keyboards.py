@@ -1,10 +1,12 @@
 """Inline and reply keyboards for the onboarding screens (architecture.md §1.2).
 
+**No main menu, ever** (architecture.md §1.3 — removed by explicit product decision): the reply
+keyboard carries exactly one persistent action, "💋 Choose Lady".
+
 Callback-data scheme (kept tiny and explicit):
 - ``start``                 — Welcome "Start" -> open gallery at card 0
 - ``card:<index>``          — show the gallery card at <index> (used by ◀/▶ pagination)
 - ``startchat:<persona_id>``— Start Chat with a persona
-- ``choose_lady`` / ``menu`` / ``resume`` — menu navigation
 - ``noop``                  — inert (the counter button)
 """
 from __future__ import annotations
@@ -52,22 +54,9 @@ def card_kb(persona_id: int, index: int, total: int, locale: str) -> InlineKeybo
 
 
 def reply_kb(locale: str) -> ReplyKeyboardMarkup:
-    """FR-001-12 — persistent reply keyboard: '💋 Choose Lady' + a menu (≡) button."""
+    """FR-001-12 — persistent reply keyboard: a single '💋 Choose Lady' button. No menu."""
     return ReplyKeyboardMarkup(
-        keyboard=[
-            [KeyboardButton(text=t("btn_choose_lady", locale))],
-            [KeyboardButton(text=t("btn_menu", locale))],
-        ],
+        keyboard=[[KeyboardButton(text=t("btn_choose_lady", locale))]],
         resize_keyboard=True,
         is_persistent=True,
-    )
-
-
-def menu_kb(locale: str) -> InlineKeyboardMarkup:
-    """FR-001-16 — main menu: at least 'Choose Lady' and 'Resume chat', one tap each."""
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=t("btn_choose_lady", locale), callback_data="choose_lady")],
-            [InlineKeyboardButton(text=t("btn_resume", locale), callback_data="resume")],
-        ]
     )
