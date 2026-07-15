@@ -2,6 +2,34 @@
 
 ## Recent changes
 
+- **F-006 biography extension — she now has a real, consistent past (and future) fed into every
+  reply (branch `feature/persona-time-biography`).** Fixes the reported gap: personas started
+  life-less (a one-line teaser + Big Five), so Alina **confabulated her childhood**. Docs-first
+  (architecture §4.2/§4.5/§5.1 + F-006 FR-006-22..28 / NFR-006-14/15 + test spec), then code:
+  - **models.py** — `Persona` gains fixed anchors **`birthdate`/`core_values`/`motivation`** and the
+    evolving **`interests`**; new **`FutureProjection`** table (+`Horizon` enum) for the forward
+    "future me" at week/month/year/epoch/lifetime.
+  - **`domain/persona_time.py`** — age is **derived from birthdate at her local date**
+    ("29 years and 150 days"), so the identity prompt is **daily-versioned** (persona-time);
+    leap-day safe, deterministic.
+  - **`persona_prompt.build_system_prompt`** — now injects persona-time identity: derived age +
+    values + motivation + current interests + current top goal.
+  - **`domain/biography.py`** — idempotent **`seed_biography`** (anchors + epoch/year/month/week/day
+    layers + goals + future-self, embedded into the persona-scoped `biography_layers` vector
+    collection) and the reply-time assembler: a bounded **graded recency block** (epoch→year→month→
+    week→recent days) + **semantically-retrieved deep layers** (a childhood question pulls her
+    childhood) + **future-self**. `MemoryIndex.for_collection` shares the one embedded-Qdrant client.
+  - **`orchestrator.handle_turn`** — fuses the biography context + persona-time goal into the single
+    system message; degrades cleanly for un-seeded personas.
+  - **`biographies/alina.py`** — Alina's authored biography imported from the source (birthdate
+    1997-02-15, values/motivation/interests, 3 epochs + years + months + weeks + recent days, 5
+    future-self horizons). Seeded at boot (`app._seed_biographies`), idempotent.
+  - **Tests:** `tests/test_f006_biography.py` — **21 automated** (FR-006-22..28, NFR-006-14/15), a
+    fake biography index exercises semantic recall. **Full suite: 378 passed, 33 skipped.**
+  - **Live check (real model):** asked about her childhood, Alina answers with the *seeded* memories
+    (Moscow courtyard, neighbours Masha/Sasha, morning runs with dad, grandma's records + "Katyusha",
+    chalk/garden) in natural first-person Russian — no more confabulation.
+
 - **F-005 + F-006 integrated into `master` — the full F-001…F-006 stack is now on one branch, green.**
   Both features had been built on independent branches off master (each unaware of the other). Merged
   F-005 (fast-forward-clean) then F-006 into `master`, resolving the shared-file conflicts so both
