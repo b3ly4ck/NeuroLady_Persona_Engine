@@ -2,43 +2,43 @@
 
 ## Recent changes
 
-- **Image/video feature specs F-007…F-014 authored (branch `feature/image-features-specs`, off
+- **Image/video feature specs F-008…F-015 authored (branch `feature/image-features-specs`, off
   master).** Documentation-only: the full image-generation product broken into eight fine-grained
   features, each with a feature file + mirror test spec (same file name), all grounded in
   `architecture.md` (§3.6 Media Delivery, §3.9 night gen service, §4.3 image/video models, §5.1
   MEDIA_ASSET, §6.1 day/night GPU handoff, DFD-3) and the product docs. No application code yet — this
   is the docs-first pass the user requested before implementation. VERSION → `0.38.0`. The split and
   each layer's responsibility:
-  - **F-007 Image Generation Runner** — the isolated, model-swappable engine behind a fixed job API;
+  - **F-008 Image Generation Runner** — the isolated, model-swappable engine behind a fixed job API;
     night-batch consumption, GPU day/night handoff with the chat LLM, reference-conditioned generation
     at 4–8 distilled steps, atomic `media/<slug>/photos/<MED-id>.png` + MEDIA_ASSET write,
     idempotency/retry/resume/degrade, never on the reply hot path. (A/B model choice = the deferred
     `feature/image-benchmarks` harness.)
-  - **F-008 Appearance & Identity Consistency** — the "always the same girl" guarantee: persona
+  - **F-009 Appearance & Identity Consistency** — the "always the same girl" guarantee: persona
     reference images (`face_ref`/`fullbody_ref`) condition every generation; per-shot ref selection,
     per-persona isolation, no-reference safe path, holds across settings / SFW↔intimate / days.
-  - **F-009 Generation Prompt Authoring** — turns the Life Engine (F-006) current slot into a
+  - **F-010 Generation Prompt Authoring** — turns the Life Engine (F-006) current slot into a
     structured scene/pose/outfit/lighting prompt (+negatives), authoring ≈5–6 distinct angles per slot;
     life↔media coherence, provenance logging, model-agnostic job payload.
-  - **F-010 Daily SFW Photo Batch** — the nightly planner that fills tomorrow's archive per persona
-    across the day's slots (F-009→F-007→F-008); dated/slot-tagged assets, idempotent/resumable,
+  - **F-011 Daily SFW Photo Batch** — the nightly planner that fills tomorrow's archive per persona
+    across the day's slots (F-010→F-008→F-009); dated/slot-tagged assets, idempotent/resumable,
     graceful per-shot degrade, configurable shot budgets, GPU-handoff-gated, ready before morning.
-  - **F-011 On-Demand Photo Delivery** — serves the right archived photo into live chat matched to the
+  - **F-012 On-Demand Photo Delivery** — serves the right archived photo into live chat matched to the
     moment (time/activity/F-005 stage); per-user no-repeat, in-voice caption, relationship pacing,
-    intimate-request routing to F-013, graceful exhaustion, NEVER hot-path generation.
-  - **F-012 Dynamic Persona Presentation** — the live, time-aware greeting card + fresh SFW photo on
+    intimate-request routing to F-014, graceful exhaustion, NEVER hot-path generation.
+  - **F-013 Dynamic Persona Presentation** — the live, time-aware greeting card + fresh SFW photo on
     persona selection (gallery→persona entry, post S1-removal); one combined message (no double nudge),
     varies per open, hot-path-free, graceful empty-archive fallback.
-  - **F-013 Intimate NSFW Photo Gen & Gating** — intimate tier: reuses F-007/F-008/F-009 + a multi-gate
+  - **F-014 Intimate NSFW Photo Gen & Gating** — intimate tier: reuses F-008/F-009/F-010 + a multi-gate
     policy (hard safety boundary = non-negotiable never-generate block; age/consent; F-005 stage-gated
     `intimacy_level` unlock; per-persona ceiling clamped to platform limit); off hot path, paced/
     no-repeat, jailbreak-resistant, audited. The uncensored differentiator, safety-bounded.
-  - **F-014 Intimate Video Keyframes** — generates the gated first/last-frame pair for a short intimate
-    clip (reuses the F-013 gate + F-008 identity); stores a linked `kind=video_keyframe` pair,
+  - **F-015 Intimate Video Keyframes** — generates the gated first/last-frame pair for a short intimate
+    clip (reuses the F-014 gate + F-009 identity); stores a linked `kind=video_keyframe` pair,
     keyframe-ready for a future i2v model (Wan 2.2 / HunyuanVideo-Avatar). **Video synthesis itself is
     deferred** — this feature only makes the system keyframe-ready.
   - Test specs follow the ~2–3-TC-per-requirement rule with explicit `benchmark`/`manual` marking for
-    GPU/human-judged image-quality cases; safety-critical F-013/F-014 gates get the densest
+    GPU/human-judged image-quality cases; safety-critical F-014/F-015 gates get the densest
     (adversarial/jailbreak) coverage. Runnable `tests/` code will be written at implementation time.
 
 - **F-005 + F-006 integrated into `master` — the full F-001…F-006 stack is now on one branch, green.**
