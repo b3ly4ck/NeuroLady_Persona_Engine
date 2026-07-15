@@ -599,7 +599,16 @@ video models below, so the night batch fits the sleep window on our own GPU.
   escalate and can lower trust). The state is fed into every reply's context (§4.2) and **gates the
   persona's openness/flirtiness/intimacy by stage**. Gates/caps/decay/cadence are all config. See
   `features/F-005-relationship-system.md`.
-- All these prompts are versioned assets under the Life Engine's prompt directory.
+- All these prompts are versioned assets under the Life Engine's prompt directory
+  (`plan_day`, `reflect_day`, `compress`, `update_goals`, `update_future`).
+- **The loop is actually driven by the Life Engine Scheduler (feature `F-007`).** F-006 defines each
+  step; F-007 is the **driver + scheduler** that runs the *due* steps per persona on a cadence
+  (morning ⇒ plan; end-of-day ⇒ reflect → compress cascade → update goals → re-author future-self),
+  timezone-correct, idempotent per period, off the reply hot path, degrading per persona without
+  stopping the loop. Locally it runs as an **in-process async background task** alongside the bot
+  (shares the DB + embedded vector store); in prod the same per-persona **tick** runs as a separate
+  scheduled worker in the night/off-peak window (§6.1). An **on-demand** "run this persona now"
+  entrypoint exists for ops/testing. See `features/F-007-life-engine-scheduler.md`.
 
 ### 4.7 Voice (in scope)
 - The persona replies with **personalized voice messages** (the first 5 daily messages are free,
