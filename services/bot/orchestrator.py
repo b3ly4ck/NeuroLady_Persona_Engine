@@ -26,6 +26,7 @@ from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
 from services.bot.domain import relationship_store as rel_store
 from services.bot.domain.fact_extraction import extract_memory_ops
+from services.bot.domain import prompt_log
 from services.bot.domain.persona_prompt import build_system_prompt
 from services.bot.domain.persona_time import today_in_tz
 from services.bot.domain.relationship import (
@@ -162,6 +163,7 @@ async def handle_turn(
         system_content += "\n\n" + bio_ctx
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     llm_messages += msg_domain.to_openai_messages(history)
+    prompt_log.maybe_dump(persona.name, user_text, llm_messages)  # dev observability (opt-in via env)
 
     # 3. Call the Chat-LLM; on any failure fall back in-character (FR-002-05/19).
     try:
