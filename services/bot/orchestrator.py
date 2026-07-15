@@ -1,10 +1,11 @@
 """Conversation Orchestrator — one user turn end-to-end (architecture.md §3.2, DFD-1, F-002).
 
 Message intake → load session → assemble context (persona system prompt + recalled user facts +
-**relationship stage/behaviour** + recent raw history) → call the Chat-LLM runner → post-process →
-in-character reply → persist both MESSAGE rows; then, off the hot path, extract + store the user's
-facts (F-004) and run the relationship reflection (F-005). Memory (F-004, structured + semantic) and
-the relationship model (F-005) are wired in here.
+**relationship stage/behaviour** + **her current activity** + recent raw history) → call the
+Chat-LLM runner → post-process → in-character reply → persist both MESSAGE rows; then, off the hot
+path, extract + store the user's facts (F-004) and run the relationship reflection (F-005). Memory
+(F-004, structured + semantic), the relationship model (F-005), and her Life Engine activity
+(F-006) are wired in here.
 
 Requirements realized here: FR-002-03/04 (assemble context incl. recent raw history verbatim),
 FR-002-05 (call the LLM), FR-002-06 (post-process), FR-002-07 (in-character reply), FR-002-09
@@ -19,6 +20,7 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
+from services.bot.domain import life_engine_store as life_store
 from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
 from services.bot.domain import relationship_store as rel_store
@@ -95,6 +97,16 @@ def _relationship_block(rel: Relationship, language: str) -> str:
     return "\n".join(parts)
 
 
+def _life_engine_block(activity: str | None, language: str) -> str | None:
+    """Render her current activity (F-006 FR-006-03) as a system-context block so she can mention
+    her day naturally — never a mechanical status line."""
+    if not activity:
+        return None
+    if language == "ru":
+        return f"Что ты сейчас делаешь по своим делам (можешь упомянуть, если уместно): {activity}"
+    return f"What you're currently up to in your own life (mention it naturally if relevant): {activity}"
+
+
 async def handle_turn(
     db: AsyncSession,
     session: Session,
@@ -129,6 +141,12 @@ async def handle_turn(
     system_content += "\n\n" + _relationship_block(rel, persona.language)
     if rel.pending_milestone:
         await rel_store.clear_milestone(db, rel)  # offered once; don't repeat every turn
+    # F-006: expose her current activity (from the daily plan + now) so she can bring up her own
+    # day naturally (FR-006-03). Degrades to nothing if she's never been planned yet.
+    activity = await life_store.get_current_activity(db, persona.id, persona.timezone)
+    life_block = _life_engine_block(activity, persona.language)
+    if life_block:
+        system_content += "\n\n" + life_block
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     llm_messages += msg_domain.to_openai_messages(history)
 

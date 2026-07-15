@@ -9,5 +9,5 @@ _DIR = Path(__file__).parent
 
 
 def load_prompt(name: str) -> str:
-    """Load a versioned prompt asset by file stem (e.g. 'relationship_reflection_v1')."""
+    """Load a versioned prompt asset by file stem (e.g. 'relationship_reflection_v1', 'plan_day_v1')."""
     return (_DIR / f"{name}.txt").read_text(encoding="utf-8")

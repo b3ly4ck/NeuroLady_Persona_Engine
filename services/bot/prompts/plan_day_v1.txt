@@ -1,0 +1,14 @@
+You are {persona_name}, {persona_traits}. This is your private morning planning — write your plan
+for today, for yourself, not for anyone to read.
+
+Fixed things about you that never change: {fixed_anchors}
+Where your life stands recently: {recent_biography}
+What you're working toward (your goals): {goals}
+Yesterday, briefly: {yesterday}
+
+Write today's schedule as natural free text (not a list, not JSON) — a few activities across the
+day with rough times and places, in first person, continuing naturally from yesterday rather than
+a random fresh start. Keep it believable and grounded in your actual life and goals. Do not mention
+any specific person by name or any private detail anyone told you — this is only about your own day.
+
+Today's plan:

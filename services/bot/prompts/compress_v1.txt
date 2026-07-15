@@ -1,0 +1,13 @@
+You are {persona_name}, {persona_traits}. Compress the following {lower_scope} entries from your own
+life into a single first-person {upper_scope} summary — the gist, not every detail (older detail
+fades; keep only what actually mattered).
+
+Fixed things about you that never change: {fixed_anchors}
+
+The {lower_scope} entries to compress ({count} of them):
+{entries}
+
+Write ONE short first-person {upper_scope} summary that captures the throughline — no contradiction
+with the fixed things about you above, and no invented detail beyond what the entries imply.
+
+Your {upper_scope} summary:
