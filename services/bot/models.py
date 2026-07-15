@@ -161,3 +161,58 @@ class UserFact(Base):
     )
 
     user: Mapped["User"] = relationship(back_populates="facts")
+
+
+class Relationship(Base):
+    """Per (user, persona) bond that evolves over time (ERD §5.1 RELATIONSHIP, F-005).
+
+    Three integer dimensions (0–100) + a **derived** stage (never set directly — F-005 FR-005-03),
+    a first-person `summary`, `last_interaction_at`, and a `pending_milestone` the persona may
+    acknowledge in-character after crossing a stage boundary (FR-005-22). Authored by F-005, stored
+    here in the Memory subsystem (FR-005-24). Strictly per-user isolated (FR-005-25).
+    """
+
+    __tablename__ = "relationships"
+    __table_args__ = (UniqueConstraint("user_id", "persona_id", name="uq_rel_user_persona"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    closeness: Mapped[int] = mapped_column(Integer, default=5)
+    trust: Mapped[int] = mapped_column(Integer, default=5)
+    attraction: Mapped[int] = mapped_column(Integer, default=5)
+    stage: Mapped[str] = mapped_column(String(16), default="Stranger")
+    summary: Mapped[str] = mapped_column(Text, default="")
+    pending_milestone: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    last_interaction_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+    reflections: Mapped[list["RelationshipReflection"]] = relationship(
+        back_populates="relationship", order_by="RelationshipReflection.id"
+    )
+
+
+class RelationshipReflection(Base):
+    """Audit log of one applied relationship reflection (ERD §5.1, F-005 FR-005-10).
+
+    Records the per-dimension deltas + reasons, the resulting stage, and the time — so every
+    relationship change is traceable and explainable (NFR-005-07).
+    """
+
+    __tablename__ = "relationship_reflections"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    relationship_id: Mapped[int] = mapped_column(ForeignKey("relationships.id"), index=True)
+    delta_closeness: Mapped[int] = mapped_column(Integer, default=0)
+    delta_trust: Mapped[int] = mapped_column(Integer, default=0)
+    delta_attraction: Mapped[int] = mapped_column(Integer, default=0)
+    reasons: Mapped[str] = mapped_column(Text, default="")  # one line per dimension
+    resulting_stage: Mapped[str] = mapped_column(String(16), default="Stranger")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+    relationship: Mapped["Relationship"] = relationship(back_populates="reflections")

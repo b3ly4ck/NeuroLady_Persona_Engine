@@ -1,10 +1,10 @@
 """Conversation Orchestrator — one user turn end-to-end (architecture.md §3.2, DFD-1, F-002).
 
-Thin vertical slice (agreed scope): message intake → load session → assemble context (persona
-system prompt + recalled user facts + recent raw history) → call the Chat-LLM runner → post-process
-→ in-character reply → persist both MESSAGE rows; then (off the hot path) extract + store the user's
-facts. Long-term **structured** memory (F-004, Postgres-only) is wired in here; the semantic/Qdrant
-half plus relationship state (F-005) are deferred, their integration points marked with TODO hooks.
+Message intake → load session → assemble context (persona system prompt + recalled user facts +
+**relationship stage/behaviour** + recent raw history) → call the Chat-LLM runner → post-process →
+in-character reply → persist both MESSAGE rows; then, off the hot path, extract + store the user's
+facts (F-004) and run the relationship reflection (F-005). Memory (F-004, structured + semantic) and
+the relationship model (F-005) are wired in here.
 
 Requirements realized here: FR-002-03/04 (assemble context incl. recent raw history verbatim),
 FR-002-05 (call the LLM), FR-002-06 (post-process), FR-002-07 (in-character reply), FR-002-09
@@ -14,16 +14,24 @@ in-character fallback, logged, user message still persisted, never silent).
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
 from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
+from services.bot.domain import relationship_store as rel_store
 from services.bot.domain.fact_extraction import extract_memory_ops
 from services.bot.domain.persona_prompt import build_system_prompt
+from services.bot.domain.relationship import (
+    DEFAULT_CONFIG,
+    RelationshipConfig,
+    stage_behavior_directive,
+)
+from services.bot.domain.relationship_reflection import HardSignals, compute_warmth, run_reflection
 from services.bot.domain.vector_store import MemoryIndex
-from services.bot.models import MessageSender, Persona, Session, UserFact
+from services.bot.models import MessageSender, Persona, Relationship, Session, UserFact
 
 log = logging.getLogger(__name__)
 
@@ -32,6 +40,10 @@ _FALLBACK = {
     "ru": "ой, я на секунду отвлеклась… напиши ещё разок?",
     "en": "ugh sorry, my head's all over the place rn — say that again?",
 }
+
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
 
 
 def _fallback_text(persona: Persona) -> str:
@@ -62,6 +74,27 @@ def _memory_block(facts: list[UserFact], language: str) -> str | None:
     )
 
 
+def _relationship_block(rel: Relationship, language: str) -> str:
+    """Render the relationship state as a stage-gated behavior directive (F-005 FR-005-19/20).
+
+    Feeds the current stage's behaviour + her private summary into the prompt so her openness/
+    flirtiness/intimacy match where they stand — never leaking numbers or stage names (NFR-005-10).
+    A pending milestone lets her acknowledge growing closer, in-character (FR-005-22/23).
+    """
+    parts = [stage_behavior_directive(rel.stage)]
+    if rel.summary:
+        parts.append(("Как ты сейчас чувствуешь ваши отношения: " if language == "ru"
+                      else "How you privately feel about him right now: ") + rel.summary)
+    if rel.pending_milestone:
+        parts.append(
+            "Ты чувствуешь, что вы стали ближе — можешь мимоходом это признать, по-человечески, "
+            "без цифр и формальностей." if language == "ru" else
+            "You feel you've grown closer — you may acknowledge that in passing, naturally, "
+            "with no numbers or mechanics."
+        )
+    return "\n".join(parts)
+
+
 async def handle_turn(
     db: AsyncSession,
     session: Session,
@@ -90,7 +123,12 @@ async def handle_turn(
     mem_block = _memory_block(recalled, persona.language)
     if mem_block:
         system_content += "\n\n" + mem_block
-    # TODO(F-005): append the relationship summary that colors tone.
+    # F-005: gate her behaviour by the current relationship stage + feed her private summary
+    # (FR-005-19/20). Read the last persisted state — never wait on a reflection (NFR-005-03).
+    rel = await rel_store.get_or_create(db, session.user_id, session.persona_id)
+    system_content += "\n\n" + _relationship_block(rel, persona.language)
+    if rel.pending_milestone:
+        await rel_store.clear_milestone(db, rel)  # offered once; don't repeat every turn
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     llm_messages += msg_domain.to_openai_messages(history)
 
@@ -103,8 +141,7 @@ async def handle_turn(
 
     # 4. Persist the persona reply so the thread stays coherent (FR-002-09).
     await msg_domain.append_message(db, session.id, MessageSender.persona, reply)
-    # TODO(F-005): update relationship signals from this exchange (FR-002-15).
-    # TODO(F-003): apply human-likeness styling + paced/chunked delivery on top of `reply`.
+    # (F-005 relationship update + F-003 styling/pacing run in the handler after the reply is sent.)
     return reply
 
 
@@ -131,3 +168,41 @@ async def update_user_memory(
     except Exception:  # pragma: no cover - defensive: memory must never break the turn
         log.warning("user-memory update failed", exc_info=True)
         return []
+
+
+async def update_relationship(
+    db: AsyncSession,
+    session: Session,
+    persona: Persona,
+    chat_client: ChatClient,
+    cfg: RelationshipConfig = DEFAULT_CONFIG,
+) -> Relationship | None:
+    """Run a relationship reflection and apply it (F-005 FR-005-06/08/09/10).
+
+    Called by the handler **after the reply is delivered** — off the hot path (NFR-005-03). Builds
+    the reflection inputs from **this user's own** recent conversation only (FR-005-28), runs the
+    LLM judgment, and applies bounded/clamped deltas + summary + audit log. On any failure (LLM
+    down or unparseable) the last good state is preserved (FR-005-27 / NFR-005-04) — never raises.
+    """
+    try:
+        rel = await rel_store.get_or_create(db, session.user_id, session.persona_id, cfg)
+        history = await msg_domain.load_recent(db, session.id)
+        conversation = "\n".join(
+            f"{'he' if m.sender == MessageSender.user else 'you'}: {m.text}" for m in history)
+        now = _now()
+        last = rel.last_interaction_at
+        if last is not None and last.tzinfo is None:
+            last = last.replace(tzinfo=timezone.utc)  # SQLite returns naive datetimes
+        days_since = ((now - last).total_seconds() / 86400.0) if last else 0.0
+        signals = HardSignals(days_since=days_since, msg_count=len(history),
+                              warmth=compute_warmth(conversation))
+        result = await run_reflection(
+            chat_client, persona.name, persona.big_five,
+            rel_store.to_state(rel), rel.summary, conversation, signals)
+        if result is None:
+            return rel  # LLM failure → last good state preserved (FR-005-27)
+        await rel_store.apply_reflection(db, rel, result, cfg)
+        return rel
+    except Exception:  # pragma: no cover - defensive: a reflection must never break the turn
+        log.warning("relationship update failed", exc_info=True)
+        return None

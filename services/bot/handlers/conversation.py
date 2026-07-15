@@ -24,7 +24,7 @@ from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.domain.vector_store import MemoryIndex
 from services.bot.models import Persona
-from services.bot.orchestrator import handle_turn, update_user_memory
+from services.bot.orchestrator import handle_turn, update_relationship, update_user_memory
 
 log = logging.getLogger(__name__)
 router = Router(name="conversation")
@@ -77,7 +77,8 @@ async def on_text(
         await _sleep(pacing_delay(chunk, settings))
         await message.answer(chunk)
 
-    # F-004: extract + store the user's salient facts AFTER the reply is delivered, so this LLM
-    # extraction never delays what he sees (FR-004-42/43). The DB session commits when the handler
-    # returns. (Production would move this to a proper background queue.)
+    # AFTER the reply is delivered (off the hot path, FR-004-42/FR-005-03/NFR-005-03): extract +
+    # store the user's facts (F-004) and run the relationship reflection (F-005). Neither delays what
+    # he saw. (Production would move both to a background queue.)
     await update_user_memory(db, user.id, message.text, chat_client, memory_index)
+    await update_relationship(db, session, persona, chat_client)
