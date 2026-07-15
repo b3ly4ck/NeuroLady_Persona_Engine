@@ -10,7 +10,10 @@ a single, stable persona prompt so the reply is in-character and on-topic.
 """
 from __future__ import annotations
 
+from datetime import date
+
 from services.bot.domain.humanize import parse_settings
+from services.bot.domain.persona_time import age_phrase, today_in_tz
 from services.bot.models import Persona
 
 _LANG_NAME = {"ru": "Russian", "en": "English"}
@@ -41,16 +44,41 @@ def _style_line(persona: Persona) -> str:
     return " ".join(bits)
 
 
-def build_system_prompt(persona: Persona) -> str:
+def build_system_prompt(
+    persona: Persona,
+    today: date | None = None,
+    goal_text: str | None = None,
+) -> str:
+    """Build the persona-time identity prompt (architecture.md §4.2).
+
+    When the persona has a `birthdate`, her age is **derived at `today`** (her local date if not
+    given) — "N years and M days" — so this block is daily-versioned (F-006 FR-006-24/NFR-006-14).
+    Fixed anchors (values, motivation) are used verbatim (FR-006-23); interests + current goal are
+    evolving persona-time fields (FR-006-25). `today` is passed for deterministic tests.
+    """
     lang = _LANG_NAME.get(persona.language, "the user's language")
     parts: list[str] = []
 
     identity = f"You are {persona.name}"
-    if persona.age:
+    if persona.birthdate is not None:
+        on = today or today_in_tz(persona.timezone)
+        identity += f", a woman who is {age_phrase(persona.birthdate, on)} old today"
+    elif persona.age:
         identity += f", a {persona.age}-year-old woman"
     if persona.profession:
         identity += f" who works as a {persona.profession}"
     parts.append(identity + ".")
+
+    # Fixed anchors — never contradicted (FR-006-23).
+    if persona.core_values:
+        parts.append(f"Your values and what you live by: {persona.core_values.strip()}")
+    if persona.motivation:
+        parts.append(f"What drives you: {persona.motivation.strip()}")
+    # Evolving persona-time fields (FR-006-25).
+    if persona.interests:
+        parts.append(f"What you're into right now: {persona.interests.strip()}")
+    if goal_text:
+        parts.append(f"What you're working toward these days: {goal_text.strip()}")
 
     if persona.card_description:
         parts.append(persona.card_description.strip())

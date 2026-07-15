@@ -20,12 +20,15 @@ from datetime import datetime, timezone
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
+from services.bot.domain import biography as bio_domain
 from services.bot.domain import life_engine_store as life_store
 from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
 from services.bot.domain import relationship_store as rel_store
 from services.bot.domain.fact_extraction import extract_memory_ops
+from services.bot.domain import prompt_log
 from services.bot.domain.persona_prompt import build_system_prompt
+from services.bot.domain.persona_time import today_in_tz
 from services.bot.domain.relationship import (
     DEFAULT_CONFIG,
     RelationshipConfig,
@@ -128,7 +131,11 @@ async def handle_turn(
     #    so memory/relationship context is concatenated into it, not added as extra system turns.
     #    (The recent window already includes the just-persisted user message.)  FR-002-03/04.
     history = await msg_domain.load_recent(db, session.id)
-    system_content = build_system_prompt(persona)
+    # Persona-time identity: age derived from birthdate at her local date + her current top goal
+    # (F-006 FR-006-24/25). Falls back cleanly for personas without a birthdate/goals.
+    goals = await life_store.active_goals(db, persona.id)
+    goal_text = goals[0].description if goals else None
+    system_content = build_system_prompt(persona, today_in_tz(persona.timezone), goal_text)
     # F-004: fuse the user's relevant stored facts into the context so she "remembers" (FR-002-13/14,
     # FR-004-24/28). Semantic search when a vector index is available, else keyword recall.
     recalled = await memory_domain.recall_relevant(db, session.user_id, user_text, memory_index)
@@ -147,8 +154,16 @@ async def handle_turn(
     life_block = _life_engine_block(activity, persona.language)
     if life_block:
         system_content += "\n\n" + life_block
+    # F-006 biography: fuse her own life story into context — graded recency + semantically-relevant
+    # deep layers (so a childhood question pulls her childhood) + future-self (FR-006-27/28). Uses the
+    # persona-scoped biography_layers vector collection; degrades to "" if she isn't seeded yet.
+    bio_index = memory_index.for_collection(life_store.BIOGRAPHY_COLLECTION) if memory_index else None
+    bio_ctx = await bio_domain.assemble_biography_context(db, persona, user_text, bio_index)
+    if bio_ctx:
+        system_content += "\n\n" + bio_ctx
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     llm_messages += msg_domain.to_openai_messages(history)
+    prompt_log.maybe_dump(persona.name, user_text, llm_messages)  # dev observability (opt-in via env)
 
     # 3. Call the Chat-LLM; on any failure fall back in-character (FR-002-05/19).
     try:
