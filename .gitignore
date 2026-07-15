@@ -49,3 +49,6 @@ chat/.runner_ready
 
 # F-004 embedded Qdrant store (dev, local)
 qdrant_data/
+
+# image A/B benchmark outputs (generated)
+image/bench_out/
