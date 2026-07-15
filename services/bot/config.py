@@ -25,6 +25,11 @@ class Settings(BaseSettings):
     qdrant_location: str = "./qdrant_data"
     # Embedding model name (fastembed); empty → the multilingual MiniLM default in embeddings.py.
     embed_model: str = ""
+    # F-007 Life Engine Scheduler — run the autonomous plan/reflect/compress/goals/future loop as an
+    # in-process background task. Enabled by default; set LIFE_ENGINE_ENABLED=0 to disable. The tick
+    # cadence lives in LifeEngineConfig (tick_interval_s); override with LIFE_ENGINE_INTERVAL_S.
+    life_engine_enabled: bool = True
+    life_engine_interval_s: int = 900
     env: str = "dev"
     log_level: str = "INFO"
 

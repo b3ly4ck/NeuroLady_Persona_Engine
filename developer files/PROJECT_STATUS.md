@@ -41,6 +41,33 @@
   - Test specs follow the ~2–3-TC-per-requirement rule with explicit `benchmark`/`manual` marking for
     GPU/human-judged image-quality cases; safety-critical F-014/F-015 gates get the densest
     (adversarial/jailbreak) coverage. Runnable `tests/` code will be written at implementation time.
+- **F-007 Life Engine Scheduler — the loop now actually runs; her life advances on its own (branch
+  `feature/f-007-scheduler`).** F-006 had all the steps (`run_plan_day/reflect_day/compress/
+  update_goals`) but **nothing drove them**, so every persona's plan/activity/reflections/biography/
+  goals/future was frozen after seeding (only her derived age advanced). F-007 is the missing
+  driver+scheduler. Docs-first (new feature `F-007` + test spec + architecture §4.6), then code:
+  - **`life_engine_runner.py`** — `run_tick(persona, now)` runs the **due** steps (local morning ⇒
+    plan; local end-of-day ⇒ reflect → **compression cascade** day→week→month→year→epoch → goal
+    update → **future-self update**), idempotent per period, degrade-safe (a step's LLM failure
+    writes nothing, never raises); `scheduler_pass` ticks the whole active roster (one persona's
+    failure never stops the rest); `run_scheduler` is the dev in-process loop; `run_persona_now`
+    forces a full run (on-demand).
+  - **`run_update_future`** (new F-006 step + `update_future_v1.txt` prompt) — the missing authoring
+    step that **re-writes** her `FUTURE_PROJECTION` rows from her latest biography + goals, so the
+    future evolves instead of staying the seeded snapshot. `store_future_projection` upserts.
+  - **Wiring** — `app.py` launches `run_scheduler` as a background asyncio task (config
+    `life_engine_enabled` default on, `life_engine_interval_s` = 900), off the reply hot path;
+    `LifeEngineConfig` gains `future_prompt_version` + `tick_interval_s`.
+  - **`python -m services.bot.life_now [Persona]`** — on-demand CLI to advance one persona now
+    (FR-007-12), safe to run while the bot holds the vector store (runs without the index).
+  - **Tests:** `tests/test_f007_scheduler.py` — **34 automated** (FR-007-01..12, NFR-007-02/04/05/
+    06/07), LLM steps stubbed + controlled clock. **Full suite: 412 passed, 33 skipped.**
+  - **Live check (real model):** `run_persona_now(Alina)` generated a believable daily plan that
+    *continued her biography* ("after yesterday's spa at Атмосфера… a walk with Pavel through the
+    old Moscow courtyards"), wrote a reflection, added 2 goals, and re-authored her future-self
+    (week: seeded "finished the Карта желаний module" → new "host the first live Карта желаний
+    community meet-up"). **Known minor issue:** the reflection came out in English — the Life Engine
+    prompts don't yet force the persona's language (NFR-006-13); plan/future were correct Russian.
 
 - **F-006 biography extension — she now has a real, consistent past (and future) fed into every
   reply (branch `feature/persona-time-biography`).** Fixes the reported gap: personas started
