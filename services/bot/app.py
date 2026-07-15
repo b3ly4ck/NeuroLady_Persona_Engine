@@ -20,8 +20,11 @@ from services.bot.biographies import BIOGRAPHIES
 from services.bot.chat_client import ChatClient
 from services.bot.config import get_settings
 from services.bot.db import init_models, make_engine, make_sessionmaker
+from services.bot.domain import life_engine_runner
 from services.bot.domain import life_engine_store as life_store
 from services.bot.domain.biography import seed_biography
+from services.bot.domain.life_engine import DEFAULT_CONFIG as _LE_CONFIG
+from dataclasses import replace as _dc_replace
 from services.bot.domain.vector_store import MemoryIndex, build_memory_index
 from services.bot.handlers import router
 from services.bot.middlewares import DbSessionMiddleware
@@ -122,9 +125,23 @@ async def _run() -> None:
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = build_dispatcher(sessionmaker, ChatClient(settings.chat_base_url), memory_index)
+
+    # F-007: run the Life Engine loop as a background task so her life advances autonomously,
+    # off the reply hot path (FR-007-01/07). Disable with LIFE_ENGINE_ENABLED=0.
+    scheduler_task: asyncio.Task | None = None
+    if settings.life_engine_enabled:
+        le_cfg = _dc_replace(_LE_CONFIG, tick_interval_s=settings.life_engine_interval_s)
+        scheduler_task = asyncio.create_task(
+            life_engine_runner.run_scheduler(
+                sessionmaker, ChatClient(settings.chat_base_url), memory_index, le_cfg)
+        )
+        log.info("life-engine scheduler enabled (interval=%ss)", settings.life_engine_interval_s)
+
     try:
         await _run_polling_with_reconnect(dp, bot)
     finally:
+        if scheduler_task is not None:
+            scheduler_task.cancel()
         await bot.session.close()
         await engine.dispose()
 

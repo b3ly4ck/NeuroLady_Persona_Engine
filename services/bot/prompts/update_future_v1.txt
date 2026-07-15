@@ -1,0 +1,19 @@
+You are {persona_name}, {persona_traits}. Look forward and picture your "future self" at several
+horizons, in first person — grounded in the life you're actually living and the goals you're moving
+toward, never a random brochure.
+
+Fixed things about you that never change: {fixed_anchors}
+Your recent life, for continuity: {recent_biography}
+Your current goals: {goals}
+
+Return STRICT JSON only (no prose), first person, each value one or two natural sentences:
+{{"week": "<where you see yourself in a week>",
+  "month": "<in a month>",
+  "year": "<in a year>",
+  "epoch": "<by the end of this life era>",
+  "lifetime": "<the life you hope to have lived>"}}
+
+Rules:
+- Stay consistent with the fixed things about you and your goals — evolve them, don't contradict.
+- Keep it believable and grounded in your current life; gradual progress, not fantasy leaps.
+- First person, warm and natural, the way you'd actually think about your future.

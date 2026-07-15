@@ -132,3 +132,41 @@ async def run_update_goals(
     if raw is None:
         return None
     return _parse_goal_update(raw)
+
+
+# ── update_future (F-007 FR-007-06) ────────────────────────────────────────────────────────────
+
+_FUTURE_HORIZONS = ("week", "month", "year", "epoch", "lifetime")
+
+
+def _parse_future(raw: str) -> dict[str, str] | None:
+    """Parse the strict-JSON future-self map. Returns {horizon: content} for the known horizons, or
+    None if nothing usable was returned (caller then keeps the last good projections)."""
+    start, end = raw.find("{"), raw.rfind("}")
+    if start == -1 or end <= start:
+        return None
+    try:
+        d = json.loads(raw[start : end + 1])
+    except (ValueError, TypeError):
+        return None
+    out = {h: str(d[h]).strip() for h in _FUTURE_HORIZONS if isinstance(d.get(h), str) and d[h].strip()}
+    return out or None
+
+
+async def run_update_future(
+    chat_client: ChatClient, persona_name: str, big_five: str,
+    recent_biography: str, goals: str,
+    cfg: LifeEngineConfig = DEFAULT_CONFIG,
+) -> dict[str, str] | None:
+    """Re-author her future-self at each horizon from her latest biography + goals (FR-007-06).
+    Returns {horizon: content} or None on failure (last good state preserved, FR-007-08)."""
+    prompt = load_prompt(cfg.future_prompt_version).format(
+        persona_name=persona_name, persona_traits=big_five or "warm and genuine",
+        fixed_anchors=fixed_anchors_text(persona_name, big_five),
+        recent_biography=recent_biography or "(just starting out)",
+        goals=goals or "(no specific goals yet)",
+    )
+    raw = await _call(chat_client, prompt, max_tokens=400)
+    if raw is None:
+        return None
+    return _parse_future(raw)

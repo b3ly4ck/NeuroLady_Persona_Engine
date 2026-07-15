@@ -28,6 +28,10 @@ class LifeEngineConfig:
     reflect_prompt_version: str = "reflect_day_v1"
     compress_prompt_version: str = "compress_v1"
     goals_prompt_version: str = "update_goals_v1"
+    future_prompt_version: str = "update_future_v1"  # F-007 FR-007-06
+    # F-007 scheduler cadence (tunable — NFR-007-08). `tick_interval_s` is the dev in-process loop
+    # period; goals/future are re-authored at end-of-day alongside the reflection.
+    tick_interval_s: int = 900
 
 
 DEFAULT_CONFIG = LifeEngineConfig()
