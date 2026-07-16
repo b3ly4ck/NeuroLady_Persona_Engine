@@ -24,7 +24,10 @@ class ChatClient:
         self,
         base_url: str = "http://127.0.0.1:8080",
         *,
-        timeout_s: float = 30.0,
+        # Transport guard, not the UX budget: must sit ABOVE the reasoning-inclusive generation
+        # budget (NFR-002-01 <=30s p95) or the tail of normal generations gets cut into fallbacks
+        # (observed live: 25-35s generations vs a 30s timeout).
+        timeout_s: float = 90.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
@@ -53,7 +56,11 @@ class ChatClient:
         *,
         temperature: float = 0.8,
         top_p: float = 0.9,
-        max_tokens: int = 320,
+        # FR-003-39/41: sized for the private <think> block PLUS a budget-compliant short reply —
+        # a compliant answer must never be cut mid-sentence by the ceiling (the old 320 did that
+        # live, and 1024 was observed still inside an unfinished CoT). The CoT of this Qwen build
+        # runs long; the prompt also orders it to keep reasoning brief.
+        max_tokens: int = 3072,
     ) -> str:
         """Call /v1/chat/completions and return the assistant text. Raises on failure."""
         payload = {
@@ -75,7 +82,34 @@ class ChatClient:
         except (KeyError, IndexError, TypeError) as exc:
             raise ChatRunnerUnavailable(f"malformed completion: {data!r}") from exc
 
-        text = (text or "").strip()
+        text = strip_reasoning((text or "").strip())
         if not text:
             raise ChatRunnerUnavailable("empty completion")
         return text
+
+
+# Internal (non-chat) LLM steps prepend this so the model's private reasoning stays SHORT — with
+# reasoning enabled, an unconstrained CoT on the batch prompts overran even a 2048-token ceiling,
+# truncating to nothing ("empty completion" on every plan/reflect step, observed live twice).
+BRIEF_REASONING_DIRECTIVE = (
+    "Think very briefly before answering — at most a couple of short lines of private reasoning, "
+    "no step-by-step analysis, no restating the task. Then produce the answer.\n\n")
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove the model's private reasoning from a completion (F-003 FR-003-41).
+
+    Centralized here — the ONE place raw model output enters the system — so every consumer
+    (conversation turn, Life Engine plan/reflect/compress/goals/future, fact extraction,
+    relationship reflection) gets clean visible text: with reasoning enabled at the runner, a raw
+    CoT was observed stored INSIDE a generated daily plan, and CoT braces can poison the JSON-step
+    parsers. Closed <think> blocks are stripped; an unclosed block or a tagless 'Thinking
+    Process:' prefix (the template opens <think> in the prompt, so truncation leaks CoT with no
+    marker) yields "" — callers already degrade on empty (fallback / keep-last-good-state)."""
+    if "</think>" in text:
+        return text.split("</think>")[-1].strip()
+    if "<think>" in text:
+        return ""
+    if text.lstrip().lower().startswith("thinking process"):
+        return ""
+    return text

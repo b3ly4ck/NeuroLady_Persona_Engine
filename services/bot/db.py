@@ -8,6 +8,7 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
     AsyncSession,
@@ -19,7 +20,20 @@ from services.bot.models import Base
 
 
 def make_engine(database_url: str) -> AsyncEngine:
-    return create_async_engine(database_url, future=True)
+    engine = create_async_engine(database_url, future=True)
+    if database_url.startswith("sqlite"):
+        # Reasoning-inclusive turns + the F-007 scheduler mean several sessions write concurrently.
+        # Default (rollback-journal, ~5s busy wait) threw "database is locked" live when a second
+        # message arrived while a long turn's transaction was open. WAL lets readers run alongside
+        # a writer, and busy_timeout makes a competing writer WAIT instead of failing.
+        @event.listens_for(engine.sync_engine, "connect")
+        def _sqlite_pragmas(dbapi_conn, _record):  # pragma: no cover - dev-sqlite plumbing
+            cur = dbapi_conn.cursor()
+            cur.execute("PRAGMA journal_mode=WAL")
+            cur.execute("PRAGMA busy_timeout=30000")
+            cur.execute("PRAGMA synchronous=NORMAL")
+            cur.close()
+    return engine
 
 
 def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:

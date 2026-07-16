@@ -56,10 +56,18 @@ def _fallback_text(persona: Persona) -> str:
 
 
 def _postprocess(text: str) -> str:
-    """Minimal post-processing (FR-002-06). Thinking is disabled at the runner, but strip any
-    stray <think>…</think> defensively and trim whitespace."""
+    """Minimal post-processing (FR-002-06, F-003 FR-003-41). Reasoning mode is ON at the runner:
+    strip the private <think>…</think> block before delivery. A think block that never closes
+    (token-truncated reasoning) must NEVER leak to the user — return empty so the caller degrades
+    to the in-character fallback."""
     if "</think>" in text:
         text = text.split("</think>")[-1]
+    elif "<think>" in text:
+        return ""  # truncated reasoning — never deliver raw thought text (FR-003-41)
+    elif text.lstrip().lower().startswith("thinking process"):
+        # The chat template opens <think> inside the *prompt*, so a token-truncated CoT arrives
+        # tagless as plain "Thinking Process: …" text (observed live). Never deliver it.
+        return ""
     return text.strip()
 
 
@@ -98,6 +106,23 @@ def _relationship_block(rel: Relationship, language: str) -> str:
             "with no numbers or mechanics."
         )
     return "\n".join(parts)
+
+
+_WEEKDAYS_RU = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
+
+
+def _local_time_block(persona: Persona, now_utc: datetime | None = None) -> str:
+    """Ground her in her own local clock (F-006 FR-006-29) — any 'now' statement (what time it is,
+    morning vs evening) must come from her real local time, never guessed from plan-text flavor
+    (live-caught: she said "around noon" at 19:00 Moscow because the prompt carried no clock)."""
+    from services.bot.domain.life_engine import local_now
+
+    now = local_now(persona.timezone, now_utc or _now())
+    if persona.language == "ru":
+        return (f"Сейчас у тебя {_WEEKDAYS_RU[now.weekday()]}, местное время ≈ {now:%H:%M} "
+                f"({now:%d.%m}). Ощущение времени суток бери отсюда.")
+    return (f"Right now it is {now:%A}, about {now:%H:%M} your local time ({now:%b %d}). "
+            f"Take your sense of the time of day from this.")
 
 
 def _life_engine_block(activity: str | None, language: str) -> str | None:
@@ -148,8 +173,10 @@ async def handle_turn(
     system_content += "\n\n" + _relationship_block(rel, persona.language)
     if rel.pending_milestone:
         await rel_store.clear_milestone(db, rel)  # offered once; don't repeat every turn
-    # F-006: expose her current activity (from the daily plan + now) so she can bring up her own
-    # day naturally (FR-006-03). Degrades to nothing if she's never been planned yet.
+    # F-006: her real local clock first (FR-006-29), then her current activity (from the daily
+    # plan + now) so she can bring up her own day naturally (FR-006-03). Activity degrades to
+    # nothing if she's never been planned yet.
+    system_content += "\n\n" + _local_time_block(persona)
     activity = await life_store.get_current_activity(db, persona.id, persona.timezone)
     life_block = _life_engine_block(activity, persona.language)
     if life_block:
@@ -166,8 +193,15 @@ async def handle_turn(
     prompt_log.maybe_dump(persona.name, user_text, llm_messages)  # dev observability (opt-in via env)
 
     # 3. Call the Chat-LLM; on any failure fall back in-character (FR-002-05/19).
+    # Commit the writes made so far (inbound message, relationship get_or_create/milestone) BEFORE
+    # the long reasoning-inclusive generation: holding a SQLite write transaction open for 30-60s
+    # locked out concurrent writers live ("database is locked" on the user's next message).
+    await db.commit()
     try:
         reply = _postprocess(await chat_client.complete(llm_messages))
+        if not reply:  # empty or truncated-reasoning output — degrade, never a blank/leaked reply
+            log.warning("post-processed reply empty (truncated reasoning?), using fallback")
+            reply = _fallback_text(persona)
     except ChatRunnerUnavailable as exc:
         log.warning("chat runner unavailable, using in-character fallback: %s", exc)
         reply = _fallback_text(persona)

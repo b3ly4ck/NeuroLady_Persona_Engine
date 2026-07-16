@@ -2,6 +2,32 @@
 
 ## Recent changes
 
+- **Reply realism (branch `feature/f-003-reply-realism`, v0.41.0–0.41.6, merged to master) — she
+  texts like a person: volume budget, 40 wpm pacing, thinking evaluated & reverted.** User feedback:
+  walls of text on short messages + a desire for reasoning mode + prompt visibility. Docs-first
+  (F-003 FR-003-39/40/41, NFR-003-01/02 revised; F-002 NFR-002-01 revised; architecture §4.1), then:
+  - **Volume budget (FR-003-39):** hard prompt rules — 1–3 short sentences (~≤35 words), long form
+    only when invited, ≤1 emoji, no formatting; token ceiling sized so a compliant reply never
+    truncates mid-sentence. Live: replies run 13–23 words, in-character RU.
+  - **Typing-speed pacing (FR-003-40):** per-chunk delay from **word count at 40 wpm** (was
+    char-based), caps revised to ≤15 s/chunk & ≤30 s/reply (`pacing_delays`); generation time counts
+    toward the first pause.
+  - **Thinking mode (FR-003-41): enabled, live-probed, and reverted for THIS build** — the HauhauCS
+    finetune emits its CoT **tagless** ("Thinking Process:…", no markers, immune to /no_think and
+    instructions), so private/visible can't be split (a raw CoT got stored inside a generated daily
+    plan; then every plan step died "empty completion"). Requirement held in abeyance with the
+    evidence recorded (architecture §4.1); **kept active:** centralized `strip_reasoning` in
+    ChatClient (all LLM consumers protected), truncation guards → in-character fallback, brief-
+    reasoning directive + 3072 ceilings on internal steps, the self-check prompt directive.
+  - **Prompt visibility:** opt-in `PROMPT_LOG_FILE` dump of the exact per-turn LLM request.
+  - **Cascade of live-caught fixes while tuning:** transport timeout 30→90 s (tail generations were
+    cut into fallbacks), SQLite **WAL + busy_timeout + commit-before-generation** ("database is
+    locked" when a second message arrived mid-generation), **she knows her local clock** (F-006
+    FR-006-29 — said "noon" at 19:00 MSK; `_local_time_block` in every turn) and **time-addressable
+    plans** (FR-006-30, `plan_day_v2` mandates HH:MM markers so current-activity picks the right
+    slot), ISS-001 resume-opener fix (Start Chat never mute), tz fallback + `Europe/Kyiv` rename +
+    `tzdata` dep. **428 passed, 33 skipped.**
+
 - **Image/video feature specs F-008…F-015 authored (branch `feature/image-features-specs`, off
   master).** Documentation-only: the full image-generation product broken into eight fine-grained
   features, each with a feature file + mirror test spec (same file name), all grounded in

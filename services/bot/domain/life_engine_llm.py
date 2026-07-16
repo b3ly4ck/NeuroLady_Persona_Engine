@@ -16,17 +16,22 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
+from services.bot.chat_client import BRIEF_REASONING_DIRECTIVE, ChatClient, ChatRunnerUnavailable
 from services.bot.domain.life_engine import DEFAULT_CONFIG, LifeEngineConfig, fixed_anchors_text
 from services.bot.prompts import load_prompt
 
 log = logging.getLogger(__name__)
 
 
-async def _call(chat_client: ChatClient, prompt: str, max_tokens: int = 350) -> str | None:
+# With reasoning enabled at the runner (FR-003-41) the private CoT alone can exceed a few hundred
+# tokens; ceilings must fit CoT + output or the visible text truncates to nothing (observed live:
+# 'empty completion' on every plan/reflect step at the old 250-400 caps). Batch path — latency is
+# not user-facing here.
+async def _call(chat_client: ChatClient, prompt: str, max_tokens: int = 3072) -> str | None:
     try:
         return await chat_client.complete(
-            [{"role": "user", "content": prompt}], temperature=0.4, max_tokens=max_tokens)
+            [{"role": "user", "content": BRIEF_REASONING_DIRECTIVE + prompt}],
+            temperature=0.4, max_tokens=max_tokens)
     except ChatRunnerUnavailable as exc:
         log.warning("Life Engine LLM call failed (preserving last good state): %s", exc)
         return None
@@ -86,7 +91,7 @@ async def run_compress(
         lower_scope=lower_scope, upper_scope=upper_scope,
         count=len(entries), entries=numbered,
     )
-    return await _call(chat_client, prompt, max_tokens=250)
+    return await _call(chat_client, prompt)
 
 
 # ── update_goals ─────────────────────────────────────────────────────────────────────────────
@@ -128,7 +133,7 @@ async def run_update_goals(
         goals=goals_text or "(no goals yet)",
         recent_reflections=recent_reflections or "(none yet)",
     )
-    raw = await _call(chat_client, prompt, max_tokens=300)
+    raw = await _call(chat_client, prompt)
     if raw is None:
         return None
     return _parse_goal_update(raw)
@@ -166,7 +171,7 @@ async def run_update_future(
         recent_biography=recent_biography or "(just starting out)",
         goals=goals or "(no specific goals yet)",
     )
-    raw = await _call(chat_client, prompt, max_tokens=400)
+    raw = await _call(chat_client, prompt)
     if raw is None:
         return None
     return _parse_future(raw)

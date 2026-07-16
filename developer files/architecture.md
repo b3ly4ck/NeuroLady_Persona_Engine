@@ -500,6 +500,31 @@ stored per-module, never inlined ad hoc.
 - Style-tuning per persona (voice/register), so text matches the persona's character.
 - Self-hosted; **loaded during awake hours**, unloaded at night to free GPU for media.
 - Configurable decoding (temperature, etc.) exposed as persona/communication settings.
+- **Reasoning ("thinking") mode is ON — and it works for humanness (F-003 FR-003-41).** This model
+  family opens a private `<think>` block before answering. Originally reasoning was disabled at the
+  runner (it burned the whole token budget on visible chain-of-thought and broke the flat <5 s
+  budget). The decision is now **reversed, deliberately**: the system prompt instructs the model to
+  use its private reasoning as a **pre-send self-check** against the texting constraints (reply-
+  volume budget, emoji budget, register, no assistant formatting, in-character consistency), and
+  the reasoning's real compute time **fills the natural "she's typing" gap** — the pause the
+  product wants anyway is spent on work that raises reply quality instead of a pure sleep.
+  Guardrails: the think block is **stripped before delivery** (Orchestrator post-process); a reply
+  whose think block never closed (token-truncated) **degrades to the in-character fallback** rather
+  than leaking raw reasoning; the generation token ceiling is sized for reasoning + a compliant
+  short reply (FR-003-39 — never mid-sentence truncation); latency governed by the revised
+  F-002 `NFR-002-01` (typing indicator immediate; generation ≤ 30 s p95 warm — measured 22-30 s live with reasoning) plus F-003's
+  typing-speed pacing caps (NFR-003-01: ≤ 15 s/chunk, ≤ 30 s total).
+  **Status for the current model build — reasoning OFF at the runner (live finding, 2026-07-16):**
+  the HauhauCS "Aggressive" finetune has **broken thinking-format discipline** — it unpredictably
+  emits its CoT as **tagless plain text** ("Thinking Process: …", no `<think>`/`</think>` markers,
+  `finish_reason: stop`), immune to `/no_think`, explicit no-reasoning instructions, and role
+  restructuring (all probed live). A tagless CoT cannot be reliably separated from the answer, so
+  the choice is leaking raw CoT to users or dropping whole outputs (both were observed — a raw CoT
+  was stored inside a generated daily plan; every plan step then failed "empty completion"). Until
+  a model build with disciplined think-tagging is deployed, `CHAT_ENABLE_THINKING` defaults to off;
+  the FR-003-41 self-check directive (applied without visible CoT), `strip_reasoning` in the
+  ChatClient, and all leak guards remain active as defense in depth. The natural response gap is
+  provided by F-003's typing-speed pacing (FR-003-40).
 
 ### 4.2 Context assembly (critical)
 For each reply the Orchestrator builds the prompt from:

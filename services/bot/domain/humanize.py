@@ -23,8 +23,11 @@ from dataclasses import dataclass
 
 from services.bot.models import Persona
 
-# NFR-003-01 — hard upper cap on the total deliberate delay; a reply is never withheld longer.
-MAX_DELAY_S = 6.0
+# NFR-003-01 — hard upper caps on the deliberate delay; a reply is never withheld longer.
+MAX_DELAY_S = 15.0        # per chunk
+MAX_TOTAL_DELAY_S = 30.0  # per reply (all chunks summed)
+# FR-003-40 — human mobile-messaging typing speed the pacing imitates (35-45 wpm midpoint).
+WORDS_PER_MINUTE = 40.0
 # Wall-of-text threshold (chars) above which a reply is split into several messages (FR-003-09).
 CHUNK_THRESHOLD = 180
 # FR-003-14 — chunk count is capped so the user is never flooded.
@@ -101,12 +104,31 @@ def chunk_reply(text: str, settings: CommSettings) -> list[str]:
 
 
 def pacing_delay(text: str, settings: CommSettings, rng: random.Random | None = None) -> float:
-    """A deliberate, length-scaled, jittered, capped pre-send delay (FR-003-01/02/06/08).
+    """A deliberate, typing-speed-realistic, jittered, capped pre-send delay (FR-003-01/02/06/08/40).
 
-    Additive wait *after* fast compute — never slows the model (FR-003-07). Always in [0.3, cap].
+    The delay approximates a human typing the chunk at ~35-45 **words** per minute (FR-003-40) —
+    word-count-based, not character-based — scaled by the persona's `typing_speed` multiplier.
+    Additive wait *after* generation — never slows the model (FR-003-07). Always in [0.3, cap].
     """
     r = rng or random
-    base = 0.6 + len(text) * 0.02          # longer text → longer "typing" (FR-003-02)
-    base /= max(settings.typing_speed, 0.1)  # faster typist → shorter (FR-003-05)
+    words = max(1, len(text.split()))
+    wps = (WORDS_PER_MINUTE / 60.0) * max(settings.typing_speed, 0.1)  # words/sec (FR-003-05)
+    base = 0.8 + words / wps               # more words → longer "typing" (FR-003-02/40)
     jitter = r.uniform(0.85, 1.15)         # not a fixed constant (FR-003-08)
     return max(0.3, min(MAX_DELAY_S, base * jitter))
+
+
+def pacing_delays(
+    chunks: list[str], settings: CommSettings, rng: random.Random | None = None
+) -> list[float]:
+    """Per-chunk delays for one reply with the **total** budget applied (NFR-003-01): once the
+    summed deliberate delay reaches `MAX_TOTAL_DELAY_S`, remaining chunks get a minimal beat."""
+    out: list[float] = []
+    total = 0.0
+    for chunk in chunks:
+        d = pacing_delay(chunk, settings, rng)
+        if total + d > MAX_TOTAL_DELAY_S:
+            d = max(0.3, MAX_TOTAL_DELAY_S - total)
+        total += d
+        out.append(d)
+    return out

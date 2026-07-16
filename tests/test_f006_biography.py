@@ -293,3 +293,57 @@ async def test_tc_nfr_006_15_02(db):
     await seed_biography(db, p, seed)
     block = await graded_biography_block(db, p.id)
     assert block.count("[day:") <= bio._MAX_DAYS
+
+
+# ── FR-006-29 — she always knows her own local clock ────────────────────────────────────────────
+
+
+async def test_tc_fr_006_29_01(db):
+    """TC-FR-006-29-01 — the turn context carries her local weekday + time (Moscow, fixed UTC)."""
+    from datetime import datetime, timezone
+
+    from services.bot.orchestrator import _local_time_block
+
+    p = await _persona(db, name="Alina", tz="Europe/Moscow", language="ru")
+    # 2026-07-16 16:00 UTC == 19:00 Moscow, Thursday
+    block = _local_time_block(p, datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc))
+    assert "четверг" in block and "19:0" in block
+
+
+async def test_tc_fr_006_29_02(db):
+    """TC-FR-006-29-02 — one UTC instant, per-persona correct local clocks (DST zones incl.)."""
+    from datetime import datetime, timezone
+
+    from services.bot.orchestrator import _local_time_block
+
+    inst = datetime(2026, 7, 16, 16, 0, tzinfo=timezone.utc)
+    msk = await _persona(db, name="Alina", tz="Europe/Moscow", language="ru")
+    ny = await _persona(db, name="Olivia", tz="America/New_York", language="en")
+    assert "19:0" in _local_time_block(msk, inst)          # UTC+3
+    assert "12:0" in _local_time_block(ny, inst)           # EDT, UTC-4
+    assert "Thursday" in _local_time_block(ny, inst)
+
+
+# ── FR-006-30 — daily plans are time-addressable (HH:MM markers) ────────────────────────────────
+
+
+async def test_tc_fr_006_30_01(db):
+    """TC-FR-006-30-01 — the active plan prompt mandates HH:MM markers."""
+    from services.bot.domain.life_engine import DEFAULT_CONFIG
+    from services.bot.prompts import load_prompt
+
+    assert DEFAULT_CONFIG.plan_prompt_version == "plan_day_v2"
+    asset = load_prompt(DEFAULT_CONFIG.plan_prompt_version)
+    assert "HH:MM" in asset and "mandatory" in asset
+
+
+async def test_tc_fr_006_30_02(db):
+    """TC-FR-006-30-02 — a marker-formatted plan returns the matching slot, not the whole text."""
+    from datetime import datetime
+
+    from services.bot.domain.life_engine import current_activity
+
+    plan = ("8:00 — пробежка в парке у пруда. 13:30 — сессии с клиентками по Zoom. "
+            "19:00-21:00 — репетиция саксофона дома.")
+    got = current_activity(plan, datetime(2026, 7, 16, 19, 30))
+    assert "саксофон" in got and "пробежка" not in got

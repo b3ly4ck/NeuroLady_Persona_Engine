@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 
 from aiogram import Bot, F, Router
 from aiogram.enums import ChatAction
@@ -19,7 +20,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient
-from services.bot.domain.humanize import chunk_reply, pacing_delay, parse_settings
+from services.bot.domain.humanize import chunk_reply, pacing_delays, parse_settings
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.domain.vector_store import MemoryIndex
@@ -66,15 +67,23 @@ async def on_text(
     # Immediate acknowledgement — the chat never looks frozen while we generate (FR-002-24).
     await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
+    gen_started = time.monotonic()
     reply = await handle_turn(db, session, persona, message.text, chat_client, memory_index)
+    gen_elapsed = time.monotonic() - gen_started
 
     # F-003 human-likeness delivery: split a long reply into a few short messages and pace each
     # with a "typing…" indicator + a deliberate, capped pause, so it reads like a real person
-    # texting rather than one instant block. Chunking preserves meaning (FR-003-38).
+    # texting rather than one instant block. Chunking preserves meaning (FR-003-38). Generation
+    # time (incl. the model's private reasoning) counts TOWARD the first pause (FR-003-41/
+    # NFR-003-02): the gap the user already waited is not slept again on top.
     settings = parse_settings(persona)
-    for chunk in chunk_reply(reply, settings):
+    chunks = chunk_reply(reply, settings)
+    delays = pacing_delays(chunks, settings)  # NFR-003-01 per-chunk + total budget
+    if delays:
+        delays[0] = max(0.3, delays[0] - gen_elapsed)
+    for chunk, delay in zip(chunks, delays):
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        await _sleep(pacing_delay(chunk, settings))
+        await _sleep(delay)
         await message.answer(chunk)
 
     # AFTER the reply is delivered (off the hot path, FR-004-42/FR-005-03/NFR-005-03): extract +
