@@ -24,7 +24,7 @@ class LifeEngineConfig:
     weekly_per_month: int = 4
     monthly_per_year: int = 12
     years_per_epoch: int = 5
-    plan_prompt_version: str = "plan_day_v1"      # FR-006-19
+    plan_prompt_version: str = "plan_day_v2"      # FR-006-19; v2 mandates HH:MM markers (FR-006-30)
     reflect_prompt_version: str = "reflect_day_v1"
     compress_prompt_version: str = "compress_v1"
     goals_prompt_version: str = "update_goals_v1"

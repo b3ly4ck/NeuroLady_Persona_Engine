@@ -341,6 +341,19 @@ Feature: F-006 Life Engine
 - **FR-006-28** — **Future-self served when relevant.** The persona's future-self projections must be
   available to the reply context so she can speak about **where she's heading** consistently (fed from
   `FUTURE_PROJECTION`), never as a mechanical list.
+- **FR-006-29** — **She always knows her own local clock.** The reply context must include the
+  persona's **current local date, weekday, and approximate time of day** (derived from
+  `PERSONA.timezone`, DST-correct), so any statement she makes about "now" (what time it is,
+  morning/evening, what she's up to) is grounded in her real local time — never guessed from the
+  narrative flavor of her plan text. (Live-caught: at 19:00 Moscow she told a user it was "around
+  noon" — the prompt carried no clock and her whole day-plan prose started with the morning.)
+- **FR-006-30** — **Daily plans must be time-addressable.** The generated `DAILY_PLAN.plan_text`
+  must carry **explicit parseable time markers** (`HH:MM`, ranges allowed) for its activities, so
+  the current-activity derivation (FR-006-03/04) can select the correct slot for "now" instead of
+  degrading to the whole-day text. Realized via the **versioned plan prompt** (FR-006-19): the
+  prompt asset instructs the model to structure the day with clock-marked entries; the
+  whole-text fallback (NFR-006-03) remains only as a last-resort degrade for legacy/unparseable
+  plans.
 
 ### Non-functional
 

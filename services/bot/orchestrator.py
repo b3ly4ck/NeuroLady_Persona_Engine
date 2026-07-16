@@ -108,6 +108,23 @@ def _relationship_block(rel: Relationship, language: str) -> str:
     return "\n".join(parts)
 
 
+_WEEKDAYS_RU = ("понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье")
+
+
+def _local_time_block(persona: Persona, now_utc: datetime | None = None) -> str:
+    """Ground her in her own local clock (F-006 FR-006-29) — any 'now' statement (what time it is,
+    morning vs evening) must come from her real local time, never guessed from plan-text flavor
+    (live-caught: she said "around noon" at 19:00 Moscow because the prompt carried no clock)."""
+    from services.bot.domain.life_engine import local_now
+
+    now = local_now(persona.timezone, now_utc or _now())
+    if persona.language == "ru":
+        return (f"Сейчас у тебя {_WEEKDAYS_RU[now.weekday()]}, местное время ≈ {now:%H:%M} "
+                f"({now:%d.%m}). Ощущение времени суток бери отсюда.")
+    return (f"Right now it is {now:%A}, about {now:%H:%M} your local time ({now:%b %d}). "
+            f"Take your sense of the time of day from this.")
+
+
 def _life_engine_block(activity: str | None, language: str) -> str | None:
     """Render her current activity (F-006 FR-006-03) as a system-context block so she can mention
     her day naturally — never a mechanical status line."""
@@ -156,8 +173,10 @@ async def handle_turn(
     system_content += "\n\n" + _relationship_block(rel, persona.language)
     if rel.pending_milestone:
         await rel_store.clear_milestone(db, rel)  # offered once; don't repeat every turn
-    # F-006: expose her current activity (from the daily plan + now) so she can bring up her own
-    # day naturally (FR-006-03). Degrades to nothing if she's never been planned yet.
+    # F-006: her real local clock first (FR-006-29), then her current activity (from the daily
+    # plan + now) so she can bring up her own day naturally (FR-006-03). Activity degrades to
+    # nothing if she's never been planned yet.
+    system_content += "\n\n" + _local_time_block(persona)
     activity = await life_store.get_current_activity(db, persona.id, persona.timezone)
     life_block = _life_engine_block(activity, persona.language)
     if life_block:

@@ -344,6 +344,21 @@
 | TC-FR-006-28-01 | integration | happy | Future-self available in the reply context | Given seeded projections; When a turn is assembled; Then a "where she's heading" block is present | automated |
 | TC-FR-006-28-02 | integration | negative | No projections → block absent (degrade) | Given a persona with no projections; When a turn is assembled; Then no future-self block is added and the turn still works | automated |
 
+### FR-006-29 — She always knows her own local clock (reply context carries local date/time)
+
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-29-01 | integration | happy | Current local time line present in the turn context | Given a persona in Europe/Moscow at a fixed UTC instant; When the turn context is assembled; Then it contains her local weekday + approximate time of day | automated |
+| TC-FR-006-29-02 | unit | boundary | Clock line is timezone/DST-correct per persona | Given personas in different zones at one UTC instant; When each context is built; Then each carries its own correct local time | automated |
+| TC-FR-006-29-03 | e2e | manual | She answers "what time is it for you?" correctly | Given a live chat in a known timezone gap; When asked about her time of day; Then her answer matches her local clock (live-caught regression: said "noon" at 19:00) | planned |
+
+### FR-006-30 — Daily plans are time-addressable (parseable HH:MM markers)
+
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-30-01 | unit | happy | Plan prompt demands clock-marked entries | Given the current plan prompt asset; When inspected; Then it instructs explicit HH:MM markers for the day's activities | automated |
+| TC-FR-006-30-02 | integration | happy | A marker-formatted plan slots correctly | Given a plan with HH:MM markers; When current_activity runs at a covered time; Then the matching slot (not the whole text) is returned | automated |
+
 ### NFR-006-14 — Persona-time determinism (daily-versioned, stable within a day)
 | TC | level | case | title | Gherkin | status |
 |----|-------|------|-------|---------|--------|
@@ -419,7 +434,7 @@ life" quality that automation can't fully score.
   no-anchor-contradiction (FR-006-27 ×3), future-self served + degrade (FR-006-28 ×2), persona-time
   determinism (NFR-006-14 ×2), bounded biography context (NFR-006-15 ×2). All **automated** (fast,
   no live model).
-- **Grand total: 124 enumerated tests** (81 FR + 37 NFR + 8 US: FR-006-01..28, NFR-006-01..15,
+- **Grand total: 129 enumerated tests** (86 FR + 37 NFR + 8 US: FR-006-01..30, NFR-006-01..15,
   US-006-01..08) — within the 100-150 target band.
 - Every test ID embeds the `FR-`/`NFR-`/`US-` id it verifies, matching the feature file's IDs, so
   coverage is traceable in both directions.

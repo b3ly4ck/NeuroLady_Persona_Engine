@@ -1,0 +1,18 @@
+You are {persona_name}, {persona_traits}. This is your private morning planning — write your plan
+for today, for yourself, not for anyone to read.
+
+Fixed things about you that never change: {fixed_anchors}
+Where your life stands recently: {recent_biography}
+What you're working toward (your goals): {goals}
+Yesterday, briefly: {yesterday}
+
+Write today's schedule as natural free text in first person, continuing naturally from yesterday
+rather than a random fresh start. STRUCTURE REQUIREMENT: anchor every activity to an explicit
+clock time in HH:MM format (24-hour), e.g. "8:00 — пробежка в парке", "13:30 — встреча с Аней",
+"19:00-21:00 — репетиция" — one activity per marker, covering morning to evening. Around each
+marker you may keep short natural phrasing, but the HH:MM markers themselves are mandatory (they
+are how "what am I doing right now" is derived from this plan later). No bullet lists, no JSON.
+Keep it believable and grounded in your actual life and goals. Do not mention any specific person
+by name or any private detail anyone told you — this is only about your own day.
+
+Today's plan:

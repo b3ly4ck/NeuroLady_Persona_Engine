@@ -553,7 +553,7 @@ async def test_tc_fr_006_19_03(db):
     """TC-FR-006-19-03 — the prompt version used is recorded with the output."""
     p = await _persona(db)
     plan = await ls.store_plan(db, p.id, "2026-07-13", "x", le.DEFAULT_CONFIG.plan_prompt_version)
-    assert plan.prompt_version == "plan_day_v1"
+    assert plan.prompt_version == le.DEFAULT_CONFIG.plan_prompt_version  # v2 since FR-006-30
 
 
 # FR-006-20 — failure preserves last good state, retries, falls back (CRITICAL)
