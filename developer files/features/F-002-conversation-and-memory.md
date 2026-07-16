@@ -285,9 +285,13 @@ Feature: F-002 Conversation & Memory
 
 ### Non-functional
 
-- **NFR-002-01** — Under normal conditions **with a warm (already-loaded) model**, the persona's
-  text reply must be delivered in **under 5 seconds** from message receipt (allowing a natural
-  human-pacing pause within that budget).
+- **NFR-002-01** — Under normal conditions **with a warm (already-loaded) model**, the typing
+  indicator must appear **immediately** on message receipt, and the reply **generation** (which
+  legitimately includes the model's private reasoning — F-003 FR-003-41) must complete within
+  **20 seconds p95**. The user-visible arrival time additionally includes F-003's deliberate
+  typing-speed pacing (bounded by NFR-003-01's caps) — the gap reads as "she's typing", never as
+  the system hanging. *(Revised from the original flat "<5 s to delivery": that budget predates
+  reasoning mode and typing-realistic pacing, which deliberately trade raw speed for humanness.)*
 - **NFR-002-02** — **Memory recall must be correct and relevant**: when the current message relates
   to a previously stored fact, the relevant fact must be retrieved and made available to the context,
   and irrelevant facts must not dominate the recall set.

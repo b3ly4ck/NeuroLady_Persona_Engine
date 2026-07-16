@@ -436,15 +436,46 @@ Feature: F-003 Human-Likeness of Communication
   **preserve the reply's content and correctness** as decided by F-002 — the delivered message(s)
   must still answer what the user actually said, with no chunk dropping, reordering, or altering the
   reply's meaning.
+- **FR-003-39** — **Reply-volume budget (texting register).** By default a reply must fit the way
+  people actually text: **1–3 short sentences (~≤ 35 words total)** for banter/ordinary exchanges.
+  A long, multi-paragraph answer is allowed **only when the user explicitly invites it** (asks for
+  a story, details, "расскажи подробнее") — and even then it stays bounded (≤ the chunk cap of
+  FR-003-14). The budget is enforced on **both** sides: (a) hard, checkable directives in the
+  system prompt (sentence/word budget, no essays), and (b) a **generation token ceiling sized so a
+  compliant reply always fits without mid-sentence truncation** — a reply must never be cut off by
+  the token limit (a truncated tail reads as a glitch, worse than a long text; ISS precedent: live
+  replies were observed cut mid-sentence at the old fixed 320-token ceiling).
+- **FR-003-40** — **Typing-speed-realistic pacing.** The deliberate per-chunk delay must
+  approximate a human typing the chunk at **35–45 words per minute** (the measured average for
+  mobile messaging), scaled by the persona's `typing_speed` multiplier and jittered — i.e. the
+  delay is computed from the chunk's **word count**, not its character length, so what the user
+  waits matches what a human would plausibly have typed. Bounded by NFR-003-01's caps.
+- **FR-003-41** — **Private reasoning (thinking mode) is enabled and put to work for style.** The
+  chat model runs with its reasoning mode **on**; the system prompt directs the model to use its
+  private reasoning to **self-check the reply against the human-likeness constraints before
+  answering** (volume budget FR-003-39, emoji budget, register, no assistant formatting, staying
+  in character). The reasoning: (a) is **never shown** to the user — it is stripped before
+  delivery, and a reply whose reasoning was truncated (no closing marker) must degrade to the
+  in-character fallback rather than leak raw thought text; (b) its real compute time **counts
+  toward the natural response gap** — the "she's typing/thinking" pause is filled with actual
+  work instead of a pure sleep (revises the F-002 fast-compute assumption; see NFR-003-02 and
+  F-002 NFR-002-01).
 
 ### Non-functional
 
-- **NFR-003-01** — The total deliberate pacing delay must be **bounded by a defined upper cap** and
-  must never exceed it, so a reply never feels withheld or ignored (checkable against the cap).
-- **NFR-003-02** — Deliberate pacing must **not increase model compute time**: on a warm model the
-  reply computation must still meet F-002's `NFR-002-01` budget, and the human feel must come purely
-  from an **additive wait after compute** — pacing and fast-compute are consistent, not
-  contradictory.
+- **NFR-003-01** — The deliberate pacing delay must be **bounded by defined upper caps** and never
+  exceed them, so a reply never feels withheld or ignored (checkable against the caps). Caps
+  (config-tunable, defaults): **≤ 15 s per chunk** and **≤ 30 s total deliberate delay per reply**;
+  once the total budget is spent, remaining chunks are delivered with only a minimal beat. (The
+  earlier 6 s cap predates typing-speed-realistic pacing FR-003-40 and the reply-volume budget
+  FR-003-39: with replies capped at ~35 words, a 35–45 wpm typist takes tens of seconds — the old
+  cap made her a superhuman typist writing essays in 6 s.)
+- **NFR-003-02** — Deliberate pacing must be an **additive wait after generation** — a pure sleep
+  never extends generation itself. Generation now legitimately includes **private reasoning**
+  (FR-003-41), which is real compute filling the response gap: the typing indicator must appear
+  immediately, reasoning+generation must fit F-002's revised `NFR-002-01` budget, and the
+  deliberate pacing wait is layered on top only up to NFR-003-01's caps — pacing never masks a
+  hung model, and a fast generation never makes her look inhumanly instant.
 - **NFR-003-03** — Human-likeness styling must **not degrade correctness or relevance**: the
   delivered reply must remain as on-topic and in-character as the F-002 reply it wraps (no
   measurable drop in answer relevance attributable to F-003).

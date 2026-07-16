@@ -500,6 +500,20 @@ stored per-module, never inlined ad hoc.
 - Style-tuning per persona (voice/register), so text matches the persona's character.
 - Self-hosted; **loaded during awake hours**, unloaded at night to free GPU for media.
 - Configurable decoding (temperature, etc.) exposed as persona/communication settings.
+- **Reasoning ("thinking") mode is ON — and it works for humanness (F-003 FR-003-41).** This model
+  family opens a private `<think>` block before answering. Originally reasoning was disabled at the
+  runner (it burned the whole token budget on visible chain-of-thought and broke the flat <5 s
+  budget). The decision is now **reversed, deliberately**: the system prompt instructs the model to
+  use its private reasoning as a **pre-send self-check** against the texting constraints (reply-
+  volume budget, emoji budget, register, no assistant formatting, in-character consistency), and
+  the reasoning's real compute time **fills the natural "she's typing" gap** — the pause the
+  product wants anyway is spent on work that raises reply quality instead of a pure sleep.
+  Guardrails: the think block is **stripped before delivery** (Orchestrator post-process); a reply
+  whose think block never closed (token-truncated) **degrades to the in-character fallback** rather
+  than leaking raw reasoning; the generation token ceiling is sized for reasoning + a compliant
+  short reply (FR-003-39 — never mid-sentence truncation); latency governed by the revised
+  F-002 `NFR-002-01` (typing indicator immediate; generation ≤ 20 s p95 warm) plus F-003's
+  typing-speed pacing caps (NFR-003-01: ≤ 15 s/chunk, ≤ 30 s total).
 
 ### 4.2 Context assembly (critical)
 For each reply the Orchestrator builds the prompt from:
