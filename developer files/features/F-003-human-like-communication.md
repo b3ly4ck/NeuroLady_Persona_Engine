@@ -460,6 +460,13 @@ Feature: F-003 Human-Likeness of Communication
   toward the natural response gap** — the "she's typing/thinking" pause is filled with actual
   work instead of a pure sleep (revises the F-002 fast-compute assumption; see NFR-003-02 and
   F-002 NFR-002-01).
+  > **Status (current model build):** requirement held in **abeyance** — live probing showed the
+  > deployed HauhauCS finetune emits its CoT **tagless** ("Thinking Process: …", no markers,
+  > immune to `/no_think` and no-reasoning instructions), making the private/visible split
+  > unenforceable (leak or drop). Reasoning is therefore **off at the runner** for this build
+  > (architecture §4.1 status note); the self-check directive, `strip_reasoning`, and the
+  > truncation guards stay active. Re-enable and re-verify when a think-disciplined build ships;
+  > the natural response gap is meanwhile provided by FR-003-40 pacing.
 
 ### Non-functional
 

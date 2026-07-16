@@ -82,7 +82,34 @@ class ChatClient:
         except (KeyError, IndexError, TypeError) as exc:
             raise ChatRunnerUnavailable(f"malformed completion: {data!r}") from exc
 
-        text = (text or "").strip()
+        text = strip_reasoning((text or "").strip())
         if not text:
             raise ChatRunnerUnavailable("empty completion")
         return text
+
+
+# Internal (non-chat) LLM steps prepend this so the model's private reasoning stays SHORT — with
+# reasoning enabled, an unconstrained CoT on the batch prompts overran even a 2048-token ceiling,
+# truncating to nothing ("empty completion" on every plan/reflect step, observed live twice).
+BRIEF_REASONING_DIRECTIVE = (
+    "Think very briefly before answering — at most a couple of short lines of private reasoning, "
+    "no step-by-step analysis, no restating the task. Then produce the answer.\n\n")
+
+
+def strip_reasoning(text: str) -> str:
+    """Remove the model's private reasoning from a completion (F-003 FR-003-41).
+
+    Centralized here — the ONE place raw model output enters the system — so every consumer
+    (conversation turn, Life Engine plan/reflect/compress/goals/future, fact extraction,
+    relationship reflection) gets clean visible text: with reasoning enabled at the runner, a raw
+    CoT was observed stored INSIDE a generated daily plan, and CoT braces can poison the JSON-step
+    parsers. Closed <think> blocks are stripped; an unclosed block or a tagless 'Thinking
+    Process:' prefix (the template opens <think> in the prompt, so truncation leaks CoT with no
+    marker) yields "" — callers already degrade on empty (fallback / keep-last-good-state)."""
+    if "</think>" in text:
+        return text.split("</think>")[-1].strip()
+    if "<think>" in text:
+        return ""
+    if text.lstrip().lower().startswith("thinking process"):
+        return ""
+    return text

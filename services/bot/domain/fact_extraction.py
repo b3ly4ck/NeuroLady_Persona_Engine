@@ -15,7 +15,7 @@ import json
 import logging
 from dataclasses import dataclass, field
 
-from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
+from services.bot.chat_client import BRIEF_REASONING_DIRECTIVE, ChatClient, ChatRunnerUnavailable
 
 log = logging.getLogger(__name__)
 
@@ -116,7 +116,7 @@ async def extract_memory_ops(
                 {"role": "user", "content": payload},
             ],
             temperature=0.0,
-            max_tokens=300,
+            max_tokens=3072,  # CoT + JSON must both fit (reasoning ON, FR-003-41)
         )
     except ChatRunnerUnavailable as exc:
         log.warning("fact extraction skipped (runner unavailable): %s", exc)

@@ -514,6 +514,17 @@ stored per-module, never inlined ad hoc.
   short reply (FR-003-39 — never mid-sentence truncation); latency governed by the revised
   F-002 `NFR-002-01` (typing indicator immediate; generation ≤ 30 s p95 warm — measured 22-30 s live with reasoning) plus F-003's
   typing-speed pacing caps (NFR-003-01: ≤ 15 s/chunk, ≤ 30 s total).
+  **Status for the current model build — reasoning OFF at the runner (live finding, 2026-07-16):**
+  the HauhauCS "Aggressive" finetune has **broken thinking-format discipline** — it unpredictably
+  emits its CoT as **tagless plain text** ("Thinking Process: …", no `<think>`/`</think>` markers,
+  `finish_reason: stop`), immune to `/no_think`, explicit no-reasoning instructions, and role
+  restructuring (all probed live). A tagless CoT cannot be reliably separated from the answer, so
+  the choice is leaking raw CoT to users or dropping whole outputs (both were observed — a raw CoT
+  was stored inside a generated daily plan; every plan step then failed "empty completion"). Until
+  a model build with disciplined think-tagging is deployed, `CHAT_ENABLE_THINKING` defaults to off;
+  the FR-003-41 self-check directive (applied without visible CoT), `strip_reasoning` in the
+  ChatClient, and all leak guards remain active as defense in depth. The natural response gap is
+  provided by F-003's typing-speed pacing (FR-003-40).
 
 ### 4.2 Context assembly (critical)
 For each reply the Orchestrator builds the prompt from:
