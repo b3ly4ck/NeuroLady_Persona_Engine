@@ -104,7 +104,10 @@ def build_system_prompt(
         "Before you answer, think privately and check yourself: does the reply fit the volume "
         "rules above, does it sound like a quick text from a real girl (not an assistant), is it "
         "in your voice and consistent with your life, and does it actually respond to what he "
-        "just said? Fix it privately if not. Never show, quote, or mention this checking."
+        "just said? Fix it privately if not. HARD LIMIT on the private thinking: at most 3 short "
+        "lines (under 30 words total) — a quick checklist, no numbered analysis, no restating the "
+        "request, no drafting multiple variants. Then close the thinking and answer immediately. "
+        "Never show, quote, or mention this checking."
     )
     # Hard in-character rule — FR-002-08 / NFR-002-10. Kept blunt and non-negotiable.
     parts.append(

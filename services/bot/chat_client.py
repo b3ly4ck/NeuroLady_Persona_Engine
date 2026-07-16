@@ -54,8 +54,10 @@ class ChatClient:
         temperature: float = 0.8,
         top_p: float = 0.9,
         # FR-003-39/41: sized for the private <think> block PLUS a budget-compliant short reply —
-        # a compliant answer must never be cut mid-sentence by the ceiling (the old 320 did that live).
-        max_tokens: int = 1024,
+        # a compliant answer must never be cut mid-sentence by the ceiling (the old 320 did that
+        # live, and 1024 was observed still inside an unfinished CoT). The CoT of this Qwen build
+        # runs long; the prompt also orders it to keep reasoning brief.
+        max_tokens: int = 2048,
     ) -> str:
         """Call /v1/chat/completions and return the assistant text. Raises on failure."""
         payload = {

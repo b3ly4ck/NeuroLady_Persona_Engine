@@ -64,6 +64,10 @@ def _postprocess(text: str) -> str:
         text = text.split("</think>")[-1]
     elif "<think>" in text:
         return ""  # truncated reasoning — never deliver raw thought text (FR-003-41)
+    elif text.lstrip().lower().startswith("thinking process"):
+        # The chat template opens <think> inside the *prompt*, so a token-truncated CoT arrives
+        # tagless as plain "Thinking Process: …" text (observed live). Never deliver it.
+        return ""
     return text.strip()
 
 

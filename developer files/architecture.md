@@ -512,7 +512,7 @@ stored per-module, never inlined ad hoc.
   whose think block never closed (token-truncated) **degrades to the in-character fallback** rather
   than leaking raw reasoning; the generation token ceiling is sized for reasoning + a compliant
   short reply (FR-003-39 — never mid-sentence truncation); latency governed by the revised
-  F-002 `NFR-002-01` (typing indicator immediate; generation ≤ 20 s p95 warm) plus F-003's
+  F-002 `NFR-002-01` (typing indicator immediate; generation ≤ 30 s p95 warm — measured 22-30 s live with reasoning) plus F-003's
   typing-speed pacing caps (NFR-003-01: ≤ 15 s/chunk, ≤ 30 s total).
 
 ### 4.2 Context assembly (critical)

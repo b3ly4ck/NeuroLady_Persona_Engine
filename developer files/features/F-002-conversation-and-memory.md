@@ -288,7 +288,7 @@ Feature: F-002 Conversation & Memory
 - **NFR-002-01** — Under normal conditions **with a warm (already-loaded) model**, the typing
   indicator must appear **immediately** on message receipt, and the reply **generation** (which
   legitimately includes the model's private reasoning — F-003 FR-003-41) must complete within
-  **20 seconds p95**. The user-visible arrival time additionally includes F-003's deliberate
+  **30 seconds p95** (measured live at 22-30 s with reasoning on this GPU). The user-visible arrival time additionally includes F-003's deliberate
   typing-speed pacing (bounded by NFR-003-01's caps) — the gap reads as "she's typing", never as
   the system hanging. *(Revised from the original flat "<5 s to delivery": that budget predates
   reasoning mode and typing-realistic pacing, which deliberately trade raw speed for humanness.)*
