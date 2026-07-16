@@ -35,7 +35,7 @@ architecture).
 
 | ID | Title | Fixed | Reported | Resolved |
 |----|-------|:-----:|----------|----------|
-| _(none yet)_ | | | | |
+| ISS-001 | Start Chat on a resumed session sends nothing and deletes S2 → empty chat | [x] | 2026-07-16 | 2026-07-16 |
 
 ---
 
@@ -60,4 +60,30 @@ architecture).
 
 ## Issues
 
-_(none logged yet)_
+## ISS-001 — Start Chat on a resumed session sends nothing and deletes S2 → empty chat
+
+- **Status:** [x] fixed
+- **Reported:** 2026-07-16
+- **Report (as stated):** In a fresh-looking chat (the user had deleted the Telegram chat
+  client-side), `/start` → gallery → Alina → **Start Chat** deletes the gallery intro + persona
+  card and sends **nothing** — the chat ends up completely empty. Picking Vika instead works
+  (opener arrives), and after Vika, picking Alina works too.
+- **Observed vs expected:** Start Chat left the chat with zero messages vs Start Chat must always
+  end with a message from the persona.
+- **Root cause:** the user still had an **active DB session** with Alina from earlier use (sessions
+  survive bot restarts and the user's client-side chat deletion, which the bot cannot see).
+  `start_or_switch_session` returned `is_new_intro=False` (same-persona reuse), and `on_start_chat`
+  applied FR-001-17's "don't re-send the intro" to **every** reuse — then deleted the S2 card +
+  intro, leaving a void. Vika had no active session (new → opener); re-picking Alina after Vika is
+  a *switch* (new session → opener) — which is exactly why the bug looked persona-specific.
+- **Why tests didn't catch it (the gap):** `TC-FR-001-17-*` asserted *no duplicate intro* on
+  double-tap, but **no test asserted that a resumed-session Start Chat still sends anything**, and
+  FR-001-17 itself conflated two different situations (rapid double-tap vs returning via the
+  gallery later).
+- **Resolution:** FR-001-17 reworded (F-001 feature + test spec): rapid duplicate taps are
+  **deduplicated** (a short in-memory guard window), but a resumed-session Start Chat **always
+  sends a short in-character resume opener** — Start Chat never leaves the chat without a persona
+  message (architecture.md §1.3 principle added). Code: `on_start_chat` resume branch +
+  `resume_opener` view + i18n copy + opener guard; tests updated/added
+  (`test_fr_001_17_*` reworked, resume-sends-message + double-tap-dedup cases).
+- **Resolved:** 2026-07-16

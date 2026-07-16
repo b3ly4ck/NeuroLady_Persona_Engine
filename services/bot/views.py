@@ -50,3 +50,9 @@ def gallery_card_view(persona: Persona, index: int, total: int, user_locale: str
 def intro_opener(persona: Persona) -> str:
     """S3 first-person opener message (FR-001-11), in the persona's language."""
     return t("intro_opener", persona.language, name=persona.name)
+
+
+def resume_opener(persona: Persona) -> str:
+    """Short in-character opener when re-entering an already-active chat (FR-001-17, ISS-001) —
+    Start Chat must never leave the chat without a persona message."""
+    return t("resume_opener", persona.language, name=persona.name)

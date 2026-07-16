@@ -37,6 +37,12 @@ _CATALOG: dict[str, dict[str, str]] = {
         "en": "Hey there 😊 I'm {name}. So glad you picked me… tell me, what's on your mind tonight? 💋",
         "ru": "Привет 😊 Я {name}. Так рада, что ты выбрал меня… расскажи, что у тебя на уме сегодня? 💋",
     },
+    # Resume opener — the user re-enters an already-active chat via the gallery (FR-001-17,
+    # ISS-001): short, in-character, never the full first-time intro, never silence.
+    "resume_opener": {
+        "en": "You're back 😏 I missed you… where were we?",
+        "ru": "Снова ты 😏 А я скучала… на чём мы остановились?",
+    },
     # ── Buttons — no menu (architecture.md §1.3: no main menu, ever) ────────────────────────────
     "btn_start_chat": {"en": "💬 Start Chat", "ru": "💬 Начать чат"},
     "btn_choose_lady": {"en": "💋 Choose Lady", "ru": "💋 Выбрать девушку"},

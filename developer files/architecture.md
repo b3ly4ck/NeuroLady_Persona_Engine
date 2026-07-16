@@ -227,6 +227,12 @@ flowchart TD
   screen's messages (card, intro) are only deleted **after** the next screen's message has actually
   landed. If sending the replacement fails, the old content is **left in place** — the chat must
   never be silently left blank/orphaned by a delete that outran (or substituted for) a failed send.
+  **Corollary — Start Chat is never mute:** entering a chat from the gallery always ends with a
+  message from the persona. A brand-new/switched session gets the full S3 opener; a **resumed**
+  same-persona session gets a short in-character **resume opener** (rapid duplicate taps are
+  deduplicated instead of silently skipped — skipping the send while still deleting S2 left an
+  empty chat, ISS-001). This matters because the bot cannot see a user deleting the chat
+  client-side: what looks "empty" to the user may be an active session to the bot.
   Only her real content (persona messages, media) and the current screen persist long-term.
 
 ---

@@ -264,3 +264,54 @@ async def test_fr_001_18_01_intro_fallback_without_media(seeded_db):
 def test_build_dispatcher_wires_without_error(sessionmaker):
     """The dispatcher builds (middleware + router registered) without a token/network."""
     assert build_dispatcher(sessionmaker) is not None
+
+
+# ── ISS-001: resumed session must never leave the chat empty (FR-001-17) ────────────────────
+
+
+async def test_fr_001_17_04_resumed_session_sends_resume_opener(seeded_db):
+    """TC-FR-001-17-04 (ISS-001) — Start Chat on an already-active same-persona session (the user
+    came back via the gallery later; e.g. after deleting the chat client-side) sends a short
+    in-character resume opener — the chat is never left empty."""
+    from services.bot.i18n import t
+
+    await get_or_create_user(seeded_db, 1102, "en")
+    persona = (await list_gallery_personas(seeded_db, "en"))[0]
+    bot = AsyncMock()
+    cb = fake_callback(1102, data=f"startchat:{persona.id}")
+    await ob.on_start_chat(cb, seeded_db, bot)   # first entry — full intro, session active
+    ob._opener_sent_at.clear()                    # simulate: the rapid-tap guard window passed
+
+    bot2 = AsyncMock()
+    cb2 = fake_callback(1102, data=f"startchat:{persona.id}")
+    await ob.on_start_chat(cb2, seeded_db, bot2)
+
+    bot2.send_message.assert_awaited_once()       # resume opener sent — not silent
+    assert bot2.send_message.await_args.args[1] == t("resume_opener", persona.language)
+    assert bot2.send_message.await_args.kwargs.get("reply_markup") is not None
+    sessions = (await seeded_db.execute(select(func.count()).select_from(Session))).scalar_one()
+    assert sessions == 1                          # still the same reused session
+
+
+async def test_fr_001_17_05_resume_opener_send_before_delete(seeded_db):
+    """TC-FR-001-17-05 — if the resume-opener send fails, the S2 card/intro are NOT deleted
+    (send-before-delete holds on the resume path too)."""
+    await get_or_create_user(seeded_db, 1103, "en")
+    persona = (await list_gallery_personas(seeded_db, "en"))[0]
+    bot = AsyncMock()
+    cb = fake_callback(1103, data=f"startchat:{persona.id}")
+    await ob.on_start_chat(cb, seeded_db, bot)   # activate the session
+    ob._opener_sent_at.clear()
+
+    bot2 = AsyncMock()
+    bot2.send_message.side_effect = RuntimeError("network hiccup")
+    cb2 = fake_callback(1103, data=f"startchat:{persona.id}")
+    ob._intro_msg_ids[cb2.message.chat.id] = 777
+    try:
+        with pytest.raises(RuntimeError):
+            await ob.on_start_chat(cb2, seeded_db, bot2)
+        cb2.message.delete.assert_not_awaited()   # card NOT deleted
+        bot2.delete_message.assert_not_awaited()  # intro NOT deleted
+        cb2.answer.assert_awaited_once()          # callback still acknowledged
+    finally:
+        ob._intro_msg_ids.pop(cb2.message.chat.id, None)
