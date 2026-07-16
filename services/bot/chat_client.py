@@ -24,7 +24,10 @@ class ChatClient:
         self,
         base_url: str = "http://127.0.0.1:8080",
         *,
-        timeout_s: float = 30.0,
+        # Transport guard, not the UX budget: must sit ABOVE the reasoning-inclusive generation
+        # budget (NFR-002-01 <=30s p95) or the tail of normal generations gets cut into fallbacks
+        # (observed live: 25-35s generations vs a 30s timeout).
+        timeout_s: float = 90.0,
         transport: httpx.AsyncBaseTransport | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
@@ -57,7 +60,7 @@ class ChatClient:
         # a compliant answer must never be cut mid-sentence by the ceiling (the old 320 did that
         # live, and 1024 was observed still inside an unfinished CoT). The CoT of this Qwen build
         # runs long; the prompt also orders it to keep reasoning brief.
-        max_tokens: int = 2048,
+        max_tokens: int = 3072,
     ) -> str:
         """Call /v1/chat/completions and return the assistant text. Raises on failure."""
         payload = {
