@@ -106,7 +106,7 @@ def test_fr_003_02_01_longer_text_longer_delay():
 
 def test_fr_003_05_01_faster_typist_shorter_delay():
     """TC-FR-003-05-01 — a higher typing_speed yields a shorter delay for the same text."""
-    text = "word " * 30
+    text = "word " * 6  # short enough that neither typist hits the per-chunk cap
     slow = pacing_delay(text, CommSettings(typing_speed=0.7), random.Random(2))
     fast = pacing_delay(text, CommSettings(typing_speed=1.6), random.Random(2))
     assert fast < slow
@@ -178,3 +178,105 @@ async def test_fr_003_09_04_handler_delivers_chunks_in_order(monkeypatch):
     assert len(sent) > 1  # chunked
     assert " ".join(sent).split() == long.split()  # in order, meaning preserved
     await engine.dispose()
+
+
+# ── FR-003-39 — reply-volume budget (texting register; no token truncation) ────────────────────
+
+
+def test_fr_003_39_01_prompt_carries_volume_budget():
+    """TC-FR-003-39-01 — the system prompt contains the hard sentence/word budget directives."""
+    prompt = build_system_prompt(_persona())
+    assert "1 to 3 short sentences" in prompt
+    assert "35 words" in prompt
+    assert "ONLY when he explicitly asks" in prompt
+    assert "bullet points" in prompt  # no structured formatting
+
+
+def test_fr_003_39_02_token_ceiling_fits_reasoning_plus_reply():
+    """TC-FR-003-39-02 — the generation ceiling leaves room for the think block + a compliant
+    reply (no 320-token cliff that truncated live replies mid-sentence)."""
+    import inspect
+
+    from services.bot.chat_client import ChatClient
+
+    default = inspect.signature(ChatClient.complete).parameters["max_tokens"].default
+    assert default >= 1024
+
+
+# ── FR-003-40 — typing-speed-realistic pacing (word-count-based, 35-45 wpm) ────────────────────
+
+
+def test_fr_003_40_01_delay_matches_human_wpm():
+    """TC-FR-003-40-01 — N words ≈ N / (40wpm/60) seconds, within jitter and below the cap."""
+    words = 6
+    d = pacing_delay("word " * words, CommSettings(typing_speed=1.0), random.Random(7))
+    expected = 0.8 + words / (40.0 / 60.0)  # ≈ 9.8s
+    assert expected * 0.85 <= d <= expected * 1.15
+
+
+def test_fr_003_40_02_faster_persona_types_faster():
+    """TC-FR-003-40-02 — a higher typing_speed shortens the same chunk's delay proportionally."""
+    text = "just a few quick words here"
+    slow = pacing_delay(text, CommSettings(typing_speed=0.8), random.Random(3))
+    fast = pacing_delay(text, CommSettings(typing_speed=1.6), random.Random(3))
+    assert fast < slow
+
+
+def test_fr_003_40_03_word_based_not_char_based():
+    """TC-FR-003-40-03 — equal char length, different word counts → different delays."""
+    many_words = "a b c d e f g h i j k l"          # 12 words, 23 chars
+    one_word = "x" * 23                              # 1 word, 23 chars
+    d_many = pacing_delay(many_words, CommSettings(), random.Random(5))
+    d_one = pacing_delay(one_word, CommSettings(), random.Random(5))
+    assert d_many > d_one
+
+
+# ── FR-003-41 — private reasoning: prompt self-check; strip; never leak when truncated ─────────
+
+
+def test_fr_003_41_01_prompt_directs_private_self_check():
+    """TC-FR-003-41-01 — the prompt instructs a private pre-send check, never revealed."""
+    prompt = build_system_prompt(_persona())
+    assert "think privately" in prompt
+    assert "Never show, quote, or mention this checking" in prompt
+
+
+def test_fr_003_41_02_closed_think_block_stripped():
+    """TC-FR-003-41-02 — a closed <think> block is stripped; only the visible reply remains."""
+    from services.bot.orchestrator import _postprocess
+
+    raw = "<think>чек: коротко, 1 эмодзи, в характере</think>привет, ну ты и пропал 😏"
+    assert _postprocess(raw) == "привет, ну ты и пропал 😏"
+
+
+def test_fr_003_41_03_truncated_think_never_leaks():
+    """TC-FR-003-41-03 — an unclosed <think> (token-truncated) yields empty → caller falls back;
+    raw reasoning text is never delivered."""
+    from services.bot.orchestrator import _postprocess
+
+    raw = "<think>она спросила про детство, надо ответить коротко и"
+    assert _postprocess(raw) == ""
+
+
+# ── NFR-003-01 — caps: ≤ MAX_DELAY_S per chunk, ≤ MAX_TOTAL_DELAY_S per reply ──────────────────
+
+
+def test_nfr_003_01_01_per_chunk_delay_capped():
+    """TC-NFR-003-01-01 — even a huge chunk never exceeds the per-chunk cap."""
+    from services.bot.domain.humanize import MAX_TOTAL_DELAY_S  # noqa: F401 (doc anchor)
+
+    rng = random.Random(1)
+    for words in (1, 10, 50, 300):
+        d = pacing_delay("word " * words, CommSettings(), rng)
+        assert 0.3 <= d <= MAX_DELAY_S
+
+
+def test_nfr_003_01_02_total_reply_delay_capped():
+    """TC-NFR-003-01-02 — the summed deliberate delay of all chunks ≤ the total cap (+min beats)."""
+    from services.bot.domain.humanize import MAX_TOTAL_DELAY_S, pacing_delays
+
+    chunks = ["word " * 40] * MAX_CHUNKS  # every chunk alone would hit the per-chunk cap
+    delays = pacing_delays(chunks, CommSettings(), random.Random(9))
+    assert len(delays) == MAX_CHUNKS
+    assert sum(delays) <= MAX_TOTAL_DELAY_S + 0.3 * MAX_CHUNKS  # budget + minimal beats
+    assert all(d >= 0.3 for d in delays)

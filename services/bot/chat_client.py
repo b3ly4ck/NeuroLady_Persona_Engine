@@ -53,7 +53,9 @@ class ChatClient:
         *,
         temperature: float = 0.8,
         top_p: float = 0.9,
-        max_tokens: int = 320,
+        # FR-003-39/41: sized for the private <think> block PLUS a budget-compliant short reply —
+        # a compliant answer must never be cut mid-sentence by the ceiling (the old 320 did that live).
+        max_tokens: int = 1024,
     ) -> str:
         """Call /v1/chat/completions and return the assistant text. Raises on failure."""
         payload = {

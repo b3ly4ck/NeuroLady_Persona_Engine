@@ -19,7 +19,7 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient
-from services.bot.domain.humanize import chunk_reply, pacing_delay, parse_settings
+from services.bot.domain.humanize import chunk_reply, pacing_delays, parse_settings
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.domain.vector_store import MemoryIndex
@@ -72,9 +72,10 @@ async def on_text(
     # with a "typing…" indicator + a deliberate, capped pause, so it reads like a real person
     # texting rather than one instant block. Chunking preserves meaning (FR-003-38).
     settings = parse_settings(persona)
-    for chunk in chunk_reply(reply, settings):
+    chunks = chunk_reply(reply, settings)
+    for chunk, delay in zip(chunks, pacing_delays(chunks, settings)):  # NFR-003-01 total budget
         await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
-        await _sleep(pacing_delay(chunk, settings))
+        await _sleep(delay)
         await message.answer(chunk)
 
     # AFTER the reply is delivered (off the hot path, FR-004-42/FR-005-03/NFR-005-03): extract +

@@ -56,10 +56,14 @@ def _fallback_text(persona: Persona) -> str:
 
 
 def _postprocess(text: str) -> str:
-    """Minimal post-processing (FR-002-06). Thinking is disabled at the runner, but strip any
-    stray <think>…</think> defensively and trim whitespace."""
+    """Minimal post-processing (FR-002-06, F-003 FR-003-41). Reasoning mode is ON at the runner:
+    strip the private <think>…</think> block before delivery. A think block that never closes
+    (token-truncated reasoning) must NEVER leak to the user — return empty so the caller degrades
+    to the in-character fallback."""
     if "</think>" in text:
         text = text.split("</think>")[-1]
+    elif "<think>" in text:
+        return ""  # truncated reasoning — never deliver raw thought text (FR-003-41)
     return text.strip()
 
 
@@ -168,6 +172,9 @@ async def handle_turn(
     # 3. Call the Chat-LLM; on any failure fall back in-character (FR-002-05/19).
     try:
         reply = _postprocess(await chat_client.complete(llm_messages))
+        if not reply:  # empty or truncated-reasoning output — degrade, never a blank/leaked reply
+            log.warning("post-processed reply empty (truncated reasoning?), using fallback")
+            reply = _fallback_text(persona)
     except ChatRunnerUnavailable as exc:
         log.warning("chat runner unavailable, using in-character fallback: %s", exc)
         reply = _fallback_text(persona)

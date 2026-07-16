@@ -83,12 +83,13 @@ def _build_server_cmd(model: Path, host: str, port: int) -> list[str]:
     if chat_format:
         cmd += ["--chat_format", chat_format]
     # This Qwen3.5 GGUF is a *reasoning* model: its chat template opens a <think> block at every
-    # generation prompt, so by default the model emits a long chain-of-thought ("Thinking
-    # Process: …") that eats the token budget and seconds of latency before the actual reply.
-    # For a real-time texting companion we want direct, in-character replies, so we disable
-    # thinking at model-load time (the template then injects an empty <think></think> and the model
-    # answers straight away). Set CHAT_ENABLE_THINKING=1 to turn reasoning back on if ever needed.
-    if _env("CHAT_ENABLE_THINKING", "0") != "1":
+    # generation prompt. Reasoning is now **ON by default** (architecture.md §4.1, F-003
+    # FR-003-41 — decision reversed): the system prompt directs the model to spend its private
+    # reasoning on a pre-send style self-check (reply-volume budget, emoji, register, character),
+    # and the real compute time fills the natural "she's typing" gap. The Orchestrator strips the
+    # <think> block before delivery and falls back in-character if it was token-truncated.
+    # Set CHAT_ENABLE_THINKING=0 to switch reasoning back off.
+    if _env("CHAT_ENABLE_THINKING", "1") != "1":
         cmd += ["--chat_template_kwargs", '{"enable_thinking": false}']
     # cache_prompt keeps the persona/system prefix hot across a user's turns.
     cmd += ["--cache", "true"]
