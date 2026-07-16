@@ -96,8 +96,11 @@ def bench_B_diffusers(reference: Path, n: int, steps: int = 8) -> Result:
         # reality for candidate B on this GPU (unquantized); note it in the result.
         free_gb = torch.cuda.mem_get_info()[0] / 1e9
         if free_gb < 56:
-            pipe.enable_model_cpu_offload()
-            res.notes = f"bf16 does not fit ({free_gb:.0f}GB free); ran with model_cpu_offload"
+            # model_cpu_offload is NOT enough: it puts whole components on GPU one at a time, and
+            # the 39G transformer + ~6G activations still exceed 47.4G (measured OOM). Sequential
+            # offload streams layer-by-layer — slow but the only way unquantized bf16 runs here.
+            pipe.enable_sequential_cpu_offload()
+            res.notes = f"bf16 does not fit ({free_gb:.0f}GB free); ran with sequential_cpu_offload"
         else:
             pipe.to("cuda")
         res.load_s = time.monotonic() - t0
@@ -177,9 +180,12 @@ def bench_A_comfy(reference: Path, n: int, steps: int = 6) -> Result:
 
         threading.Thread(target=_sample_vram, daemon=True).start()
         t0 = time.monotonic()
+        # --disable-smart-memory: without it ComfyUI keeps everything resident after gen 1 and the
+        # second prompt's text-encode OOMs (measured). Forces model unloads between executions.
         proc = subprocess.Popen(
             [str(ROOT / "image/.venv/bin/python"), str(COMFY_DIR / "main.py"),
-             "--port", "8188", "--output-directory", str(OUT_DIR / "A")],
+             "--port", "8188", "--disable-smart-memory",
+             "--output-directory", str(OUT_DIR / "A")],
             cwd=str(COMFY_DIR), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         # wait for the server + model load (readiness gate)
         deadline = time.monotonic() + 600
@@ -199,6 +205,7 @@ def bench_A_comfy(reference: Path, n: int, steps: int = 6) -> Result:
             # first gen also pulls the 28GB checkpoint into VRAM — give it a long leash
             _comfy_run_and_wait(wf, timeout=1200 if i == 0 else 600)
             res.gen_times.append(time.monotonic() - t)
+            print(f"  A image {i}: {res.gen_times[-1]:.0f}s", flush=True)
         res.out_paths = sorted(str(p) for p in (OUT_DIR / "A").glob("*.png"))
         res.notes = "gen[0] includes lazy checkpoint load into VRAM"
         res.peak_vram_gb = max(vram_samples, default=0.0)
