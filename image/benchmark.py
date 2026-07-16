@@ -79,6 +79,7 @@ def _reset_vram() -> None:
 def bench_B_diffusers(reference: Path, n: int, steps: int = 8) -> Result:
     """Load Qwen-Image-Edit-2511 via diffusers, apply the Lightning distill LoRA, generate."""
     res = Result(candidate="B_diffusers_lightning", steps=steps)
+    pipe = None
     try:
         import torch
         from diffusers import DiffusionPipeline  # auto-selects QwenImageEditPlusPipeline
@@ -90,14 +91,17 @@ def bench_B_diffusers(reference: Path, n: int, steps: int = 8) -> Result:
         # Lightning distill: 8 (or 4) steps instead of ~30 — the whole point of candidate B's speed.
         if LIGHTNING_LORA.exists():
             pipe.load_lora_weights(str(LIGHTNING_LORA))
-        # base transformer (39G) + text encoder (16G) > 48GB — expect the offload path on this GPU.
-        try:
-            pipe.to("cuda")
-        except torch.cuda.OutOfMemoryError:
-            torch.cuda.empty_cache()
+        # bf16 weights (39G transformer + 16G text encoder) exceed the 48GB card — a full
+        # .to("cuda") can never fit, so go straight to sequential offload. This IS the deployment
+        # reality for candidate B on this GPU (unquantized); note it in the result.
+        free_gb = torch.cuda.mem_get_info()[0] / 1e9
+        if free_gb < 56:
             pipe.enable_model_cpu_offload()
-            res.notes = "does not fit 48GB fully; ran with model_cpu_offload"
+            res.notes = f"bf16 does not fit ({free_gb:.0f}GB free); ran with model_cpu_offload"
+        else:
+            pipe.to("cuda")
         res.load_s = time.monotonic() - t0
+        print(f"  B loaded in {res.load_s:.0f}s ({res.notes or 'fully on GPU'})", flush=True)
 
         ref = Image.open(reference).convert("RGB")
         out_dir = OUT_DIR / "B"
@@ -110,12 +114,18 @@ def bench_B_diffusers(reference: Path, n: int, steps: int = 8) -> Result:
             p = out_dir / f"B_{i:02d}.png"
             image.save(p)
             res.out_paths.append(str(p))
+            print(f"  B image {i}: {res.gen_times[-1]:.0f}s", flush=True)
 
         res.peak_vram_gb = _peak_vram_gb()
-        del pipe
-        _reset_vram()
     except Exception as exc:  # keep the other candidate runnable even if this one fails
+        import traceback
+        traceback.print_exc()
         res.error = f"{type(exc).__name__}: {exc}"
+    finally:
+        # ALWAYS release VRAM — a leaked ~47GB reservation here starves the other candidate.
+        if pipe is not None:
+            del pipe
+        _reset_vram()
     return res
 
 
@@ -264,20 +274,24 @@ def main() -> None:
     ap.add_argument("--candidates", default="A,B", help="comma list of A,B")
     ap.add_argument("--reference", required=True, help="path to a reference face/body photo")
     ap.add_argument("--n", type=int, default=3, help="images per candidate (<= len(PROMPTS))")
-    ap.add_argument("--steps", type=int, default=8)
+    # Per-candidate step counts: each runs at ITS recommended distill setting (fair comparison of
+    # deployable configs, not of a shared arbitrary number). A: Phr00t AIO is happy at 4; B: the
+    # Lightning LoRA on disk is the 8-step distill.
+    ap.add_argument("--steps-a", type=int, default=4)
+    ap.add_argument("--steps-b", type=int, default=8)
     args = ap.parse_args()
     ref = Path(args.reference)
     if not ref.exists():
         raise SystemExit(f"reference image not found: {ref}")
 
     results: list[Result] = []
-    want = {c.strip().upper() for c in args.candidates.split(",")}
-    if "B" in want:
-        print("→ candidate B (diffusers + Lightning LoRA) …")
-        results.append(bench_B_diffusers(ref, args.n, args.steps))
-    if "A" in want:
-        print("→ candidate A (Rapid AIO via ComfyUI) …")
-        results.append(bench_A_comfy(ref, args.n, min(args.steps, 6)))
+    for cand in [c.strip().upper() for c in args.candidates.split(",")]:  # run in given order
+        if cand == "B":
+            print(f"→ candidate B (diffusers + Lightning LoRA, {args.steps_b} steps) …", flush=True)
+            results.append(bench_B_diffusers(ref, args.n, args.steps_b))
+        elif cand == "A":
+            print(f"→ candidate A (Rapid AIO via ComfyUI, {args.steps_a} steps) …", flush=True)
+            results.append(bench_A_comfy(ref, args.n, args.steps_a))
     write_results(results)
 
 
