@@ -44,8 +44,15 @@ SCOPES = ("day", "week", "month", "year", "epoch")
 
 
 def local_now(tz_name: str, now_utc: datetime) -> datetime:
-    """The persona's current local time, DST-correct, from her `PERSONA.timezone`."""
-    return now_utc.astimezone(ZoneInfo(tz_name))
+    """The persona's current local time, DST-correct, from her `PERSONA.timezone`.
+
+    An unknown/renamed zone key (e.g. legacy "Europe/Kiev" on a system without backward-compat
+    links) must never crash a reply or a scheduler tick — degrade to UTC (NFR-007-06)."""
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:  # noqa: BLE001 - ZoneInfoNotFoundError + missing-tzdata ModuleNotFoundError
+        tz = ZoneInfo("UTC")
+    return now_utc.astimezone(tz)
 
 
 def local_date_key(tz_name: str, now_utc: datetime) -> str:

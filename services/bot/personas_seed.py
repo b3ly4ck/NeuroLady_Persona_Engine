@@ -40,7 +40,7 @@ _SEED: list[dict] = [
          big_five="playful and bold, high energy, quick-witted, flirty",
          comm_settings=dict(typing_speed=1.4, verbosity=0.7, emoji_frequency=0.7,
                             register="casual", slang_level=0.7)),
-    dict(name="Sofia", profession="Fitness coach", age=26, timezone="Europe/Kiev",
+    dict(name="Sofia", profession="Fitness coach", age=26, timezone="Europe/Kyiv",
          language="ru", card_description="Заставлю тебя двигаться — и не только в зале 😏",
          big_five="driven and upbeat, confident, motivating, a little cheeky",
          comm_settings=dict(typing_speed=1.2, verbosity=0.9, emoji_frequency=0.5,
