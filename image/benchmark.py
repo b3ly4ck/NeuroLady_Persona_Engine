@@ -28,7 +28,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-ROOT = Path("/home/human/NeuroLady_Final")
+ROOT = Path(__file__).resolve().parent.parent  # repo root — works from any git worktree
 V23_CHECKPOINT = ROOT / "image/models/v23/Qwen-Rapid-AIO-NSFW-v23.safetensors"
 BASE_DIR = ROOT / "image/models/native/base"
 LIGHTNING_LORA = ROOT / "image/models/native/lightning-distill/Qwen-Image-Edit-2511-Lightning-8steps-V1.0-bf16.safetensors"
@@ -53,6 +53,7 @@ class Result:
     steps: int = 0
     out_paths: list[str] = field(default_factory=list)
     error: str | None = None
+    notes: str = ""
 
     @property
     def avg_gen_s(self) -> float:
@@ -89,7 +90,13 @@ def bench_B_diffusers(reference: Path, n: int, steps: int = 8) -> Result:
         # Lightning distill: 8 (or 4) steps instead of ~30 — the whole point of candidate B's speed.
         if LIGHTNING_LORA.exists():
             pipe.load_lora_weights(str(LIGHTNING_LORA))
-        pipe.to("cuda")
+        # base transformer (39G) + text encoder (16G) > 48GB — expect the offload path on this GPU.
+        try:
+            pipe.to("cuda")
+        except torch.cuda.OutOfMemoryError:
+            torch.cuda.empty_cache()
+            pipe.enable_model_cpu_offload()
+            res.notes = "does not fit 48GB fully; ran with model_cpu_offload"
         res.load_s = time.monotonic() - t0
 
         ref = Image.open(reference).convert("RGB")
@@ -124,18 +131,41 @@ def bench_A_comfy(reference: Path, n: int, steps: int = 6) -> Result:
     must be validated against the actual AIO on the first GPU run (node names/wiring for this build).
     """
     res = Result(candidate="A_rapid_aio_v23", steps=steps)
+    import shutil
     import subprocess
+    import threading
     import urllib.request
 
     workflow_path = ROOT / "image/bench_workflow_aio.json"
     proc = None
+    # ComfyUI runs in its own process — in-process torch stats see nothing, so sample nvidia-smi.
+    vram_samples: list[float] = []
+    stop_sampling = threading.Event()
+
+    def _sample_vram() -> None:
+        while not stop_sampling.is_set():
+            out = subprocess.run(
+                ["nvidia-smi", "--query-gpu=memory.used", "--format=csv,noheader,nounits"],
+                capture_output=True, text=True)
+            try:
+                vram_samples.append(int(out.stdout.splitlines()[0].strip()) / 1024)
+            except (ValueError, IndexError):
+                pass
+            stop_sampling.wait(2)
+
     try:
         if not workflow_path.exists():
             raise FileNotFoundError(
                 "image/bench_workflow_aio.json missing — export a Qwen-Image-Edit workflow for the "
                 "AIO checkpoint from ComfyUI (API format) and save it here.")
 
-        _reset_vram()
+        # LoadImage resolves names against ComfyUI's input dir — stage the reference there.
+        comfy_input = COMFY_DIR / "input"
+        comfy_input.mkdir(exist_ok=True)
+        ref_name = f"bench_ref{reference.suffix or '.png'}"
+        shutil.copy2(reference, comfy_input / ref_name)
+
+        threading.Thread(target=_sample_vram, daemon=True).start()
         t0 = time.monotonic()
         proc = subprocess.Popen(
             [str(ROOT / "image/.venv/bin/python"), str(COMFY_DIR / "main.py"),
@@ -154,14 +184,18 @@ def bench_A_comfy(reference: Path, n: int, steps: int = 6) -> Result:
         workflow = json.loads(workflow_path.read_text())
         (OUT_DIR / "A").mkdir(parents=True, exist_ok=True)
         for i, prompt in enumerate(PROMPTS[:n]):
-            wf = _inject(workflow, prompt=prompt, reference=str(reference), steps=steps, seed=i)
+            wf = _inject(workflow, prompt=prompt, reference=ref_name, steps=steps, seed=i)
             t = time.monotonic()
-            _comfy_run_and_wait(wf)
+            # first gen also pulls the 28GB checkpoint into VRAM — give it a long leash
+            _comfy_run_and_wait(wf, timeout=1200 if i == 0 else 600)
             res.gen_times.append(time.monotonic() - t)
-        res.peak_vram_gb = _peak_vram_gb()
+        res.out_paths = sorted(str(p) for p in (OUT_DIR / "A").glob("*.png"))
+        res.notes = "gen[0] includes lazy checkpoint load into VRAM"
+        res.peak_vram_gb = max(vram_samples, default=0.0)
     except Exception as exc:
         res.error = f"{type(exc).__name__}: {exc}"
     finally:
+        stop_sampling.set()
         if proc is not None:
             proc.terminate()
     return res
@@ -196,6 +230,10 @@ def _comfy_run_and_wait(workflow: dict, timeout: float = 300) -> None:
         hist = json.loads(urllib.request.urlopen(
             f"http://127.0.0.1:8188/history/{pid}", timeout=10).read())
         if pid in hist:
+            status = hist[pid].get("status", {})
+            if status.get("status_str") == "error":
+                msgs = [m for m in status.get("messages", []) if m and m[0] == "execution_error"]
+                raise RuntimeError(f"ComfyUI execution error: {msgs or status}")
             return
         time.sleep(1)
     raise TimeoutError("ComfyUI generation timed out")
@@ -208,13 +246,13 @@ def write_results(results: list[Result]) -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     lines = [
         "# Image-generation A/B benchmark", "",
-        "| Candidate | steps | load (s) | avg gen (s/img) | peak VRAM (GB) | images | error |",
-        "|-----------|------:|---------:|----------------:|---------------:|-------:|-------|",
+        "| Candidate | steps | load (s) | avg gen (s/img) | peak VRAM (GB) | images | notes | error |",
+        "|-----------|------:|---------:|----------------:|---------------:|-------:|-------|-------|",
     ]
     for r in results:
         lines.append(
             f"| {r.candidate} | {r.steps} | {r.load_s:.1f} | {r.avg_gen_s:.2f} | "
-            f"{r.peak_vram_gb:.1f} | {len(r.out_paths)} | {r.error or '—'} |")
+            f"{r.peak_vram_gb:.1f} | {len(r.out_paths)} | {r.notes or '—'} | {r.error or '—'} |")
     lines += ["", "Realism is judged visually from the saved images in `bench_out/{A,B}/`.",
               "Decision factors: realism, s/image, load/unload time (day↔night cadence), VRAM headroom."]
     (OUT_DIR / "results.md").write_text("\n".join(lines))
