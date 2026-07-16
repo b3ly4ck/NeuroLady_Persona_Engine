@@ -174,6 +174,10 @@ async def handle_turn(
     prompt_log.maybe_dump(persona.name, user_text, llm_messages)  # dev observability (opt-in via env)
 
     # 3. Call the Chat-LLM; on any failure fall back in-character (FR-002-05/19).
+    # Commit the writes made so far (inbound message, relationship get_or_create/milestone) BEFORE
+    # the long reasoning-inclusive generation: holding a SQLite write transaction open for 30-60s
+    # locked out concurrent writers live ("database is locked" on the user's next message).
+    await db.commit()
     try:
         reply = _postprocess(await chat_client.complete(llm_messages))
         if not reply:  # empty or truncated-reasoning output — degrade, never a blank/leaked reply
