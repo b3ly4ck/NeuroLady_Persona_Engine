@@ -42,6 +42,219 @@
     `FakeGate` (blocks a prohibited/adversarial battery, withholds below opt-in/stage, clamps to a
     ceiling), a `FakeAudit`, and the deterministic `FakeBackend` for end-to-end pair generation into
     a tmp media root. Whole suite green (504 passed, 52 skipped).
+- **F-013 Dynamic Persona Presentation IMPLEMENTED (branch `feature/f-013-presentation`) — the live,
+  time/context-aware greeting shown the instant a persona is opened (the F-001 post-selection beat).**
+  Replaces the static S3 intro with a greeting *in her voice* that reflects her current F-006 Life
+  Engine slot + local time of day, paired with a fitting SFW photo from today's F-011 archive. Pure
+  lookup + template compose — no hot-path generation (FR-013-07 / NFR-013-01).
+  - **`services/bot/domain/presentation.py`** (new): the whole composer, deterministic given a `seed`.
+    - `photo_period(hour)` (coarse: morning/afternoon/evening/night, for photo-tag matching) and
+      `narrative_period(hour)` (fine: early_morning/morning/midday/afternoon/evening/night/late_night,
+      for greeting phrasing).
+    - `compose_greeting(persona, activity, now_local, *, settings, seed)` — picks a name-carrying
+      opener variant per (language, narrative period) + a question variant per tone tier, weaves in
+      her current activity, and appends a period emoji only when her comm-settings emoji frequency
+      warrants it. Tone tier (`soft`/`warm`/`peppy`) is derived from F-003 `comm_settings_json`
+      (register/slang/emoji), so voice is config-driven (FR-013-09 / NFR-013-07). RU + EN templates.
+    - `select_welcome_photo(assets, now_local, activity, media_root, *, seed)` — F-012-style tag
+      scoring (`_score_asset` on `time_of_day`/`activity` meta) over SFW photos only (`is_sfw`
+      excludes any `intimate`/`intimacy_level>0` asset — FR-013-06 / NFR-013-08); best match wins,
+      seed breaks ties. Returns `(None, None)` on an empty/all-intimate archive.
+    - `compose_presentation(db, persona, *, media_root, now, seed) -> PresentationCard` — reads her
+      current activity via `life_engine_store.get_current_activity` + today's archive via
+      `imagegen.store.latest_available_assets`, then builds `PresentationCard{text, photo_ref,
+      asset_id}`. Content only: no keyboard/navigation (FR-013-10). `media_root` defaults to
+      `ImageRunnerSettings().media_root`.
+  - **Handler hook (shared file, minimal edit) — `services/bot/handlers/onboarding.py`:** in
+    `on_start_chat`, the first-time (`is_new_intro`) branch now composes the F-013 card and passes
+    its `text`/`photo_ref` into `send_persona_intro`, which gained optional `opener` + `photo_ref`
+    (with an `_UNSET` sentinel so `None` = "text-only" vs default = "use her gallery photo"). Default
+    call sites (and the F-001 direct-call tests) are unchanged; the resume/duplicate-tap paths are
+    untouched, so the single-message + send-before-delete guarantees (FR-013-03 / NFR-013-05) hold.
+  - **Tests — `tests/test_f013_presentation.py`:** one runnable test per TC (26 automated, 10 skips
+    for GPU/human/perf-judged coherence, identity and latency). Full suite green (506 passed, 55
+    skipped). Base branched off origin/master @ F-008 (services/imagegen + MediaAsset present).
+- **F-012 On-Demand Photo Delivery IMPLEMENTED (branch `feature/f-012-photo-delivery`) — the
+  consumer side of the day archive: select-and-send an SFW photo into the live chat, instantly, no
+  hot-path generation.** New domain module `services/bot/domain/media_delivery.py`:
+  - **`classify_photo_request`** (FR-012-07 / NFR-012-08): SFW vs intimate vs ambiguous; ambiguous
+    resolves to the gate-routed side, so an unclear request never serves from the SFW archive.
+    `routes_to_gate()` = everything except clearly-SFW. `IntimacyGate` Protocol stub
+    (`handle_intimate_request(user_id, persona_id, stage, request_text, context)`) — F-014 owns the
+    real logic (built in parallel); F-012 only routes and passes back `gate_result`.
+  - **`select_asset` / `score_asset`** (FR-012-01/03): reuses `imagegen.store.latest_available_assets`
+    (today's archive → most-recent-prior-day degrade) + `parse_meta`; scores each candidate on
+    time-of-day (exact, else cyclic-adjacency-decayed on morning→afternoon→evening→night) + activity
+    + location + mood tags; filters out `intimate=True` (NFR-012-08) and already-sent assets
+    (NFR-012-02); deterministic max(score, id) pick.
+  - **No-repeat + audit** (FR-012-02/10): new append-only table **`MediaSend`** (id, user_id,
+    asset_id, sent_at) appended AT END of `services/bot/models.py`. `sent_asset_ids` filters the
+    per-user history; `record_send` appends. Per-user isolated (NFR-012-06).
+  - **Relationship pacing** (FR-012-06 / NFR-012-04): `pacing_allows` reads the F-005 `Relationship`
+    stage and enforces per-stage frequency caps over a rolling window (Stranger 1 → Devoted 25).
+  - **Caption/deflection in her voice** (FR-012-05/08): `request_caption` / `request_deflection` call
+    the injected `CaptionClient` (the real `ChatClient` satisfies it; tests fake it) — F-012 never
+    authors persona voice; safe in-voice fallback if the client is down (never error/placeholder).
+  - **`deliver_photo`** (on-request flow) and **`maybe_proactive_share`** (FR-012-09: stage floor
+    `Friend`+ + pacing + min-score gate) return a `DeliveryResult{outcome, asset, caption,
+    deflection, gate_result}`. No `imagegen` backend/runner symbol is imported into the delivery path
+    (FR-012-04 / NFR-012-01 — pure lookup+send).
+  - **Handler hook** `services/bot/handlers/media.py` (new file, standalone helper — NOT a competing
+    `F.text` router, so no collision with F-003/F-013 handlers): `serve_photo_request` turns a
+    `DeliveryResult` into Telegram sends via the §3.6 Media path; `asset_abspath` resolves
+    `storage_ref` under `<repo>/media` **without importing `imagegen`** (keeps the F-008 NFR-008-04
+    bot-path guard green).
+  - **Tests** `tests/test_f012_photo_delivery.py` — 29 automated (fakes: in-memory DB, planted
+    `MediaAsset` rows with meta tags, fake `CaptionClient`, fake `IntimacyGate`) + 8 skips
+    (benchmark-perf ×2, human-judged context-fit ×1, manual/GPU user-story ×5). Whole suite: 509
+    passed, 53 skipped.
+- **F-014 Intimate NSFW Photo Generation & Gating — GATE LAYER IMPLEMENTED (branch
+  `feature/f-014-intimacy-gate`).** The safety-critical gating layer that decides *whether, what,
+  and to whom* an intimate image may be produced/delivered. No image content — pure policy + audit
+  glue on top of the F-008 engine. New module **`services/bot/domain/intimacy_gate.py`**:
+  - **Hard safety gate (FR-014-01 / NFR-014-01 / NFR-014-09)** — `hard_safety_scan(text) ->
+    ProhibitedCategory | None`, a **deny-first, config-independent** filter for prohibited
+    categories (`minors`, `non_consent`, `unauthorized_likeness`). It takes ONLY the request text
+    (no config/user/stage param — proven by a signature test), runs BEFORE every other check, and is
+    NOT a tunable knob. Jailbreak-resistant: leet/homoglyph fold + whitespace/punctuation collapse +
+    an under-18 age detector, matched against word-boundary patterns and collapsed substring tokens.
+    An adversarial battery (minors/non-consent/likeness, incl. spaced/leet/roleplay/prompt-injection
+    phrasings) is 100% blocked while benign adult-intimate phrasing passes.
+  - **Age/consent (FR-014-02)** — requires `User.adult_verified` (pre-existing) **and** the new
+    `User.intimate_opt_in`; otherwise `withhold(not_adult|not_opted_in)`.
+  - **Ceiling clamp (FR-014-08 / NFR-014-07)** — `IntimacyGateConfig.effective_ceiling() =
+    max(0, min(persona_ceiling, PLATFORM_MAX_INTIMACY_LEVEL=3))`; no config can raise the ceiling
+    above the platform hard limit (proven for ceilings −5…999).
+  - **Stage gate (FR-014-03)** — `level_min_stage` maps each intimacy_level to a minimum F-005 stage
+    (default 1→Flirting, 2→Romance, 3→Love); below threshold → `withhold(below_stage)`.
+  - **Verdict + audit** — `evaluate(...) -> GateVerdict` (pure); `decide_and_log(...)` persists an
+    append-only **`GateDecision`** row (action/reason/category/requested_level/effective_ceiling/
+    stage) — **never the request text** (FR-014-12 / NFR-014-08). `gate_signals(...)` / `unlocked_level`
+    expose stage/opt-in/unlocked-level for a future paywall (FR-014-11) — no billing code here.
+  - **Fulfilment (FR-014-06 / FR-014-07 / FR-014-10)** — `fulfill(...)` delivers a fitting unsent
+    archived asset (paced, no-repeat) or **enqueues** an intimate F-008 job (`intimate=True` + level)
+    via `queue_ops` — always queued, never inline. Delivery pacing/no-repeat reuses F-012's
+    discipline through a `DeliveryPacer` protocol (F-012 parallel; `InMemoryPacer` stub for now).
+    `process_intimate_request(...)` is the end-to-end entry point F-012/F-015 route into.
+  - **models.py (append-only shared edits)** — `User.intimate_opt_in: bool = False`; new
+    `GateDecision` table (`gate_decisions`) with no content column.
+  - Tests: **`tests/test_f014_intimacy_gate.py`** — 43 TCs (40 pass, 3 GPU/human-judged skips:
+    identity fidelity). Whole suite green (520 passed, 48 skipped).
+- **F-010 Generation Prompt Authoring IMPLEMENTED (branch `feature/f-010-prompt-authoring`, on top
+  of F-008) — turns a persona's Life Engine state into model-ready image prompts.** New module
+  `services/imagegen/prompt_author.py` (pure text composition, NO model/network/I-O — NFR-010-06):
+  - **Inputs.** `LifeSlot{activity, location, mood, time_of_day}` is what F-011 hands us, derived
+    from F-006 (`current_activity(...)` + local time). Helpers `time_of_day_from_hour()` and
+    `slot_from_activity(activity, now_local, ...)` derive the time-of-day bucket
+    (morning/afternoon/evening/night) so a caller with only the free-text activity still gets
+    time-coherent lighting (FR-010-01/07).
+  - **Style (config-driven, FR-010-06/NFR-010-04).** `PersonaStyle{aesthetic, palette, outfits,
+    locations}` per persona_slug; `PromptAuthorConfig{shot_count, subject_token, realism_cues,
+    negatives, framings, time_lighting, default_scene, default_style, styles{slug->style}, params}`
+    with `.from_dict()` (load from YAML/JSON — retune with no code change).
+  - **Composition (FR-010-02).** `author_prompt(slot, style, framing, cfg, seed, shot_index)` →
+    subject placeholder + scene/activity + location + outfit + framing/pose + time-of-day lighting +
+    mood + phone-photo realism cues + aesthetic/palette. Negatives are emitted separately onto
+    `GenParams.negative`.
+  - **Shot-set variety (FR-010-04).** `_select_framings()` rotates a curated vocabulary of 8
+    genuinely-distinct angles (`DEFAULT_FRAMINGS`: close selfie, wide establishing, candid side,
+    mirror, low/high angle, over-the-shoulder, medium portrait) by seed; distinct while count ≤ 8,
+    wrapping with a variation suffix beyond. Default N=6.
+  - **Never restates identity (FR-010-05).** `BANNED_IDENTITY_TERMS` (hair/eye/face/skin/body/age
+    descriptors) + `assert_no_identity_terms()` guard every authored prompt; the bare subject noun
+    ("woman") is allowed — face/body consistency is F-009's reference conditioning.
+  - **SFW-only (NFR-010-07).** `EXPLICIT_TERMS` + `assert_sfw()` — intimate vocabulary stays in
+    F-014.
+  - **Safe default (FR-010-09).** Empty/None/whitespace slot → `DEFAULT_SCENE` (config-defined),
+    never crashes.
+  - **Determinism (NFR-010-03).** Same slot + `base_seed` → byte-identical prompts, per-shot seeds
+    (`base_seed + i`) and idempotent `job_key`s (`<prefix>#<nn>`, prefix from a sha1 slot signature).
+  - **Output = F-008 job contract (FR-010-08/10/11).** `author_jobs(persona_slug, slot, style,
+    config, count, base_seed, job_key_prefix, references)` — the entry point **F-011** calls —
+    returns `list[GenerationJob]` with `SlotMeta{pose/background/location/activity/time_of_day}`;
+    F-008's `store.store_asset` writes `slot_meta_json()` (5 fields + prompt + seed) into
+    `MEDIA_ASSET.meta_json`, so provenance is fully traceable and On-Demand (F-012) can pick by
+    context. `references` (F-009 identity refs) are passed through untouched.
+  - **Tests:** `tests/test_f010_prompt_authoring.py` — 39 TCs (29 real, 10 skips for
+    benchmark/manual/GPU-judged image-level + user-story acceptance); mirrors the test spec. Whole
+    suite green (509 passed, 55 skipped).
+  - Base note: this branch was cut on top of the F-008 engine (services/imagegen/); it adds only the
+    additive `prompt_author.py` module + its test — no existing engine file was modified.
+- **F-011 Daily SFW Photo Batch IMPLEMENTED (branch `feature/f-011-daily-batch`, v0.45.0) — the
+  NIGHTLY PLANNER that fills each persona's next-day SFW photo archive.** Additive module
+  `services/imagegen/batch_planner.py` (orchestration only — it holds no GPU, imports no backend,
+  and never renders; F-008 renders, F-011 enqueues):
+  - **Slot derivation (FR-011-02):** `derive_slots(plan_text)` turns a persona's F-006 free-text
+    `DAILY_PLAN` (HH:MM markers) into ordered `SlotContext`s via `life_engine._split_slots`, tagging
+    each with `time_of_day` (morning/afternoon/evening/night), a short `activity` summary, and a
+    best-effort `location` guess. A markerless-but-nonempty plan degrades to one whole-day slot
+    (never zero coverage — NFR-011-02).
+  - **Shot-set commissioning (FR-011-03/09):** per active persona, per slot, commission
+    `shots_per_slot` shots (default 6, rotating camera angles). `BatchPlanConfig` is the config-only
+    budget knob: `shots_per_slot`, `slots` filter, `plan_days_ahead` (default 1 = tomorrow),
+    `base_seed`, and `per_persona` overrides keyed by slug (FR-011-09/NFR-011-06 — data edits, no
+    code change).
+  - **Boundaries as injected Protocols:** `PromptAuthor.author(persona, slot, shot_index) ->
+    AuthoredShot{prompt, negative, SlotMeta}` is the **F-010** contract (a minimal
+    `DefaultPromptAuthor` ships so the planner runs standalone; F-010's real author is injected at
+    integration). `ReferenceProvider.references_for(persona)` is the **F-009** hook
+    (`DefaultReferenceProvider` forwards the persona's `face_ref`/`fullbody_ref` — TODO: F-009
+    replaces it behind the same Protocol with its reference-selection policy).
+  - **Idempotent + resumable (FR-011-06/NFR-011-04):** deterministic
+    `job_key_for(slug, date, slot_idx, shot_idx)` = `daily-<slug>-<date>-<slot>-<shot>`; re-running
+    the planner reuses the same keys so `queue_ops.enqueue` dedupes (proven: re-run → 0 new jobs).
+    Generation resume is the existing F-008 runner (`requeue_stale`).
+  - **Degrade + isolation (FR-011-07/NFR-011-07):** per-shot planning failures are caught + logged
+    and don't abort the slot; a whole-persona failure is caught and doesn't abort the roster
+    (per-persona commit after each persona). Metrics: `PlanMetrics.snapshot()` returns/logs
+    planned/enqueued/existing/failed counts overall + per persona (FR-011-11/NFR-011-08).
+  - **Window/GPU (FR-011-01/08/10, NFR-011-03):** `should_run(personas, now)` gates on the same
+    `in_media_window` the F-008 runner uses (planning is cheap but the batch is a night job).
+    `run_nightly(sessionmaker, runner, now)` = gate → `plan_day` → `runner.run_batch` (F-008 does
+    the `unload_chat → load → drain → close → reload_chat` handoff); returns `{"ran": False}` in the
+    day window so the batch waits and the chat model keeps the GPU. SFW only: every job asserts
+    `intimate=False`.
+  - **No engine files touched** — `contract.py`/`queue_ops.py`/`runner.py`/`store.py` are read-only;
+    F-011 is purely additive. Dating is via `MEDIA_ASSET.created_at` (same-day, NFR-011-01); slot
+    tags ride `SlotMeta` → `meta_json` for F-012/F-013 context selection (FR-011-05).
+  - **Tests: `tests/test_f011_daily_batch.py` — one test per declared TC (40): 32 runnable (real
+    plan→enqueue→drain against FakeBackend + tmp media root + in-memory DB, fake F-010 author),
+    8 explicit skips (GPU throughput/coverage benchmark + 5 manual US acceptance). Full suite:
+    512 passed, 53 skipped.** Test-spec statuses updated to `implemented`.
+- **F-009 Appearance & Identity Consistency IMPLEMENTED (branch `feature/f-009-identity`) — the
+  reference-conditioning POLICY on top of the F-008 engine.** New module `services/imagegen/
+  identity.py` (additive; no existing F-008 file touched), stdlib + pydantic-settings only, no
+  model/server code — model-agnostic (FR-009-10 / NFR-009-05):
+  - **`IdentityPolicy`** — decides *which* persona reference(s) condition a shot and *how strongly*,
+    then writes them into the fixed contract's `GenerationJob.references` (the single F-008
+    integration point). `classify_shot(job)` infers face-vs-full-body from the F-010-authored
+    prompt+slot text via config-driven keyword lists (full-body wins ties; configurable default).
+    `select()` is pure and reads ONLY the given persona's anchors (per-persona isolation, FR-009-07);
+    `apply()` mutates the job; `require()` raises `NoReferenceError` for strict callers.
+  - **Reference-per-shot (FR-009-03):** face shots lead with `face_ref`, full-figure shots with
+    `fullbody_ref`; a full-body shot with only a face anchor safely falls back to the face anchor
+    (right identity, never nothing). Optional secondary anchor attached for extra identity signal.
+  - **No-reference safe path (FR-009-08):** a persona with no anchors yields a typed *skipped*
+    `IdentitySelection` (empty references → the F-008 backend rejects the job with a defined error)
+    or a config-defined placeholder — NEVER a wrong-identity generation, never a crash.
+  - **`IdentityPolicySettings`** (env prefix `IDENTITY_`, NFR-009-07): `face_keywords`,
+    `full_body_keywords`, `default_shot_type`, `face_strength`/`full_body_strength`,
+    `include_secondary_reference`, `no_reference_action` (skip|placeholder), `placeholder_reference`
+    — selection + strength re-tunable with no code change. Canonical path helpers
+    `face_reference_path`/`fullbody_reference_path` (`media/<slug>/reference/{face,fullbody}.png`, §6.3).
+  - **Strength** is a policy-level decision on the selection (for logging / future weight-aware
+    backends); it deliberately does NOT ride the job contract, keeping identity decoupled from any
+    model's knobs.
+  - **Consumes, never captures** references (FR-009-09): reads `PERSONA.face_ref`/`fullbody_ref`
+    only; no upload/write/persistence code (asserted by a source-scan test). Persona Studio owns
+    authoring.
+  - **Tests: `tests/test_f009_identity.py` — one test per declared TC (41): 23 runnable (policy
+    selection, job forwarding, per-persona isolation across the roster, no-reference safety,
+    config-driven tuning, model-agnostic round-trip) + 18 explicit skips (GPU/benchmark + manual
+    US/fidelity acceptance).** Test-spec statuses updated (implemented / out-of-band per TC);
+    supplementary automatable TCs registered: TC-FR-009-04-03, -05-03, -08-03, TC-NFR-009-07-02.
+    Full suite: **504 passed, 62 skipped.** No shared file modified (models.py already carried
+    `face_ref`/`fullbody_ref`); no F-008/F-010/F-011/F-014 internals touched.
 
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`

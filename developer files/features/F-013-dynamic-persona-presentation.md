@@ -1,6 +1,6 @@
 # F-013 — Dynamic Persona Presentation
 
-- **Status:** Draft
+- **Status:** Implemented
 - **Summary:** The **first impression** when a user opens or selects a persona. Instead of a static
   bio card, F-013 greets with a **live, context- and time-aware welcome**: a greeting **message in her
   voice** that reflects **what she's doing right now** (her current Life Engine slot — F-006) and

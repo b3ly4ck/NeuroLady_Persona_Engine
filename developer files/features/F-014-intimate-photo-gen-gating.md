@@ -1,6 +1,7 @@
 # F-014 — Intimate NSFW Photo Generation & Gating
 
-- **Status:** Draft
+- **Status:** Implemented (gate layer — `services/bot/domain/intimacy_gate.py`, branch
+  `feature/f-014-intimacy-gate`; identity fidelity is GPU/human-judged)
 - **Summary:** Extends the image system to **intimate (NSFW) photos** and, critically, owns the
   **gating** that decides **whether, what, and to whom** an intimate image may be produced or sent. It
   reuses the same pipeline — F-010-style prompt authoring (intimate vocabulary), the F-008 engine (the
