@@ -2,6 +2,41 @@
 
 ## Recent changes
 
+- **F-012 On-Demand Photo Delivery IMPLEMENTED (branch `feature/f-012-photo-delivery`) — the
+  consumer side of the day archive: select-and-send an SFW photo into the live chat, instantly, no
+  hot-path generation.** New domain module `services/bot/domain/media_delivery.py`:
+  - **`classify_photo_request`** (FR-012-07 / NFR-012-08): SFW vs intimate vs ambiguous; ambiguous
+    resolves to the gate-routed side, so an unclear request never serves from the SFW archive.
+    `routes_to_gate()` = everything except clearly-SFW. `IntimacyGate` Protocol stub
+    (`handle_intimate_request(user_id, persona_id, stage, request_text, context)`) — F-014 owns the
+    real logic (built in parallel); F-012 only routes and passes back `gate_result`.
+  - **`select_asset` / `score_asset`** (FR-012-01/03): reuses `imagegen.store.latest_available_assets`
+    (today's archive → most-recent-prior-day degrade) + `parse_meta`; scores each candidate on
+    time-of-day (exact, else cyclic-adjacency-decayed on morning→afternoon→evening→night) + activity
+    + location + mood tags; filters out `intimate=True` (NFR-012-08) and already-sent assets
+    (NFR-012-02); deterministic max(score, id) pick.
+  - **No-repeat + audit** (FR-012-02/10): new append-only table **`MediaSend`** (id, user_id,
+    asset_id, sent_at) appended AT END of `services/bot/models.py`. `sent_asset_ids` filters the
+    per-user history; `record_send` appends. Per-user isolated (NFR-012-06).
+  - **Relationship pacing** (FR-012-06 / NFR-012-04): `pacing_allows` reads the F-005 `Relationship`
+    stage and enforces per-stage frequency caps over a rolling window (Stranger 1 → Devoted 25).
+  - **Caption/deflection in her voice** (FR-012-05/08): `request_caption` / `request_deflection` call
+    the injected `CaptionClient` (the real `ChatClient` satisfies it; tests fake it) — F-012 never
+    authors persona voice; safe in-voice fallback if the client is down (never error/placeholder).
+  - **`deliver_photo`** (on-request flow) and **`maybe_proactive_share`** (FR-012-09: stage floor
+    `Friend`+ + pacing + min-score gate) return a `DeliveryResult{outcome, asset, caption,
+    deflection, gate_result}`. No `imagegen` backend/runner symbol is imported into the delivery path
+    (FR-012-04 / NFR-012-01 — pure lookup+send).
+  - **Handler hook** `services/bot/handlers/media.py` (new file, standalone helper — NOT a competing
+    `F.text` router, so no collision with F-003/F-013 handlers): `serve_photo_request` turns a
+    `DeliveryResult` into Telegram sends via the §3.6 Media path; `asset_abspath` resolves
+    `storage_ref` under `<repo>/media` **without importing `imagegen`** (keeps the F-008 NFR-008-04
+    bot-path guard green).
+  - **Tests** `tests/test_f012_photo_delivery.py` — 29 automated (fakes: in-memory DB, planted
+    `MediaAsset` rows with meta tags, fake `CaptionClient`, fake `IntimacyGate`) + 8 skips
+    (benchmark-perf ×2, human-judged context-fit ×1, manual/GPU user-story ×5). Whole suite: 509
+    passed, 53 skipped.
+
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
   (deliberately GPU-free: it orchestrates the model over the ComfyUI HTTP API, so torch/CUDA stay in

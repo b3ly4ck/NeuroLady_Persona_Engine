@@ -1,6 +1,6 @@
 # F-012 — On-Demand Photo Delivery
 
-- **Status:** Draft
+- **Status:** Implemented (branch feature/f-012-photo-delivery)
 - **Summary:** Serves a photo **into the live chat** — the consumer side of the day archive. When the
   user asks ("send a pic", "what are you up to?") or when she **proactively** shares one, F-012 picks
   the **right already-generated** photo from today's archive (F-011) — matched to **the current moment**

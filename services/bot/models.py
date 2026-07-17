@@ -402,3 +402,21 @@ class MediaJob(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
+
+
+class MediaSend(Base):
+    """Append-only log of one photo delivered to one user (F-012 FR-012-02/10, §3.6).
+
+    The per-user sent-history that guarantees **no asset is ever resent** to the same user
+    (NFR-012-02) and the audit trail for a media send (which user, which asset, when). Rows are
+    only ever inserted, never updated — the history is the source of truth for the no-repeat filter
+    and for relationship-paced frequency counting (FR-012-06). Strictly per-user (NFR-012-06): a
+    selection for one user reads only that user's rows.
+    """
+
+    __tablename__ = "media_sends"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("media_assets.id"), index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
