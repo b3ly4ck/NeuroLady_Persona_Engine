@@ -2,6 +2,39 @@
 
 ## Recent changes
 
+- **F-013 Dynamic Persona Presentation IMPLEMENTED (branch `feature/f-013-presentation`) — the live,
+  time/context-aware greeting shown the instant a persona is opened (the F-001 post-selection beat).**
+  Replaces the static S3 intro with a greeting *in her voice* that reflects her current F-006 Life
+  Engine slot + local time of day, paired with a fitting SFW photo from today's F-011 archive. Pure
+  lookup + template compose — no hot-path generation (FR-013-07 / NFR-013-01).
+  - **`services/bot/domain/presentation.py`** (new): the whole composer, deterministic given a `seed`.
+    - `photo_period(hour)` (coarse: morning/afternoon/evening/night, for photo-tag matching) and
+      `narrative_period(hour)` (fine: early_morning/morning/midday/afternoon/evening/night/late_night,
+      for greeting phrasing).
+    - `compose_greeting(persona, activity, now_local, *, settings, seed)` — picks a name-carrying
+      opener variant per (language, narrative period) + a question variant per tone tier, weaves in
+      her current activity, and appends a period emoji only when her comm-settings emoji frequency
+      warrants it. Tone tier (`soft`/`warm`/`peppy`) is derived from F-003 `comm_settings_json`
+      (register/slang/emoji), so voice is config-driven (FR-013-09 / NFR-013-07). RU + EN templates.
+    - `select_welcome_photo(assets, now_local, activity, media_root, *, seed)` — F-012-style tag
+      scoring (`_score_asset` on `time_of_day`/`activity` meta) over SFW photos only (`is_sfw`
+      excludes any `intimate`/`intimacy_level>0` asset — FR-013-06 / NFR-013-08); best match wins,
+      seed breaks ties. Returns `(None, None)` on an empty/all-intimate archive.
+    - `compose_presentation(db, persona, *, media_root, now, seed) -> PresentationCard` — reads her
+      current activity via `life_engine_store.get_current_activity` + today's archive via
+      `imagegen.store.latest_available_assets`, then builds `PresentationCard{text, photo_ref,
+      asset_id}`. Content only: no keyboard/navigation (FR-013-10). `media_root` defaults to
+      `ImageRunnerSettings().media_root`.
+  - **Handler hook (shared file, minimal edit) — `services/bot/handlers/onboarding.py`:** in
+    `on_start_chat`, the first-time (`is_new_intro`) branch now composes the F-013 card and passes
+    its `text`/`photo_ref` into `send_persona_intro`, which gained optional `opener` + `photo_ref`
+    (with an `_UNSET` sentinel so `None` = "text-only" vs default = "use her gallery photo"). Default
+    call sites (and the F-001 direct-call tests) are unchanged; the resume/duplicate-tap paths are
+    untouched, so the single-message + send-before-delete guarantees (FR-013-03 / NFR-013-05) hold.
+  - **Tests — `tests/test_f013_presentation.py`:** one runnable test per TC (26 automated, 10 skips
+    for GPU/human/perf-judged coherence, identity and latency). Full suite green (506 passed, 55
+    skipped). Base branched off origin/master @ F-008 (services/imagegen + MediaAsset present).
+
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
   (deliberately GPU-free: it orchestrates the model over the ComfyUI HTTP API, so torch/CUDA stay in
