@@ -2,6 +2,31 @@
 
 ## Recent changes
 
+- **Image pipeline INTEGRATION WIRING (branch `feature/image-integration`, v0.52.0) — the seven
+  parallel-built features now run as ONE pipeline.** The per-feature protocol stubs are replaced
+  with the real implementations at a single seam each:
+  - `services/imagegen/wiring.py` — `build_production_planner()`: F-011's planner now authors via
+    **F-010** (`F010PromptAuthor` adapter over `author_jobs`, deterministic per slot+shot) and
+    conditions via **F-009** (`IdentityReferenceProvider` over `IdentityPolicy`, face-ref first,
+    [] on the no-reference safe path).
+  - `services/imagegen/runner.py` — keyframe kind routing: jobs with F-015's `-first`/`-last` keys
+    persist as `kind=video_keyframe` with `pair_id`/`frame` stamped into meta_json (was: everything
+    stored as photo).
+  - `services/bot/domain/gate_adapter.py` — `F014GateAdapter` satisfies F-012's `IntimacyGate`
+    protocol with the real F-014 `process_intimate_request` (loads user/persona, reads the F-005
+    stage, shares one process-wide pacer, forwards F-009 references into intimate jobs).
+  - `services/bot/domain/media_delivery.py` — new `looks_like_photo_request` intent detector
+    (RU/EN verb+noun, conservative); `services/bot/handlers/conversation.py` short-circuits photo
+    requests into `serve_photo_request` (upload_photo action, no LLM turn); `handlers/media.py`
+    voices gate outcomes (delivered intimate asset → photo; queued/paced/withheld/blocked → one
+    short in-voice RU/EN line).
+  - Tests: `tests/test_image_integration.py` — 23 wiring tests (author adapter variety/determinism,
+    identity ordering + safe path, planner→queue→runner end-to-end with real F-010 prompts + F-009
+    refs, keyframe kind routing, gate adapter consent/allow/hard-block, intent detection, handler
+    wiring). Full suite: **706 passed, 109 skipped**.
+  - Known deferred dedupe: F-013's presentation keeps its local `_score_asset` copy of F-012's
+    selection scoring (both work; unify later).
+
 - **F-015 Intimate Video Keyframes IMPLEMENTED (branch `feature/f-015-video-keyframes`) — authors,
   gates, queues, and stores the first/last-frame PAIR for a short intimate clip; video synthesis
   stays deferred (i2v models Wan 2.2 / HunyuanVideo-Avatar — architecture.md §4.3/§3.9).** One new,

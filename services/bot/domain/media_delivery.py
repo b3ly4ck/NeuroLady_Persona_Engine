@@ -111,6 +111,32 @@ def routes_to_gate(kind: PhotoRequestClass) -> bool:
     return kind is not PhotoRequestClass.sfw
 
 
+# Photo-request INTENT detection (integration wiring): is this chat message asking for a photo at
+# all? Only then does the delivery path run; everything else stays a normal F-002 turn. RU + EN,
+# deliberately conservative — a false negative costs a photo, a false positive hijacks a turn.
+_PHOTO_NOUNS = (
+    "фото", "фотку", "фотка", "фотографи", "селфи", "фотки", "пикчу",
+    "photo", " pic ", " pic?", " pic!", "a pic", "picture", "selfie", " snap",
+)
+_PHOTO_VERBS = (
+    "пришли", "скинь", "отправь", "покажи", "сфоткай", "шли", "хочу увидеть", "можно",
+    "send", "show", "share", "take", "got a", "can i see", "let me see", "wanna see",
+)
+
+
+def looks_like_photo_request(text: str) -> bool:
+    """True when the message asks for a photo (verb+noun pair, or an intimate ask that names
+    imagery). Intent only — SFW/intimate classification stays `classify_photo_request`."""
+    t = f" {(text or '').lower().strip()} "
+    has_noun = any(n in t for n in _PHOTO_NOUNS)
+    if not has_noun:
+        return False
+    if any(v in t for v in _PHOTO_VERBS):
+        return True
+    # an explicitly intimate ask that names a photo counts even without a request verb
+    return classify_photo_request(t) is not PhotoRequestClass.sfw
+
+
 class IntimacyGate(Protocol):
     """F-014's intimate-photo gate (built in parallel). F-012 only **routes** to it — it owns none
     of the gating/consent/delivery logic. The gate decides entitlement/consent and returns its own
