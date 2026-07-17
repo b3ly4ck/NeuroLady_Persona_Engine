@@ -73,6 +73,9 @@ class User(Base):
     telegram_id: Mapped[int] = mapped_column(BigInteger, unique=True, index=True)
     locale: Mapped[str] = mapped_column(String(8), default="en")
     adult_verified: Mapped[bool] = mapped_column(default=False)
+    # F-014 intimacy gate: age/consent flags. `adult_verified` (above) + this opt-in are BOTH
+    # required before any intimate content is served (FR-014-02). Append-only, default off.
+    intimate_opt_in: Mapped[bool] = mapped_column(default=False)
     # F-003 per-user comm overlay (nullable); unused by F-001.
     interaction_style_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
@@ -402,3 +405,44 @@ class MediaJob(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
+
+
+class MediaSend(Base):
+    """Append-only log of one photo delivered to one user (F-012 FR-012-02/10, §3.6).
+
+    The per-user sent-history that guarantees **no asset is ever resent** to the same user
+    (NFR-012-02) and the audit trail for a media send (which user, which asset, when). Rows are
+    only ever inserted, never updated — the history is the source of truth for the no-repeat filter
+    and for relationship-paced frequency counting (FR-012-06). Strictly per-user (NFR-012-06): a
+    selection for one user reads only that user's rows.
+    """
+
+    __tablename__ = "media_sends"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    asset_id: Mapped[str] = mapped_column(ForeignKey("media_assets.id"), index=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
+
+
+class GateDecision(Base):
+    """Append-only audit log of one F-014 intimacy-gate decision (FR-014-12 / NFR-014-08).
+
+    Every gate evaluation — allow / withhold / block — is recorded here for safety review. The row
+    stores the outcome only: `action`, `reason`, the prohibited `category` (block only), the
+    requested level, the effective ceiling, and the stage. The **prohibited request text is never
+    persisted** — only the category/reason — so the audit trail carries no prohibited content.
+    """
+
+    __tablename__ = "gate_decisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    action: Mapped[str] = mapped_column(String(16), index=True)   # allow | withhold | block
+    reason: Mapped[str] = mapped_column(String(24), index=True)   # ok | hard_safety | not_adult | ...
+    category: Mapped[str | None] = mapped_column(String(32), nullable=True)  # prohibited category (block)
+    requested_level: Mapped[int] = mapped_column(Integer, default=0)
+    effective_ceiling: Mapped[int] = mapped_column(Integer, default=0)
+    stage: Mapped[str] = mapped_column(String(16), default="Stranger")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)

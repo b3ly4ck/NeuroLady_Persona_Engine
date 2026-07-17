@@ -1,6 +1,6 @@
 # F-010 — Generation Prompt Authoring
 
-- **Status:** Draft
+- **Status:** Implemented (branch `feature/f-010-prompt-authoring`)
 - **Summary:** Turns **what she is doing right now** into a concrete **image prompt**. Where F-009
   keeps the *identity* fixed, F-010 authors the *content* of each shot: the **scene, activity,
   location, outfit, pose, framing, time-of-day lighting, and camera angle**. It reads the persona's
