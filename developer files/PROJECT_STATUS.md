@@ -2,6 +2,45 @@
 
 ## Recent changes
 
+- **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
+  batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
+  (deliberately GPU-free: it orchestrates the model over the ComfyUI HTTP API, so torch/CUDA stay in
+  `image/.venv` — NFR-008-07 isolation — and the whole lifecycle is unit-testable with fakes):
+  - **`contract.py`** — the fixed job API (FR-008-01): `GenerationJob{job_key, persona_slug, prompt,
+    references[], GenParams{steps/cfg/width/height/seed/negative}, SlotMeta{pose/background/location/
+    activity/time_of_day}, intimate, intimacy_level}`; strict validation → `InvalidJob` (no crash on
+    malformed payloads); `slot_meta_json()` carries the five slot fields + prompt/seed provenance.
+  - **`backends.py`** — swappable model behind the API (FR-008-03): `ComfyUIBackend` (prod =
+    benchmark verdict: Rapid-AIO v23, headless ComfyUI, `--disable-smart-memory`, input staging,
+    history error-checking, teardown in `close()`) + registry `build_backend(config)`;
+    `testing.FakeBackend` for tests/dry-runs. Model swap = config change (`IMAGE_BACKEND`).
+  - **`store.py`** — atomic persistence (FR-008-07..09): bytes → `.part` temp → fsync →
+    `os.replace` → ONLY then the `MEDIA_ASSET` row; `MED-<slug>-<nnnnn>` id == file stem (1:1,
+    NFR-008-05); `reconcile()` orphan check; `latest_available_assets()` = today's archive else the
+    most recent prior day (NFR-008-03 degrade); `empty_archive_personas()` for the §6.4 alert.
+  - **`queue_ops.py`** — durable DB queue over new `MEDIA_JOB` (FR-008-11..14): idempotent enqueue
+    by unique `job_key`; guarded-UPDATE claim (two workers → one winner); retry with exponential
+    backoff → parked `failed` on give-up; `requeue_stale()` resumes crashed batches.
+  - **`runner.py`** — the batch loop: window gate `in_media_window` (persona-local hours, wrap
+    supported), **GPU handoff** (FR-008-15/16): `unload_chat → backend.load → drain → backend.close
+    (in `finally` — the benchmark's leaked-47GB lesson) → reload_chat`; per-job isolation (one
+    failure never blocks the batch); `RunnerMetrics` snapshot (NFR-008-08);
+    `check_empty_archive_alert`. `__main__.py` = cron/systemd entrypoint (`python -m
+    services.imagegen`), self-gating.
+  - **models.py** — new `MediaAsset` (§5.1: string PK MED-id, kind/intimate/intimacy_level/
+    storage_ref/meta_json) + `MediaJob` (job_key unique, payload_json, status/attempts/
+    next_attempt_at/claimed_at/asset_id/error) + enums `MediaKind`, `MediaJobStatus`.
+  - **`services/imagegen/config.py`** — `ImageRunnerSettings` (env prefix `IMAGE_`, NFR-008-10):
+    backend, workflow/checkpoint, default params (4 steps per benchmark), media_root, window hours,
+    retry/backoff/staleness, handoff commands.
+  - **Tests: `tests/test_f008_image_runner.py` — one test per declared TC (64): 52 runnable
+    (real lifecycle against FakeBackend + tmp media root + in-memory DB), 12 explicit skips
+    (GPU/benchmark/human-judged + manual US acceptance). Full suite: 480 passed, 45 skipped.**
+    Test-spec statuses updated (implemented / out-of-band per TC).
+  - Boundaries kept: nothing in `services/bot` imports `imagegen` (asserted by tests — FR-008-10/
+    NFR-008-04); prompts authoring (F-010), reference policy (F-009), batch planning (F-011),
+    delivery (F-012), intimacy gate (F-014) remain their own features on top of this engine.
+
 - **Image A/B benchmark DONE — production image model chosen: Phr00t Qwen-Rapid-AIO-NSFW-v23 via
   headless ComfyUI (branch `feature/image-benchmarks`, v0.39.1–0.39.4, merged to master).** Full
   report: `developer files/image_benchmark_report.md`; raw numbers + sample images committed under

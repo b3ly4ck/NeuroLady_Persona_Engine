@@ -338,3 +338,67 @@ class FutureProjection(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
     )
+
+
+class MediaKind(str, enum.Enum):
+    """MEDIA_ASSET.kind (ERD §5.1; F-008 kind=photo, F-015 adds video_keyframe)."""
+    photo = "photo"
+    video_keyframe = "video_keyframe"
+
+
+class MediaJobStatus(str, enum.Enum):
+    """F-008 job lifecycle: pending → running → done | failed (given up) | skipped."""
+    pending = "pending"
+    running = "running"
+    done = "done"
+    failed = "failed"
+
+
+class MediaAsset(Base):
+    """A generated media file in the external media/ library (ERD §5.1 MEDIA_ASSET; F-008
+    FR-008-07/08). `id` is the MED-<persona_slug>-<nnnnn> scheme and equals the file stem, so the
+    DB row and the archive file map 1:1 (NFR-008-05). The row is inserted only after the file is
+    durably written (FR-008-09).
+    """
+
+    __tablename__ = "media_assets"
+
+    id: Mapped[str] = mapped_column(String(96), primary_key=True)  # MED-<slug>-<nnnnn>
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    kind: Mapped[MediaKind] = mapped_column(Enum(MediaKind), default=MediaKind.photo, index=True)
+    intimate: Mapped[bool] = mapped_column(default=False, index=True)
+    intimacy_level: Mapped[int] = mapped_column(Integer, default=0)
+    # Relative path inside the media library, e.g. media/<slug>/photos/<MED-id>.png (§6.3).
+    storage_ref: Mapped[str] = mapped_column(String(256))
+    # pose / background / location / activity / time_of_day + prompt provenance (F-010 FR-010-08).
+    meta_json: Mapped[str] = mapped_column(Text, default="{}")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+
+
+class MediaJob(Base):
+    """One queued generation request for the F-008 runner (fixed job API, FR-008-01).
+
+    `job_key` is the idempotency key (FR-008-12): enqueueing or re-processing the same key never
+    yields a second asset. `attempts`/`next_attempt_at` drive retry-with-backoff (FR-008-13);
+    `running` rows older than a staleness cutoff are requeued on the next batch (FR-008-14 resume).
+    The payload is the full job contract JSON (services/imagegen/contract.py).
+    """
+
+    __tablename__ = "media_jobs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    job_key: Mapped[str] = mapped_column(String(128), unique=True, index=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    payload_json: Mapped[str] = mapped_column(Text)
+    status: Mapped[MediaJobStatus] = mapped_column(
+        Enum(MediaJobStatus), default=MediaJobStatus.pending, index=True
+    )
+    attempts: Mapped[int] = mapped_column(Integer, default=0)
+    next_attempt_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    asset_id: Mapped[str | None] = mapped_column(ForeignKey("media_assets.id"), nullable=True)
+    error: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
