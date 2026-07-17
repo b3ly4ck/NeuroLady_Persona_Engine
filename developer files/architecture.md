@@ -551,9 +551,18 @@ For each reply the Orchestrator builds the prompt from:
   biography/persona-time/future-self layers here are added by the F-006 biography extension.)*
 
 ### 4.3 Image & video generation (night batch)
-All media models are **self-hosted** and accelerated with **LightX2V** — an inference framework
-(not a model) that provides 4-step distilled checkpoints + FP8/INT8 quantization for the image and
-video models below, so the night batch fits the sleep window on our own GPU.
+All media models are **self-hosted**, run as **4-step distilled checkpoints on a low step count**,
+and are quantized to fit our GPU, so the night batch fits the sleep window.
+
+> **Acceleration stack — LightX2V dropped on our GPU (decision, 2026-07; see §4.3a).** The docs
+> originally named **LightX2V** as the accelerator. Its headline value is **FP8** distilled
+> checkpoints — and **FP8 is unavailable on our Turing (sm_75) Quadro RTX 8000** (FP8 needs Ada/
+> Hopper, sm_89+). This was proven twice: the **image A/B** disqualified the LightX2V-native
+> candidate (bf16 wouldn't fit; only sequential CPU-offload ran → 424 s/img, blank frames) and the
+> winner is the **Phr00t AIO served on headless ComfyUI** (4 steps, ~117 s/img). So the actual
+> acceleration pattern is **"community 4-step distilled + GGUF/INT8 quantization, served through
+> ComfyUI"** — GGUF has **no FP8 dependency**, so it runs on Turing. The **4-step distill LoRAs
+> themselves (e.g. Wan2.2-Lightning)** are still used — only the LightX2V *framework* is dropped.
 
 - **Images — `Qwen-Image-Edit-Rapid-AIO` v23 (NSFW variant):** an All-In-One, distilled +
   FP8-quantized build on top of **Qwen-Image-Edit-2511** (accelerator + VAE + CLIP merged into one
@@ -564,10 +573,19 @@ video models below, so the night batch fits the sleep window on our own GPU.
   her current activity/setting, §3.5), it produces **SFW** shots (gym selfie, office photo, …) and
   **intimate** shots → the day's archive.
 - **Video — two separate models for two jobs:**
-  - **Intimate / no-speech video → `Wan 2.2` (distilled).** Best-in-class body anatomy and motion
-    realism; image+text → video, self-hosted night batch, accelerated by LightX2V's Wan 4-step
-    distillation. Ideally one per planned activity/location, at varying intimacy.
-  - **Talking-head video circles → `HunyuanVideo-Avatar`.** Drives the intro note and the
+  - **Intimate / no-speech video → `Wan 2.2` (distilled), the first video capability we build
+    (feature `F-016`).** Best-in-class body anatomy and motion realism; **image+text → video**
+    (conditioned on the persona's reference/keyframe still, F-009/F-015). Served on **headless
+    ComfyUI + City96 ComfyUI-GGUF** (the same runtime as images), with the **Wan2.2-Lightning
+    4-step distill LoRA** and **GGUF-quantized** weights so it runs on our Turing GPU without FP8
+    (§4.3a). **Speed is the product requirement, not resolution:** the target is a short clip
+    (~4 s at 16 fps ≈ 65 frames) at a **Telegram-sized low resolution** (≈480×480 / 512×384),
+    generated in **≈90 s on the RTX 8000** — deliberately trading resolution for turnaround, since
+    the output is an in-chat video message, not a cinema render. Model tier (**TI2V-5B** dense vs
+    **A14B MoE high/low-noise**) and GGUF quant level (Q4…Q8) are **chosen by the `video/` bench**
+    against that 4 s/≈90 s budget, same as the image A/B. Night batch, GPU day/night handoff with
+    the chat LLM (§6.1). One clip per planned activity/location, at varying intimacy.
+  - **Talking-head video circles → `HunyuanVideo-Avatar` (deferred — after Wan).** Drives the intro note and the
     **proactive daily story circles** from a persona image + voice/script. Chosen for its
     audio-driven emotion (Audio Emotion Module) and face-aware audio adapter, giving lifelike
     expression on the "circle" — and it shares the Hunyuan family with our video stack. This
