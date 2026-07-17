@@ -43,6 +43,40 @@
     plan→enqueue→drain against FakeBackend + tmp media root + in-memory DB, fake F-010 author),
     8 explicit skips (GPU throughput/coverage benchmark + 5 manual US acceptance). Full suite:
     512 passed, 53 skipped.** Test-spec statuses updated to `implemented`.
+- **F-009 Appearance & Identity Consistency IMPLEMENTED (branch `feature/f-009-identity`) — the
+  reference-conditioning POLICY on top of the F-008 engine.** New module `services/imagegen/
+  identity.py` (additive; no existing F-008 file touched), stdlib + pydantic-settings only, no
+  model/server code — model-agnostic (FR-009-10 / NFR-009-05):
+  - **`IdentityPolicy`** — decides *which* persona reference(s) condition a shot and *how strongly*,
+    then writes them into the fixed contract's `GenerationJob.references` (the single F-008
+    integration point). `classify_shot(job)` infers face-vs-full-body from the F-010-authored
+    prompt+slot text via config-driven keyword lists (full-body wins ties; configurable default).
+    `select()` is pure and reads ONLY the given persona's anchors (per-persona isolation, FR-009-07);
+    `apply()` mutates the job; `require()` raises `NoReferenceError` for strict callers.
+  - **Reference-per-shot (FR-009-03):** face shots lead with `face_ref`, full-figure shots with
+    `fullbody_ref`; a full-body shot with only a face anchor safely falls back to the face anchor
+    (right identity, never nothing). Optional secondary anchor attached for extra identity signal.
+  - **No-reference safe path (FR-009-08):** a persona with no anchors yields a typed *skipped*
+    `IdentitySelection` (empty references → the F-008 backend rejects the job with a defined error)
+    or a config-defined placeholder — NEVER a wrong-identity generation, never a crash.
+  - **`IdentityPolicySettings`** (env prefix `IDENTITY_`, NFR-009-07): `face_keywords`,
+    `full_body_keywords`, `default_shot_type`, `face_strength`/`full_body_strength`,
+    `include_secondary_reference`, `no_reference_action` (skip|placeholder), `placeholder_reference`
+    — selection + strength re-tunable with no code change. Canonical path helpers
+    `face_reference_path`/`fullbody_reference_path` (`media/<slug>/reference/{face,fullbody}.png`, §6.3).
+  - **Strength** is a policy-level decision on the selection (for logging / future weight-aware
+    backends); it deliberately does NOT ride the job contract, keeping identity decoupled from any
+    model's knobs.
+  - **Consumes, never captures** references (FR-009-09): reads `PERSONA.face_ref`/`fullbody_ref`
+    only; no upload/write/persistence code (asserted by a source-scan test). Persona Studio owns
+    authoring.
+  - **Tests: `tests/test_f009_identity.py` — one test per declared TC (41): 23 runnable (policy
+    selection, job forwarding, per-persona isolation across the roster, no-reference safety,
+    config-driven tuning, model-agnostic round-trip) + 18 explicit skips (GPU/benchmark + manual
+    US/fidelity acceptance).** Test-spec statuses updated (implemented / out-of-band per TC);
+    supplementary automatable TCs registered: TC-FR-009-04-03, -05-03, -08-03, TC-NFR-009-07-02.
+    Full suite: **504 passed, 62 skipped.** No shared file modified (models.py already carried
+    `face_ref`/`fullbody_ref`); no F-008/F-010/F-011/F-014 internals touched.
 
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
