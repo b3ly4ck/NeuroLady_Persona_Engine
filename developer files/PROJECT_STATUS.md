@@ -2,6 +2,39 @@
 
 ## Recent changes
 
+- **F-014 Intimate NSFW Photo Generation & Gating — GATE LAYER IMPLEMENTED (branch
+  `feature/f-014-intimacy-gate`).** The safety-critical gating layer that decides *whether, what,
+  and to whom* an intimate image may be produced/delivered. No image content — pure policy + audit
+  glue on top of the F-008 engine. New module **`services/bot/domain/intimacy_gate.py`**:
+  - **Hard safety gate (FR-014-01 / NFR-014-01 / NFR-014-09)** — `hard_safety_scan(text) ->
+    ProhibitedCategory | None`, a **deny-first, config-independent** filter for prohibited
+    categories (`minors`, `non_consent`, `unauthorized_likeness`). It takes ONLY the request text
+    (no config/user/stage param — proven by a signature test), runs BEFORE every other check, and is
+    NOT a tunable knob. Jailbreak-resistant: leet/homoglyph fold + whitespace/punctuation collapse +
+    an under-18 age detector, matched against word-boundary patterns and collapsed substring tokens.
+    An adversarial battery (minors/non-consent/likeness, incl. spaced/leet/roleplay/prompt-injection
+    phrasings) is 100% blocked while benign adult-intimate phrasing passes.
+  - **Age/consent (FR-014-02)** — requires `User.adult_verified` (pre-existing) **and** the new
+    `User.intimate_opt_in`; otherwise `withhold(not_adult|not_opted_in)`.
+  - **Ceiling clamp (FR-014-08 / NFR-014-07)** — `IntimacyGateConfig.effective_ceiling() =
+    max(0, min(persona_ceiling, PLATFORM_MAX_INTIMACY_LEVEL=3))`; no config can raise the ceiling
+    above the platform hard limit (proven for ceilings −5…999).
+  - **Stage gate (FR-014-03)** — `level_min_stage` maps each intimacy_level to a minimum F-005 stage
+    (default 1→Flirting, 2→Romance, 3→Love); below threshold → `withhold(below_stage)`.
+  - **Verdict + audit** — `evaluate(...) -> GateVerdict` (pure); `decide_and_log(...)` persists an
+    append-only **`GateDecision`** row (action/reason/category/requested_level/effective_ceiling/
+    stage) — **never the request text** (FR-014-12 / NFR-014-08). `gate_signals(...)` / `unlocked_level`
+    expose stage/opt-in/unlocked-level for a future paywall (FR-014-11) — no billing code here.
+  - **Fulfilment (FR-014-06 / FR-014-07 / FR-014-10)** — `fulfill(...)` delivers a fitting unsent
+    archived asset (paced, no-repeat) or **enqueues** an intimate F-008 job (`intimate=True` + level)
+    via `queue_ops` — always queued, never inline. Delivery pacing/no-repeat reuses F-012's
+    discipline through a `DeliveryPacer` protocol (F-012 parallel; `InMemoryPacer` stub for now).
+    `process_intimate_request(...)` is the end-to-end entry point F-012/F-015 route into.
+  - **models.py (append-only shared edits)** — `User.intimate_opt_in: bool = False`; new
+    `GateDecision` table (`gate_decisions`) with no content column.
+  - Tests: **`tests/test_f014_intimacy_gate.py`** — 43 TCs (40 pass, 3 GPU/human-judged skips:
+    identity fidelity). Whole suite green (520 passed, 48 skipped).
+
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
   (deliberately GPU-free: it orchestrates the model over the ComfyUI HTTP API, so torch/CUDA stay in
