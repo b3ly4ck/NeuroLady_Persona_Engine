@@ -135,6 +135,12 @@ flowchart LR
   **measured choice against the 4 s/≈90 s target** (mirrors the image A/B harness).
 - **FR-016-13** — Generation must be **auditable**: model tier, quant, step count, seed, resolution,
   frame count, and timing are recorded with each asset for reproducibility/provenance.
+- **FR-016-14** — **Content tier v1 (product decision, 2026-07): solo, hand-focused intimate acts
+  only.** The runner must validate the job's motion prompt/intimacy metadata against the
+  **configured content tier** and refuse jobs outside it (same fail-closed posture as the F-014
+  gate): v1 admits only clips of the persona **alone**, performing **hand-focused** intimate
+  actions — no other act categories, no additional participants. The tier is config
+  (widened deliberately later, without code change), and every refusal is audited.
 
 ### Non-functional
 - **NFR-016-01** — **Speed target:** a ~4 s (≈65-frame @16fps) clip at the configured low resolution

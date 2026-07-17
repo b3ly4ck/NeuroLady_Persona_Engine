@@ -94,6 +94,13 @@ image A/B, these are marked `benchmark` and run against real weights, not in the
 | TC-FR-016-13-01 | unit | happy | Tier/quant/steps/seed/res/frames/timing recorded with the asset | automated |
 | TC-FR-016-13-02 | unit | mapping | The recorded config can reproduce the same clip (seed honored) | automated |
 
+### FR-016-14 — Content tier v1: solo hand-focused only (fail closed)
+| TC | level | case | title | status |
+|----|-------|------|-------|--------|
+| TC-FR-016-14-01 | unit | happy | A v1-tier job (solo, hand-focused) passes tier validation | automated |
+| TC-FR-016-14-02 | unit | error | A job outside the tier (other acts / participants) is refused + audited, nothing generated | automated |
+| TC-FR-016-14-03 | unit | mapping | The tier is config-driven — widening it needs no code change | automated |
+
 ## Non-functional
 
 ### NFR-016-01 — Speed target (CRITICAL, benchmark)

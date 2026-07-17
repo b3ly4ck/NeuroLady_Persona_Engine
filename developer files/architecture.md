@@ -572,24 +572,39 @@ and are quantized to fit our GPU, so the night batch fits the sleep window.
   edits). Guided by the day plan + current time (the external LLM writes the generation prompt for
   her current activity/setting, §3.5), it produces **SFW** shots (gym selfie, office photo, …) and
   **intimate** shots → the day's archive.
-- **Video — two separate models for two jobs:**
-  - **Intimate / no-speech video → `Wan 2.2` (distilled), the first video capability we build
-    (feature `F-016`).** Best-in-class body anatomy and motion realism; **image+text → video**
-    (conditioned on the persona's reference/keyframe still, F-009/F-015). Served on **headless
-    ComfyUI + City96 ComfyUI-GGUF** (the same runtime as images), with the **Wan2.2-Lightning
-    4-step distill LoRA** and **GGUF-quantized** weights so it runs on our Turing GPU without FP8
-    (§4.3a). **Speed is the product requirement, not resolution:** the target is a short clip
-    (~4 s at 16 fps ≈ 65 frames) at a **Telegram-sized low resolution** (≈480×480 / 512×384),
-    generated in **≈90 s on the RTX 8000** — deliberately trading resolution for turnaround, since
-    the output is an in-chat video message, not a cinema render. Model tier (**TI2V-5B** dense vs
-    **A14B MoE high/low-noise**) and GGUF quant level (Q4…Q8) are **chosen by the `video/` bench**
-    against that 4 s/≈90 s budget, same as the image A/B. Night batch, GPU day/night handoff with
-    the chat LLM (§6.1). One clip per planned activity/location, at varying intimacy.
-  - **Talking-head video circles → `HunyuanVideo-Avatar` (deferred — after Wan).** Drives the intro note and the
-    **proactive daily story circles** from a persona image + voice/script. Chosen for its
-    audio-driven emotion (Audio Emotion Module) and face-aware audio adapter, giving lifelike
-    expression on the "circle" — and it shares the Hunyuan family with our video stack. This
-    **replaces the earlier external Hedra candidate**, so all video is now self-hosted.
+- **Video — three content streams, one shared engine philosophy (fast, low-res, Telegram-sized):**
+  - **(1) Intimate clips → `Wan 2.2` i2v (feature `F-016`), silent.** Best-in-class body anatomy
+    and motion realism; **image+text → video** (conditioned on the persona's reference/keyframe
+    still, F-009/F-015). Served on **headless ComfyUI + City96 ComfyUI-GGUF** (the same runtime as
+    images), with the **Wan2.2-Lightning 4-step distill LoRA** and **GGUF-quantized** weights so it
+    runs on our Turing GPU without FP8 (§4.3a). **Speed is the product requirement, not
+    resolution:** a short clip (~4 s at 16 fps ≈ 65 frames) at ≈480×480 / 512×384, generated in
+    **≈90 s on the RTX 8000**. Model tier (**TI2V-5B** dense vs **A14B** MoE) and GGUF quant are
+    **chosen by the `video/` bench** against that budget, same as the image A/B.
+    **Content tier v1 (product decision, 2026-07): solo, hand-focused intimate acts only** — the
+    clip catalog starts narrow and widens deliberately (F-016 FR-016-14); the F-014 hard gate
+    applies unconditionally.
+  - **(2) Daily-life ("civilian") SFW clips → the same `Wan 2.2` runner (feature `F-017`),
+    silent.** Short slice-of-life clips of her day (gym set, coffee pour, walk, cooking) generated
+    from the **Life Engine's day plan slots** (F-006) + an SFW archive photo/reference as the
+    conditioning still — the video sibling of the F-011 daily photo batch. Same engine, same job
+    API, same speed budget; only the prompt tier and gating differ (SFW — no F-014 clearance
+    needed, but the same identity conditioning, F-009).
+  - **(3) Talking-head voice circles (feature `F-018`) — persona image + voice → Telegram video
+    note.** The intro note + **proactive daily story circles** ("говорящая голова" telling her
+    day's story, engaging the user back into chat). **Voice: ElevenLabs** (per-persona
+    `voice_profile_ref`, external API — no GPU). **Animation: audio-driven avatar model, chosen by
+    bench between two candidates:** **(A) `Wan2.2-S2V` (speech-to-video)** — audio-driven
+    talking-human generation in the SAME Wan family/runtime we already serve (GGUF workflows
+    exist), which would avoid installing a second model family and a fourth GPU slot; **(B)
+    `HunyuanVideo-Avatar`** — audio-driven emotion (Audio Emotion Module) + face-aware audio
+    adapter, the fallback if S2V lip-sync quality disappoints. (Replaces the earlier external
+    Hedra candidate — all video stays self-hosted.) **Circles are per-persona-per-day, shared
+    across all users** (not per-user personalization), so one nightly render serves everyone.
+  - **Night GPU rotation (§6.1):** the sleep window is now shared by **image batch → Wan clip
+    batch (intimate + daily-life) → circle batch** — the scheduler owns the rotation order and
+    ensures each runner loads once, drains its queue, and releases VRAM before the next
+    (chat reloads before the awake window).
 - Each generated asset is stored **with metadata** (slot, location, pose, background, intimacy
   level) so Media Delivery can serve context-appropriate media and support sexting continuity.
 - Prompts, model choices, and pipelines live **inside the respective module's directory**
