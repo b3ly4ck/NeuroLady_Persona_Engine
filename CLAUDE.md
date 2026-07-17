@@ -176,6 +176,28 @@ explicitly asks for it elsewhere.
 
 ## Preferences and feedback
 
+- [2026-07-17] **NEVER commit worktree/machine-local plumbing — it destroyed a 28G model and cost
+  the developer real time/money.** Root cause chain (all must be avoided): (1) to share heavy
+  gitignored assets (`image/models` = 28G v23 checkpoint, `image/comfyui`, `image/.venv`) across
+  isolated worktrees, symlinks were created **inside the repo pointing back at the same repo's real
+  asset paths** — a self-referencing landmine at the exact path of real data; (2) a subdirectory
+  `.gitignore` used **repo-root-relative patterns** (`image/.venv` inside `image/.gitignore`), which
+  are actually directory-relative → matched nothing → the symlinks were **not** ignored; (3) a broad
+  `git add`/`git add -A` staged those symlinks as tracked files (mode 120000) and they were committed
+  and pushed; (4) when that branch merged into another working tree, git **materialized the tracked
+  self-symlink over the real directory, deleting the 28G checkpoint + ComfyUI + venv**. Binding rules
+  going forward: **(a)** never create a symlink whose target is a path inside the same git repo,
+  above all at a path holding real or gitignored heavy data — share cross-worktree assets via
+  **absolute paths injected through config/env** (this project already has `IMAGE_COMFY_DIR`,
+  `IMAGE_COMFY_PYTHON`, `IMAGE_MEDIA_ROOT`, `CHAT_MODEL_PATH` for exactly this), not via in-repo
+  symlinks; **(b)** never `git add -A` or `git add <dir>` blindly — always `git status --short`
+  first and stage **explicit files**, especially in a worktree; **(c)** `.gitignore` patterns are
+  relative to the file's own directory — verify with `git check-ignore -v <path>` before trusting
+  them; **(d)** treat gitignored heavy assets (models/checkpoints/venvs) as sacred: confirm
+  `git ls-files -s | awk '$1==120000'` is empty before pushing, and after any merge/checkout that
+  touches the tree, verify the heavy assets still exist (a symlink where a real dir belongs = STOP);
+  **(e)** before any `rm -rf` "recovery", inspect what is actually there first — a wrong assumption
+  compounds the loss.
 - [2026-07-10] User wants CLAUDE.md and all future .md files in this project written in English, not Russian.
 - [2026-07-10] User wants PROJECT_STATUS.md and VERSION kept inside a `developer files/`
   subfolder, but CLAUDE.md must stay at the repo root (not moved into that subfolder), so
