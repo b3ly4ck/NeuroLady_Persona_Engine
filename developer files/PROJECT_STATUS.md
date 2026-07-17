@@ -2,6 +2,48 @@
 
 ## Recent changes
 
+- **F-011 Daily SFW Photo Batch IMPLEMENTED (branch `feature/f-011-daily-batch`, v0.45.0) — the
+  NIGHTLY PLANNER that fills each persona's next-day SFW photo archive.** Additive module
+  `services/imagegen/batch_planner.py` (orchestration only — it holds no GPU, imports no backend,
+  and never renders; F-008 renders, F-011 enqueues):
+  - **Slot derivation (FR-011-02):** `derive_slots(plan_text)` turns a persona's F-006 free-text
+    `DAILY_PLAN` (HH:MM markers) into ordered `SlotContext`s via `life_engine._split_slots`, tagging
+    each with `time_of_day` (morning/afternoon/evening/night), a short `activity` summary, and a
+    best-effort `location` guess. A markerless-but-nonempty plan degrades to one whole-day slot
+    (never zero coverage — NFR-011-02).
+  - **Shot-set commissioning (FR-011-03/09):** per active persona, per slot, commission
+    `shots_per_slot` shots (default 6, rotating camera angles). `BatchPlanConfig` is the config-only
+    budget knob: `shots_per_slot`, `slots` filter, `plan_days_ahead` (default 1 = tomorrow),
+    `base_seed`, and `per_persona` overrides keyed by slug (FR-011-09/NFR-011-06 — data edits, no
+    code change).
+  - **Boundaries as injected Protocols:** `PromptAuthor.author(persona, slot, shot_index) ->
+    AuthoredShot{prompt, negative, SlotMeta}` is the **F-010** contract (a minimal
+    `DefaultPromptAuthor` ships so the planner runs standalone; F-010's real author is injected at
+    integration). `ReferenceProvider.references_for(persona)` is the **F-009** hook
+    (`DefaultReferenceProvider` forwards the persona's `face_ref`/`fullbody_ref` — TODO: F-009
+    replaces it behind the same Protocol with its reference-selection policy).
+  - **Idempotent + resumable (FR-011-06/NFR-011-04):** deterministic
+    `job_key_for(slug, date, slot_idx, shot_idx)` = `daily-<slug>-<date>-<slot>-<shot>`; re-running
+    the planner reuses the same keys so `queue_ops.enqueue` dedupes (proven: re-run → 0 new jobs).
+    Generation resume is the existing F-008 runner (`requeue_stale`).
+  - **Degrade + isolation (FR-011-07/NFR-011-07):** per-shot planning failures are caught + logged
+    and don't abort the slot; a whole-persona failure is caught and doesn't abort the roster
+    (per-persona commit after each persona). Metrics: `PlanMetrics.snapshot()` returns/logs
+    planned/enqueued/existing/failed counts overall + per persona (FR-011-11/NFR-011-08).
+  - **Window/GPU (FR-011-01/08/10, NFR-011-03):** `should_run(personas, now)` gates on the same
+    `in_media_window` the F-008 runner uses (planning is cheap but the batch is a night job).
+    `run_nightly(sessionmaker, runner, now)` = gate → `plan_day` → `runner.run_batch` (F-008 does
+    the `unload_chat → load → drain → close → reload_chat` handoff); returns `{"ran": False}` in the
+    day window so the batch waits and the chat model keeps the GPU. SFW only: every job asserts
+    `intimate=False`.
+  - **No engine files touched** — `contract.py`/`queue_ops.py`/`runner.py`/`store.py` are read-only;
+    F-011 is purely additive. Dating is via `MEDIA_ASSET.created_at` (same-day, NFR-011-01); slot
+    tags ride `SlotMeta` → `meta_json` for F-012/F-013 context selection (FR-011-05).
+  - **Tests: `tests/test_f011_daily_batch.py` — one test per declared TC (40): 32 runnable (real
+    plan→enqueue→drain against FakeBackend + tmp media root + in-memory DB, fake F-010 author),
+    8 explicit skips (GPU throughput/coverage benchmark + 5 manual US acceptance). Full suite:
+    512 passed, 53 skipped.** Test-spec statuses updated to `implemented`.
+
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
   (deliberately GPU-free: it orchestrates the model over the ComfyUI HTTP API, so torch/CUDA stay in
