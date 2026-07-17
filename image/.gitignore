@@ -1,4 +1,4 @@
-image/.venv
-image/comfyui
-image/models
-image/bench_ref
+.venv
+comfyui
+models
+bench_ref
