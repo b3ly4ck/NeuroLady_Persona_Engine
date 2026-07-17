@@ -1,6 +1,6 @@
 # F-015 — Intimate Video Keyframes
 
-- **Status:** Draft (video generation itself deferred — see scope)
+- **Status:** Implemented — keyframe pair authoring/gating/storage (branch `feature/f-015-video-keyframes`); **video synthesis remains deferred** (see scope).
 - **Summary:** Produces the **first and last frame** (keyframes) for a short **intimate video** clip.
   Modern image-to-video models (e.g. Wan 2.2 / HunyuanVideo-Avatar — architecture.md §4.3, deferred)
   animate **between a start frame and an end frame**; the believability of the clip is decided by those

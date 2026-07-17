@@ -2,6 +2,47 @@
 
 ## Recent changes
 
+- **F-015 Intimate Video Keyframes IMPLEMENTED (branch `feature/f-015-video-keyframes`) — authors,
+  gates, queues, and stores the first/last-frame PAIR for a short intimate clip; video synthesis
+  stays deferred (i2v models Wan 2.2 / HunyuanVideo-Avatar — architecture.md §4.3/§3.9).** One new,
+  strictly **additive** module `services/imagegen/keyframes.py` — no existing engine file was
+  modified (the model already carried `MediaKind.video_keyframe` + `MediaAsset.intimate/level`):
+  - **Gate reuse (FR-015-01, NFR-015-01).** F-014 owns the intimacy gate; F-015 only depends on its
+    SHAPE. `keyframes.py` defines the integration contract as Protocols — `IntimacyGate.evaluate(
+    user, persona, level, request) -> GateDecision` and `GateAuditLog.record(feature, pair_id,
+    decision)` — and REQUIRES both injected. Every request runs the gate FIRST; blocked/withheld →
+    nothing authored/queued/stored. `GateDecision{outcome: allow|withhold|block, level, category,
+    reason}` carries only an audit category/reason — never the prohibited/request text. F-015 adds
+    **no looser path** (adversarial-battery test proves passthrough stays blocked).
+  - **Motion-span authoring (FR-015-02).** `MotionSpan` + config `KeyframeVocab` (template + a
+    default library of coherent, tasteful intimate motions) → `author_motion_span()` produces a
+    start-frame and end-frame prompt sharing setting/outfit with a plausible, interpolatable pose
+    delta. Intimacy is conveyed by `intimate=true` + level, not graphic prompt text.
+  - **Pair jobs via F-008/F-009 (FR-015-03).** `build_keyframe_jobs()` emits TWO `GenerationJob`s
+    with the SAME references (F-009 identity conditioning) and SAME scene (slot fields), differing
+    only by pose/prompt; `intimate=true` + level; linked keys `<base>-first`/`<base>-last`
+    (`keyframe_keys`/`split_keyframe_key`).
+  - **Gated request → queue (FR-015-05/06/09).** `request_keyframe_pair()` gates, logs the decision
+    via the audit sink (category/reason only), and — only on allow — enqueues both jobs through
+    `queue_ops.enqueue` at the gate's **ceiling-clamped** level (never bumped above). It never
+    generates; the night runner (F-008) does. The stored prompt base is the persona, not the raw
+    request (`_neutral_base`) — no prohibited wording leaks into prompts.
+  - **Linked-pair storage (FR-015-04).** `store_keyframe_asset()`/`store_keyframe_pair()` reuse
+    `store.store_asset(kind=video_keyframe)` (its `kind` param already exists) and then augment
+    `meta_json` with `{pair_id, frame:"first"|"last"}` — **without touching `store.py`**. Takes
+    ready bytes; performs NO generation.
+  - **Keyframe-ready contract (FR-015-07/08, NFR-015-06).** `load_keyframe_pair(db, pair_id)`
+    returns a `KeyframePair{pair_id, first, last, intimacy_level}` whose `as_i2v_input()` is a
+    generic (first_frame, last_frame, level) shape with ZERO video-model dependency — a future i2v
+    runner consumes it with no schema/redesign change. The module imports no torch/diffusers/cv2/
+    comfyui/wan/hunyuan (import-scan test).
+  - **Tests:** `tests/test_f015_keyframes.py` — 31 TCs (24 automated, 7 skipped for GPU/human-judged
+    identity & motion coherence + manual US acceptance), one per declared TC id, mapping 1:1 to
+    `developer files/tests/F-015-intimate-video-keyframes.md` (Status column updated). Uses a
+    `FakeGate` (blocks a prohibited/adversarial battery, withholds below opt-in/stage, clamps to a
+    ceiling), a `FakeAudit`, and the deterministic `FakeBackend` for end-to-end pair generation into
+    a tmp media root. Whole suite green (504 passed, 52 skipped).
+
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
   (deliberately GPU-free: it orchestrates the model over the ComfyUI HTTP API, so torch/CUDA stay in
