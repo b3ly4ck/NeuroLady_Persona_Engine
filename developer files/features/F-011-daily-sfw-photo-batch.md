@@ -1,6 +1,6 @@
 # F-011 — Daily SFW Photo Batch
 
-- **Status:** Draft
+- **Status:** Implemented (`services/imagegen/batch_planner.py`; tests `tests/test_f011_daily_batch.py`)
 - **Summary:** The **nightly planner** that fills each persona's **next-day photo archive**. Every
   night (during the GPU's media window — architecture.md §6.1, DFD-3), for each active persona, it
   reads **tomorrow's Life Engine plan** (F-006: the day's slots — waking, gym, work, cafe, home,
