@@ -31,6 +31,15 @@ class MemoryIndex:
         self._collection = collection
         self._ready = False
 
+    def for_collection(self, collection: str) -> "MemoryIndex":
+        """A sibling index over a different collection, **sharing** this client + embedder.
+
+        An embedded Qdrant (local path) can be opened by only one client, so the persona-biography
+        index (collection ``biography_layers``, owner key = ``persona_id``) must reuse the same
+        client/embedder as the user-facts index rather than opening a second one.
+        """
+        return MemoryIndex(self._client, self._embedder, collection)
+
     # ── collection lifecycle ─────────────────────────────────────────────────────────────────
     def _ensure_collection(self, dim: int) -> None:
         if self._ready:

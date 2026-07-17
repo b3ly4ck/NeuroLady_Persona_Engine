@@ -17,7 +17,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.domain.life_engine_llm import GoalUpdate
 from services.bot.domain.vector_store import MemoryIndex, VectorStoreUnavailable
-from services.bot.models import BiographyLayer, DailyPlan, Goal, GoalStatus, Reflection
+from services.bot.models import (
+    BiographyLayer,
+    DailyPlan,
+    FutureProjection,
+    Goal,
+    GoalStatus,
+    Horizon,
+    Reflection,
+)
 
 log = logging.getLogger(__name__)
 
@@ -220,3 +228,30 @@ async def apply_goal_update(db: AsyncSession, persona_id: int, update: GoalUpdat
         added.append(g)
     await db.flush()
     return added
+
+
+# ── future-self projections (F-007 FR-007-06) ──────────────────────────────────────────────────
+
+
+async def store_future_projection(
+    db: AsyncSession, persona_id: int, horizon: str, content: str, prompt_version: str
+) -> FutureProjection:
+    """Upsert one future-self projection (one row per (persona, horizon) — FR-006-26/FR-007-06)."""
+    h = Horizon(horizon)
+    existing = (
+        await db.execute(
+            select(FutureProjection).where(
+                FutureProjection.persona_id == persona_id, FutureProjection.horizon == h)
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        existing.content = content
+        existing.prompt_version = prompt_version
+        existing.updated_at = _now()
+        await db.flush()
+        return existing
+    row = FutureProjection(persona_id=persona_id, horizon=h, content=content,
+                           prompt_version=prompt_version)
+    db.add(row)
+    await db.flush()
+    return row

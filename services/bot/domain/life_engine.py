@@ -24,10 +24,14 @@ class LifeEngineConfig:
     weekly_per_month: int = 4
     monthly_per_year: int = 12
     years_per_epoch: int = 5
-    plan_prompt_version: str = "plan_day_v1"      # FR-006-19
+    plan_prompt_version: str = "plan_day_v2"      # FR-006-19; v2 mandates HH:MM markers (FR-006-30)
     reflect_prompt_version: str = "reflect_day_v1"
     compress_prompt_version: str = "compress_v1"
     goals_prompt_version: str = "update_goals_v1"
+    future_prompt_version: str = "update_future_v1"  # F-007 FR-007-06
+    # F-007 scheduler cadence (tunable — NFR-007-08). `tick_interval_s` is the dev in-process loop
+    # period; goals/future are re-authored at end-of-day alongside the reflection.
+    tick_interval_s: int = 900
 
 
 DEFAULT_CONFIG = LifeEngineConfig()
@@ -40,8 +44,15 @@ SCOPES = ("day", "week", "month", "year", "epoch")
 
 
 def local_now(tz_name: str, now_utc: datetime) -> datetime:
-    """The persona's current local time, DST-correct, from her `PERSONA.timezone`."""
-    return now_utc.astimezone(ZoneInfo(tz_name))
+    """The persona's current local time, DST-correct, from her `PERSONA.timezone`.
+
+    An unknown/renamed zone key (e.g. legacy "Europe/Kiev" on a system without backward-compat
+    links) must never crash a reply or a scheduler tick — degrade to UTC (NFR-007-06)."""
+    try:
+        tz = ZoneInfo(tz_name)
+    except Exception:  # noqa: BLE001 - ZoneInfoNotFoundError + missing-tzdata ModuleNotFoundError
+        tz = ZoneInfo("UTC")
+    return now_utc.astimezone(tz)
 
 
 def local_date_key(tz_name: str, now_utc: datetime) -> str:

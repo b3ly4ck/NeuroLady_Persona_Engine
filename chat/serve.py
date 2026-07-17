@@ -82,12 +82,14 @@ def _build_server_cmd(model: Path, host: str, port: int) -> list[str]:
     chat_format = os.environ.get("CHAT_CHAT_FORMAT")
     if chat_format:
         cmd += ["--chat_format", chat_format]
-    # This Qwen3.5 GGUF is a *reasoning* model: its chat template opens a <think> block at every
-    # generation prompt, so by default the model emits a long chain-of-thought ("Thinking
-    # Process: …") that eats the token budget and seconds of latency before the actual reply.
-    # For a real-time texting companion we want direct, in-character replies, so we disable
-    # thinking at model-load time (the template then injects an empty <think></think> and the model
-    # answers straight away). Set CHAT_ENABLE_THINKING=1 to turn reasoning back on if ever needed.
+    # This Qwen3.5 GGUF is a *reasoning* model. Reasoning was enabled per F-003 FR-003-41, but
+    # live testing showed THIS finetune (HauhauCS "Aggressive") has broken thinking-format
+    # discipline: it unpredictably emits its CoT as tagless plain text ("Thinking Process: ...")
+    # with no <think>/</think> markers — unseparable from the answer, so either raw CoT leaks to
+    # the user or whole outputs must be dropped (both observed live). Until a build with
+    # disciplined think-tagging is deployed, reasoning stays OFF at the runner; the FR-003-41
+    # self-check directive and all strip/leak guards remain active as defense in depth.
+    # Set CHAT_ENABLE_THINKING=1 to re-enable for evaluation.
     if _env("CHAT_ENABLE_THINKING", "0") != "1":
         cmd += ["--chat_template_kwargs", '{"enable_thinking": false}']
     # cache_prompt keeps the persona/system prefix hot across a user's turns.

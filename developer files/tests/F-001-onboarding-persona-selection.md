@@ -149,13 +149,15 @@
 | TC-FR-001-16-02 | e2e | happy | Each action reachable in one tap | *(feature removed — no main menu screen exists)* | deprecated |
 | TC-FR-001-16-03 | integration | happy | Resume chat returns to active persona | *(feature removed — resuming is now: pick the same persona again on Choose Lady, FR-001-10)* | deprecated |
 
-### FR-001-17 — Repeated "Start" / "Start Chat" taps are idempotent
+### FR-001-17 — Duplicate taps deduplicated; a resumed session still gets a resume opener (never an empty chat)
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-001-17-01 | integration | concurrency | Double-tap Start Chat → 1 session, 1 intro | Given a card; When "Start Chat" tapped twice fast; Then one session and one intro result | planned |
+| TC-FR-001-17-01 | integration | concurrency | Double-tap Start Chat → 1 session, 1 opener | Given a card; When "Start Chat" tapped twice fast; Then one session and exactly one opener are delivered (guard window dedupes the second) | automated |
 | TC-FR-001-17-02 | integration | concurrency | Double `/start` → no dup state | Given a user; When `/start` is sent twice fast; Then no duplicated USER row or double gallery render | planned |
 | TC-FR-001-17-03 | integration | idempotency | Idempotency key dedups replays | Given the same update delivered twice; When processed; Then the second is a no-op | planned |
+| TC-FR-001-17-04 | integration | happy | Resumed session Start Chat sends a resume opener (ISS-001) | Given an active same-persona session (user returned via the gallery later); When "Start Chat" is tapped; Then a short in-character resume opener is sent — the chat is never left empty | automated |
+| TC-FR-001-17-05 | integration | ordering | Resume opener respects send-before-delete | Given a resumed session; When "Start Chat" is handled; Then the resume opener is sent (successfully) before the S2 card/intro are deleted | automated |
 
 ### FR-001-18 — Persona without an intro note falls back gracefully
 

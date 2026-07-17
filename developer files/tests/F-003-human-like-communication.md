@@ -300,16 +300,40 @@
 | TC-FR-003-38-02 | unit | negative | No chunk drop/reorder/meaning change | Given a chunked reply; When delivered; Then no chunk is dropped, reordered, or altered in meaning | planned |
 | TC-FR-003-38-03 | e2e | happy | Delivered reply still answers the user | Given a client message; When the styled reply arrives; Then it still answers what the user asked | planned |
 
+### FR-003-39 — Reply-volume budget (texting register; no mid-sentence token truncation)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-003-39-01 | unit | happy | Prompt carries a hard volume budget | Given the persona system prompt; When built; Then it contains explicit sentence/word-budget directives (1–3 sentences, ~≤35 words default) | automated |
+| TC-FR-003-39-02 | unit | boundary | Token ceiling fits reasoning + compliant reply | Given the ChatClient defaults; When inspected; Then the generation ceiling is sized so a budget-compliant reply plus its think block fits (no 320-token cliff) | automated |
+| TC-FR-003-39-03 | e2e | statistical | Live replies respect the budget | Given ordinary banter messages against the real model; When replies are measured; Then the typical reply stays within ~1–3 sentences and long form appears only when invited | planned |
+
+### FR-003-40 — Typing-speed-realistic pacing (35–45 wpm, word-count-based)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-003-40-01 | unit | happy | Delay derived from word count at human wpm | Given a chunk of N words; When the delay is computed; Then it approximates N words at 35–45 wpm (scaled by typing_speed), within jitter | automated |
+| TC-FR-003-40-02 | unit | mapping | Faster persona types faster | Given the same chunk and a higher typing_speed; When computed; Then the delay is proportionally shorter | automated |
+| TC-FR-003-40-03 | unit | boundary | Word-based, not char-based | Given two chunks with equal chars but different word counts; When computed; Then delays differ with word count | automated |
+
+### FR-003-41 — Private reasoning enabled and used for style self-check; never leaks
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-003-41-01 | unit | happy | Prompt directs a private pre-send self-check | Given the persona system prompt; When built; Then it instructs the model to privately verify volume/emoji/register before answering and never reveal the reasoning | automated |
+| TC-FR-003-41-02 | unit | happy | Closed think block is stripped from delivery | Given a raw reply with a closed <think> block; When post-processed; Then only the visible reply remains | automated |
+| TC-FR-003-41-03 | unit | error | Truncated think block degrades, never leaks | Given a raw reply whose <think> never closes (token-truncated); When post-processed; Then raw reasoning is NOT delivered — the turn falls back in-character | automated |
+
 ---
 
 ## Non-functional requirements
 
-### NFR-003-01 — Total deliberate delay bounded by a defined upper cap
+### NFR-003-01 — Deliberate delay bounded (≤15 s/chunk, ≤30 s total, config-tunable)
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-NFR-003-01-01 | performance | boundary | Measured delay ≤ cap | Given many paced replies; When timed; Then no total delay exceeds the cap | planned |
-| TC-NFR-003-01-02 | performance | boundary | Worst-case within cap | Given the longest/busiest case; When timed; Then delivery is within the cap | planned |
+| TC-NFR-003-01-01 | performance | boundary | Per-chunk delay ≤ per-chunk cap | Given many paced chunks incl. very long ones; When computed; Then no single delay exceeds the per-chunk cap | automated |
+| TC-NFR-003-01-02 | performance | boundary | Total per-reply delay ≤ total cap | Given a max-chunk reply of long chunks; When the delays are summed; Then the total deliberate delay ≤ the total cap and trailing chunks degrade to a minimal beat | automated |
 
 ### NFR-003-02 — Pacing does not increase model compute time
 

@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 
 from aiogram import Bot, F, Router
 from aiogram.filters import CommandStart
@@ -41,6 +42,22 @@ _CHOOSE_LADY_LABELS = {t("btn_choose_lady", "en"), t("btn_choose_lady", "ru")}
 # (FR-001-21). In-memory: fine for the single-process dev bot; a multi-instance gateway would move
 # this to shared state (Redis/FSM), consistent with the stateless-gateway principle (architecture §3.1).
 _intro_msg_ids: dict[int, int] = {}
+
+# Rapid-duplicate-tap guard for Start Chat openers (FR-001-17 / ISS-001): remembers when an opener
+# (full or resume) was last sent per (chat, persona). Within the window a duplicate tap is deduped;
+# outside it a resumed session always gets a resume opener — never silence. In-memory, same
+# single-process dev note as `_intro_msg_ids` above.
+_OPENER_GUARD_S = 8.0
+_opener_sent_at: dict[tuple[int, int], float] = {}
+
+
+def _mark_opener_sent(chat_id: int, persona_id: int) -> None:
+    _opener_sent_at[(chat_id, persona_id)] = time.monotonic()
+
+
+def _opener_recently_sent(chat_id: int, persona_id: int) -> bool:
+    ts = _opener_sent_at.get((chat_id, persona_id))
+    return ts is not None and (time.monotonic() - ts) < _OPENER_GUARD_S
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────────────────────
@@ -211,10 +228,15 @@ async def on_noop(cb: CallbackQuery) -> None:
 async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
     """FR-001-10/11/12/14/17/21 — create/reuse/switch session, send the S3 opener, THEN clean up S2.
 
-    Send-before-delete (architecture.md §1.3): if `is_new_intro`, the opener is sent and must
-    succeed before the S2 card + intro are deleted. If sending raises, the S2 messages are left in
-    place (not deleted) and the exception propagates (logged by aiogram) rather than silently
-    leaving the chat blank; `cb.answer()` still fires via `finally` so the tap doesn't spin forever.
+    Send-before-delete (architecture.md §1.3): the opener is sent and must succeed before the S2
+    card + intro are deleted. If sending raises, the S2 messages are left in place (not deleted)
+    and the exception propagates (logged by aiogram) rather than silently leaving the chat blank;
+    `cb.answer()` still fires via `finally` so the tap doesn't spin forever.
+
+    **Start Chat is never mute** (FR-001-17 / ISS-001): a brand-new/switched session gets the full
+    S3 opener; a **resumed** same-persona session gets a short in-character resume opener — the bot
+    can't see the user deleting the chat client-side, so silence + S2 cleanup left an empty chat.
+    Only *rapid duplicate taps* (within `_OPENER_GUARD_S`) are deduplicated instead.
     """
     user = await _user_from(db, cb.from_user)
     persona_id = int(cb.data.split(":", 1)[1])
@@ -225,11 +247,19 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
     chat_id = cb.message.chat.id
     _, is_new_intro = await start_or_switch_session(db, user.id, persona_id)
     try:
-        if is_new_intro:  # FR-001-17: a reused (double-tapped) session does not re-send the intro
+        if is_new_intro:
             await send_persona_intro(
                 bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale)
             )
-        # Only reached if the send above succeeded (or wasn't needed) — now safe to tidy up S2.
+            _mark_opener_sent(chat_id, persona_id)
+        elif not _opener_recently_sent(chat_id, persona_id):  # resume — never silent (ISS-001)
+            await bot.send_message(
+                chat_id, views.resume_opener(persona),
+                reply_markup=keyboards.reply_kb(user.locale),
+            )
+            _mark_opener_sent(chat_id, persona_id)
+        # else: rapid duplicate tap within the guard window — the opener just sent covers it.
+        # Only reached if the send above succeeded (or was deduped) — now safe to tidy up S2.
         await _safe_delete_own(cb.message)          # the persona-card message
         await _delete_tracked_intro(bot, chat_id)    # the gallery intro message
     finally:

@@ -227,6 +227,12 @@ flowchart TD
   screen's messages (card, intro) are only deleted **after** the next screen's message has actually
   landed. If sending the replacement fails, the old content is **left in place** — the chat must
   never be silently left blank/orphaned by a delete that outran (or substituted for) a failed send.
+  **Corollary — Start Chat is never mute:** entering a chat from the gallery always ends with a
+  message from the persona. A brand-new/switched session gets the full S3 opener; a **resumed**
+  same-persona session gets a short in-character **resume opener** (rapid duplicate taps are
+  deduplicated instead of silently skipped — skipping the send while still deleting S2 left an
+  empty chat, ISS-001). This matters because the bot cannot see a user deleting the chat
+  client-side: what looks "empty" to the user may be an active session to the bot.
   Only her real content (persona messages, media) and the current screen persist long-term.
 
 ---
@@ -494,18 +500,55 @@ stored per-module, never inlined ad hoc.
 - Style-tuning per persona (voice/register), so text matches the persona's character.
 - Self-hosted; **loaded during awake hours**, unloaded at night to free GPU for media.
 - Configurable decoding (temperature, etc.) exposed as persona/communication settings.
+- **Reasoning ("thinking") mode is ON — and it works for humanness (F-003 FR-003-41).** This model
+  family opens a private `<think>` block before answering. Originally reasoning was disabled at the
+  runner (it burned the whole token budget on visible chain-of-thought and broke the flat <5 s
+  budget). The decision is now **reversed, deliberately**: the system prompt instructs the model to
+  use its private reasoning as a **pre-send self-check** against the texting constraints (reply-
+  volume budget, emoji budget, register, no assistant formatting, in-character consistency), and
+  the reasoning's real compute time **fills the natural "she's typing" gap** — the pause the
+  product wants anyway is spent on work that raises reply quality instead of a pure sleep.
+  Guardrails: the think block is **stripped before delivery** (Orchestrator post-process); a reply
+  whose think block never closed (token-truncated) **degrades to the in-character fallback** rather
+  than leaking raw reasoning; the generation token ceiling is sized for reasoning + a compliant
+  short reply (FR-003-39 — never mid-sentence truncation); latency governed by the revised
+  F-002 `NFR-002-01` (typing indicator immediate; generation ≤ 30 s p95 warm — measured 22-30 s live with reasoning) plus F-003's
+  typing-speed pacing caps (NFR-003-01: ≤ 15 s/chunk, ≤ 30 s total).
+  **Status for the current model build — reasoning OFF at the runner (live finding, 2026-07-16):**
+  the HauhauCS "Aggressive" finetune has **broken thinking-format discipline** — it unpredictably
+  emits its CoT as **tagless plain text** ("Thinking Process: …", no `<think>`/`</think>` markers,
+  `finish_reason: stop`), immune to `/no_think`, explicit no-reasoning instructions, and role
+  restructuring (all probed live). A tagless CoT cannot be reliably separated from the answer, so
+  the choice is leaking raw CoT to users or dropping whole outputs (both were observed — a raw CoT
+  was stored inside a generated daily plan; every plan step then failed "empty completion"). Until
+  a model build with disciplined think-tagging is deployed, `CHAT_ENABLE_THINKING` defaults to off;
+  the FR-003-41 self-check directive (applied without visible CoT), `strip_reasoning` in the
+  ChatClient, and all leak guards remain active as defense in depth. The natural response gap is
+  provided by F-003's typing-speed pacing (FR-003-40).
 
 ### 4.2 Context assembly (critical)
 For each reply the Orchestrator builds the prompt from:
-- **Persona system prompt** (identity, current-era characteristics, communication style,
-  today's plan/mood).
-- **Biography layers** relevant to the query (semantic retrieval from vector DB — e.g. protests
-  she "attended" → she can answer).
+- **Persona-time identity prompt** (the "Digital Persona", §4.4 / Pygmalion) — recomputed for the
+  **current local date** so it is naturally **daily-versioned**: fixed anchors (name, **birthdate**,
+  core **values/motivation**, **Big Five**) + evolving persona-time fields (**age derived from
+  birthdate**, e.g. "28 years and 3 days"; current **interests**; current **goal**) + communication
+  style + today's plan/mood. Fixed anchors are used verbatim and must never be contradicted (F-006).
+- **Biography (graded by recency + semantic):** her own life is fed into every reply, not just when
+  asked. A compact **graded block** always carries the coarse-to-fine recent shape — current-**epoch**
+  gist → this **year** → last **month** → last **week** → recent **days** — and, on top of that,
+  **semantically-retrieved deep layers** relevant to the message (e.g. a childhood question pulls the
+  childhood epoch), so she answers about her past **consistently** instead of confabulating. Served by
+  Memory (F-004) by scope + vector search; authored/seeded by the Life Engine (F-006).
+- **Future-self projections** (week / month / year / next epoch / lifetime) so she can speak about
+  where she's heading, consistent with her goals and biography (F-006).
 - **User memory:** categorized structured facts + semantically retrieved past statements.
 - **Relationship state** summary.
 - **Recent raw conversation history — several of the latest messages passed through as-is** (a
   hard requirement: the live dialogue must be in-context, not only summarized).
-- Assembled to fit the model's context budget with a clear priority order.
+- Assembled to fit the model's context budget with a clear priority order; the biography block is
+  **length-bounded** (graded summaries, not the whole life) so it never blows the token/latency
+  budget. *(The F-002 thin slice originally shipped identity + memory + relationship only; the
+  biography/persona-time/future-self layers here are added by the F-006 biography extension.)*
 
 ### 4.3 Image & video generation (night batch)
 All media models are **self-hosted** and accelerated with **LightX2V** — an inference framework
@@ -557,6 +600,20 @@ video models below, so the night batch fits the sleep window on our own GPU.
   **`childhood|youth|current` are `period_key` values under `scope=epoch`**, not scope values.
   The Life Engine authors/compresses these layers; the **Memory Service stores, indexes, and serves**
   them (by scope, and semantically) — F-004.
+- **Seeded initial biography (day one).** A persona does **not** start life-less. Each persona ships
+  with an **authored initial biography** — the fixed epoch anchors (childhood/youth) plus a recent
+  descent (current epoch → recent years → recent months → last weeks → recent days) — **imported into
+  `BIOGRAPHY_LAYER` at provisioning** and embedded. The Life Engine then only *continues* the story
+  forward (plan → reflect → compress). This is what lets her answer about her childhood coherently
+  from the very first message instead of confabulating.
+- **Persona-time (daily-versioned identity).** Her identity prompt is regenerated per local day: the
+  **age is derived from `birthdate`** ("27 years and 1 day"), and the **evolving** fields (interests,
+  current goal, current-era colour) reflect the latest state — while the **fixed anchors** (name,
+  birthdate, core values/motivation, Big Five) are immutable. Same date + same stored state ⇒ same
+  identity prompt (versioned by date).
+- **Future-self projections.** Alongside the backward pyramid she carries **forward** projections at
+  horizons **week / month / year / next epoch / lifetime** (`FUTURE_PROJECTION`, §5.1), authored by
+  the Life Engine and consistent with her goals + biography, so she can talk about where she's headed.
 
 ### 4.6 Reflection & goal prompts (external LLM)
 - **Planning, reflection, goal synthesis, and relationship reflection** are generated by calling
@@ -573,7 +630,16 @@ video models below, so the night batch fits the sleep window on our own GPU.
   escalate and can lower trust). The state is fed into every reply's context (§4.2) and **gates the
   persona's openness/flirtiness/intimacy by stage**. Gates/caps/decay/cadence are all config. See
   `features/F-005-relationship-system.md`.
-- All these prompts are versioned assets under the Life Engine's prompt directory.
+- All these prompts are versioned assets under the Life Engine's prompt directory
+  (`plan_day`, `reflect_day`, `compress`, `update_goals`, `update_future`).
+- **The loop is actually driven by the Life Engine Scheduler (feature `F-007`).** F-006 defines each
+  step; F-007 is the **driver + scheduler** that runs the *due* steps per persona on a cadence
+  (morning ⇒ plan; end-of-day ⇒ reflect → compress cascade → update goals → re-author future-self),
+  timezone-correct, idempotent per period, off the reply hot path, degrading per persona without
+  stopping the loop. Locally it runs as an **in-process async background task** alongside the bot
+  (shares the DB + embedded vector store); in prod the same per-persona **tick** runs as a separate
+  scheduled worker in the night/off-peak window (§6.1). An **on-demand** "run this persona now"
+  entrypoint exists for ops/testing. See `features/F-007-life-engine-scheduler.md`.
 
 ### 4.7 Voice (in scope)
 - The persona replies with **personalized voice messages** (the first 5 daily messages are free,
@@ -606,6 +672,7 @@ erDiagram
     USER ||--o{ USER_FACT : reveals
     SESSION ||--o{ MESSAGE : contains
     PERSONA ||--o{ BIOGRAPHY_LAYER : has
+    PERSONA ||--o{ FUTURE_PROJECTION : envisions
     PERSONA ||--o{ DAILY_PLAN : has
     PERSONA ||--o{ REFLECTION : has
     PERSONA ||--o{ GOAL : pursues
@@ -626,7 +693,11 @@ erDiagram
         id PK
         name
         profession
-        age
+        age "display fallback; her real age is DERIVED from birthdate (F-006 persona-time)"
+        birthdate "date; FIXED anchor — drives daily-versioned age (F-006)"
+        core_values "text; FIXED anchor — values she lives by (F-006)"
+        motivation "text; FIXED anchor — what drives her (F-006)"
+        interests "text; EVOLVING persona-time field, fed into identity (F-006)"
         timezone "IANA tz, e.g. Europe/Moscow — defines her current time"
         card_description "first-person gallery teaser"
         language "ru|en"
@@ -676,6 +747,14 @@ erDiagram
         period_key "e.g. childhood|youth|current for scope=epoch; 2026|2026-07|... otherwise"
         content
         embedding_ref "vector DB"
+    }
+    FUTURE_PROJECTION {
+        id PK
+        persona_id FK
+        horizon "week|month|year|epoch|lifetime (F-006)"
+        content "first-person 'future me' at this horizon"
+        prompt_version "audit"
+        created_at
     }
     DAILY_PLAN {
         id PK

@@ -14,12 +14,21 @@ from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramNetworkError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from sqlalchemy import select
+
+from services.bot.biographies import BIOGRAPHIES
 from services.bot.chat_client import ChatClient
 from services.bot.config import get_settings
 from services.bot.db import init_models, make_engine, make_sessionmaker
+from services.bot.domain import life_engine_runner
+from services.bot.domain import life_engine_store as life_store
+from services.bot.domain.biography import seed_biography
+from services.bot.domain.life_engine import DEFAULT_CONFIG as _LE_CONFIG
+from dataclasses import replace as _dc_replace
 from services.bot.domain.vector_store import MemoryIndex, build_memory_index
 from services.bot.handlers import router
 from services.bot.middlewares import DbSessionMiddleware
+from services.bot.models import Persona
 from services.bot.personas_seed import seed_personas
 
 log = logging.getLogger(__name__)
@@ -61,6 +70,25 @@ def build_dispatcher(
     return dp
 
 
+async def _seed_biographies(sessionmaker_db, memory_index: "MemoryIndex | None") -> dict[str, dict]:
+    """Import authored initial biographies (F-006 FR-006-22) for any persona that has one, so she
+    starts with a coherent past. Idempotent — safe to run on every boot."""
+    db = sessionmaker_db
+    bio_index = (
+        memory_index.for_collection(life_store.BIOGRAPHY_COLLECTION) if memory_index else None
+    )
+    results: dict[str, dict] = {}
+    personas = (await db.execute(select(Persona))).scalars().all()
+    for persona in personas:
+        seed = BIOGRAPHIES.get(persona.name)
+        if seed is None:
+            continue
+        counts = await seed_biography(db, persona, seed, bio_index)
+        if any(counts.values()):
+            results[persona.name] = counts
+    return results
+
+
 async def _run() -> None:
     settings = get_settings()
     logging.basicConfig(level=settings.log_level)
@@ -73,27 +101,47 @@ async def _run() -> None:
     engine = make_engine(settings.database_url)
     await init_models(engine)  # dev convenience; production uses migrations
     sessionmaker = make_sessionmaker(engine)
-    async with sessionmaker() as db:
-        inserted = await seed_personas(db)
-        await db.commit()
-        if inserted:
-            logging.getLogger(__name__).info("seeded %d personas", inserted)
 
     # F-004 semantic memory index (None if disabled / deps missing → keyword recall fallback).
+    # Built before seeding so authored biographies (F-006) can be embedded at provision time.
     memory_index = None
     if settings.qdrant_location:
         memory_index = build_memory_index(settings.qdrant_location, settings.embed_model or None)
         if memory_index is not None:
             log.info("semantic memory enabled (qdrant=%s)", settings.qdrant_location)
 
+    async with sessionmaker() as db:
+        inserted = await seed_personas(db)
+        await db.commit()
+        if inserted:
+            logging.getLogger(__name__).info("seeded %d personas", inserted)
+        seeded_bios = await _seed_biographies(db, memory_index)
+        await db.commit()
+        if seeded_bios:
+            logging.getLogger(__name__).info("seeded biographies: %s", seeded_bios)
+
     bot = Bot(
         token=settings.telegram_bot_token,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML),
     )
     dp = build_dispatcher(sessionmaker, ChatClient(settings.chat_base_url), memory_index)
+
+    # F-007: run the Life Engine loop as a background task so her life advances autonomously,
+    # off the reply hot path (FR-007-01/07). Disable with LIFE_ENGINE_ENABLED=0.
+    scheduler_task: asyncio.Task | None = None
+    if settings.life_engine_enabled:
+        le_cfg = _dc_replace(_LE_CONFIG, tick_interval_s=settings.life_engine_interval_s)
+        scheduler_task = asyncio.create_task(
+            life_engine_runner.run_scheduler(
+                sessionmaker, ChatClient(settings.chat_base_url), memory_index, le_cfg)
+        )
+        log.info("life-engine scheduler enabled (interval=%ss)", settings.life_engine_interval_s)
+
     try:
         await _run_polling_with_reconnect(dp, bot)
     finally:
+        if scheduler_task is not None:
+            scheduler_task.cancel()
         await bot.session.close()
         await engine.dispose()
 

@@ -310,6 +310,51 @@ Feature: F-006 Life Engine
 - **FR-006-21** — Every biography layer/reflection must record **what it was derived from** (source
   period/inputs) and **when**, so the life story is **auditable**.
 
+#### Seeded biography, persona-time identity & future-self (biography extension)
+> Closes the gap where a persona started life-less (only a one-line teaser + Big Five), so she
+> confabulated her past. Realizes the "Digital Persona" of architecture.md §4.4 (Pygmalion) and the
+> biography-in-context promised in §4.2, and adds the forward-facing "future self".
+- **FR-006-22** — **Seeded initial biography.** Each persona must be **provisioned with an authored
+  initial biography** — the fixed **epoch** anchors (childhood/youth) plus a recent descent
+  (current-epoch → recent **years** → recent **months** → last **weeks** → recent **days**) —
+  imported into `BIOGRAPHY_LAYER` (and embedded) at seed time, so she can answer about her past
+  coherently **from the first message** rather than inventing it. Import must be **idempotent**
+  (re-seeding does not duplicate layers).
+- **FR-006-23** — **Fixed identity anchors as structured fields.** `PERSONA` must carry the immutable
+  anchors as first-class fields: **`birthdate`**, **`core_values`**, **`motivation`** (alongside the
+  existing `name` and `big_five`). These are used verbatim in the identity prompt and are **never**
+  mutated or contradicted by the Life Engine.
+- **FR-006-24** — **Birthdate-derived, daily-versioned age ("persona-time").** The persona's age must
+  be **derived from `birthdate` at the current local date** (e.g. "28 years and 3 days"), not a static
+  stored integer; the identity prompt is therefore **daily-versioned** (recomputed per local day).
+- **FR-006-25** — **Evolving persona-time fields.** The persona's current **`interests`** and current
+  **goal(s)** must be first-class inputs to the identity prompt and may evolve over time via the Life
+  Engine (they are *not* fixed anchors).
+- **FR-006-26** — **Future-self projections.** Each persona must carry forward projections at horizons
+  **week / month / year / epoch / lifetime** (`FUTURE_PROJECTION`), seeded and thereafter authorable,
+  each a first-person "future me" that stays **consistent** with her goals and biography.
+- **FR-006-27** — **Biography served into every reply.** The Orchestrator must include the persona's
+  biography in the reply context (F-002 §4.2): a **graded recency block** (current-epoch gist → year →
+  last month → last week → recent days) **plus semantically-retrieved deep layers** relevant to the
+  user's message (e.g. a childhood question retrieves the childhood epoch). The served biography must
+  **never contradict** the fixed anchors, and must be **length-bounded** (FR-006-27 ↔ NFR-006-15).
+- **FR-006-28** — **Future-self served when relevant.** The persona's future-self projections must be
+  available to the reply context so she can speak about **where she's heading** consistently (fed from
+  `FUTURE_PROJECTION`), never as a mechanical list.
+- **FR-006-29** — **She always knows her own local clock.** The reply context must include the
+  persona's **current local date, weekday, and approximate time of day** (derived from
+  `PERSONA.timezone`, DST-correct), so any statement she makes about "now" (what time it is,
+  morning/evening, what she's up to) is grounded in her real local time — never guessed from the
+  narrative flavor of her plan text. (Live-caught: at 19:00 Moscow she told a user it was "around
+  noon" — the prompt carried no clock and her whole day-plan prose started with the morning.)
+- **FR-006-30** — **Daily plans must be time-addressable.** The generated `DAILY_PLAN.plan_text`
+  must carry **explicit parseable time markers** (`HH:MM`, ranges allowed) for its activities, so
+  the current-activity derivation (FR-006-03/04) can select the correct slot for "now" instead of
+  degrading to the whole-day text. Realized via the **versioned plan prompt** (FR-006-19): the
+  prompt asset instructs the model to structure the day with clock-marked entries; the
+  whole-text fallback (NFR-006-03) remains only as a last-resort degrade for legacy/unparseable
+  plans.
+
 ### Non-functional
 
 - **NFR-006-01** — **Self-consistency:** across a long generated history, the biography must contain
@@ -340,3 +385,9 @@ Feature: F-006 Life Engine
   documented and inspectable enough to reproduce/evaluate (supports the research framing, US-006-08).
 - **NFR-006-13** — **Localization:** her plan/reflection/biography are generated in the persona's
   language (RU/EN), reading as natural first-person, never machine-stilted or mixed-language.
+- **NFR-006-14** — **Persona-time determinism:** the identity prompt is **daily-versioned** — given
+  the same local date and the same stored state (birthdate, interests, goal, anchors), the identity
+  block is **stable within that day** and the derived age is exact ("N years and M days").
+- **NFR-006-15** — **Bounded biography context:** the biography served into a reply is
+  **length-bounded** (graded summaries + a small number of semantic layers, not the whole life), so
+  it never breaks the F-002 latency/token budget (§4.2), even for a persona with a long history.

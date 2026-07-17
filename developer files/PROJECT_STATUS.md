@@ -2,6 +2,147 @@
 
 ## Recent changes
 
+- **Image A/B benchmark DONE — production image model chosen: Phr00t Qwen-Rapid-AIO-NSFW-v23 via
+  headless ComfyUI (branch `feature/image-benchmarks`, v0.39.1–0.39.4, merged to master).** Full
+  report: `developer files/image_benchmark_report.md`; raw numbers + sample images committed under
+  `image/bench_out/` (force-added past gitignore). Key facts, measured on the Quadro RTX 8000 48GB
+  with the same live reference photo and the same 3 "camera roll" prompts:
+  - **A (Rapid-AIO v23, 4 steps, 1024²): avg 117 s/img (129/112/110), peak 40.3G — fits resident,
+    3/3 realistic images, identity from the reference held (same face/haircut across gym/cafe/home).**
+  - **B (official Qwen-Image-Edit-2511 bf16 + Lightning 8-step LoRA): disqualified.** bf16 weights
+    (55G) cannot fit the 48G card; `model_cpu_offload` still OOMs (39G transformer + ~6G activations);
+    only `sequential_cpu_offload` runs → **424 s/img and all 3 outputs blank** (3,129-byte PNGs, NaN
+    signature). Its 127G of weights (native/base + lightning-distill) **deleted from disk** after the
+    user-confirmed verdict; the harness keeps the B code path for a future quantized re-test.
+  - Ops lessons encoded in the harness (v0.39.2-3) and binding for the F-008 runner: release VRAM in
+    `finally` (a leaked 47G reservation starved the next model); ComfyUI needs
+    `--disable-smart-memory` on this card (second consecutive gen OOMs at text-encode otherwise);
+    per-candidate step counts; `--candidates` order honored.
+  - Also produced during the run-up: live validation of v23 **edit mode** (reference → new scene,
+    identity held, F-009 concept proven) and t2i realism at 4 steps ≈ 8 steps (768²) — both noted in
+    the report; reference assets in `image/bench_ref/` (main dir, untracked).
+
+- **Reply realism (branch `feature/f-003-reply-realism`, v0.41.0–0.41.6, merged to master) — she
+  texts like a person: volume budget, 40 wpm pacing, thinking evaluated & reverted.** User feedback:
+  walls of text on short messages + a desire for reasoning mode + prompt visibility. Docs-first
+  (F-003 FR-003-39/40/41, NFR-003-01/02 revised; F-002 NFR-002-01 revised; architecture §4.1), then:
+  - **Volume budget (FR-003-39):** hard prompt rules — 1–3 short sentences (~≤35 words), long form
+    only when invited, ≤1 emoji, no formatting; token ceiling sized so a compliant reply never
+    truncates mid-sentence. Live: replies run 13–23 words, in-character RU.
+  - **Typing-speed pacing (FR-003-40):** per-chunk delay from **word count at 40 wpm** (was
+    char-based), caps revised to ≤15 s/chunk & ≤30 s/reply (`pacing_delays`); generation time counts
+    toward the first pause.
+  - **Thinking mode (FR-003-41): enabled, live-probed, and reverted for THIS build** — the HauhauCS
+    finetune emits its CoT **tagless** ("Thinking Process:…", no markers, immune to /no_think and
+    instructions), so private/visible can't be split (a raw CoT got stored inside a generated daily
+    plan; then every plan step died "empty completion"). Requirement held in abeyance with the
+    evidence recorded (architecture §4.1); **kept active:** centralized `strip_reasoning` in
+    ChatClient (all LLM consumers protected), truncation guards → in-character fallback, brief-
+    reasoning directive + 3072 ceilings on internal steps, the self-check prompt directive.
+  - **Prompt visibility:** opt-in `PROMPT_LOG_FILE` dump of the exact per-turn LLM request.
+  - **Cascade of live-caught fixes while tuning:** transport timeout 30→90 s (tail generations were
+    cut into fallbacks), SQLite **WAL + busy_timeout + commit-before-generation** ("database is
+    locked" when a second message arrived mid-generation), **she knows her local clock** (F-006
+    FR-006-29 — said "noon" at 19:00 MSK; `_local_time_block` in every turn) and **time-addressable
+    plans** (FR-006-30, `plan_day_v2` mandates HH:MM markers so current-activity picks the right
+    slot), ISS-001 resume-opener fix (Start Chat never mute), tz fallback + `Europe/Kyiv` rename +
+    `tzdata` dep. **428 passed, 33 skipped.**
+
+- **Image/video feature specs F-008…F-015 authored (branch `feature/image-features-specs`, off
+  master).** Documentation-only: the full image-generation product broken into eight fine-grained
+  features, each with a feature file + mirror test spec (same file name), all grounded in
+  `architecture.md` (§3.6 Media Delivery, §3.9 night gen service, §4.3 image/video models, §5.1
+  MEDIA_ASSET, §6.1 day/night GPU handoff, DFD-3) and the product docs. No application code yet — this
+  is the docs-first pass the user requested before implementation. **Numbered F-008…F-015** (F-007 was
+  taken by the parallel Life Engine Scheduler feature, so the whole block was shifted +1 before merge).
+  VERSION → `0.39.0` (merge onto the F-006-biography master). The split and each layer's responsibility:
+  - **F-008 Image Generation Runner** — the isolated, model-swappable engine behind a fixed job API;
+    night-batch consumption, GPU day/night handoff with the chat LLM, reference-conditioned generation
+    at 4–8 distilled steps, atomic `media/<slug>/photos/<MED-id>.png` + MEDIA_ASSET write,
+    idempotency/retry/resume/degrade, never on the reply hot path. (A/B model choice = the deferred
+    `feature/image-benchmarks` harness.)
+  - **F-009 Appearance & Identity Consistency** — the "always the same girl" guarantee: persona
+    reference images (`face_ref`/`fullbody_ref`) condition every generation; per-shot ref selection,
+    per-persona isolation, no-reference safe path, holds across settings / SFW↔intimate / days.
+  - **F-010 Generation Prompt Authoring** — turns the Life Engine (F-006) current slot into a
+    structured scene/pose/outfit/lighting prompt (+negatives), authoring ≈5–6 distinct angles per slot;
+    life↔media coherence, provenance logging, model-agnostic job payload.
+  - **F-011 Daily SFW Photo Batch** — the nightly planner that fills tomorrow's archive per persona
+    across the day's slots (F-010→F-008→F-009); dated/slot-tagged assets, idempotent/resumable,
+    graceful per-shot degrade, configurable shot budgets, GPU-handoff-gated, ready before morning.
+  - **F-012 On-Demand Photo Delivery** — serves the right archived photo into live chat matched to the
+    moment (time/activity/F-005 stage); per-user no-repeat, in-voice caption, relationship pacing,
+    intimate-request routing to F-014, graceful exhaustion, NEVER hot-path generation.
+  - **F-013 Dynamic Persona Presentation** — the live, time-aware greeting card + fresh SFW photo on
+    persona selection (gallery→persona entry, post S1-removal); one combined message (no double nudge),
+    varies per open, hot-path-free, graceful empty-archive fallback.
+  - **F-014 Intimate NSFW Photo Gen & Gating** — intimate tier: reuses F-008/F-009/F-010 + a multi-gate
+    policy (hard safety boundary = non-negotiable never-generate block; age/consent; F-005 stage-gated
+    `intimacy_level` unlock; per-persona ceiling clamped to platform limit); off hot path, paced/
+    no-repeat, jailbreak-resistant, audited. The uncensored differentiator, safety-bounded.
+  - **F-015 Intimate Video Keyframes** — generates the gated first/last-frame pair for a short intimate
+    clip (reuses the F-014 gate + F-009 identity); stores a linked `kind=video_keyframe` pair,
+    keyframe-ready for a future i2v model (Wan 2.2 / HunyuanVideo-Avatar). **Video synthesis itself is
+    deferred** — this feature only makes the system keyframe-ready.
+  - Test specs follow the ~2–3-TC-per-requirement rule with explicit `benchmark`/`manual` marking for
+    GPU/human-judged image-quality cases; safety-critical F-014/F-015 gates get the densest
+    (adversarial/jailbreak) coverage. Runnable `tests/` code will be written at implementation time.
+- **F-007 Life Engine Scheduler — the loop now actually runs; her life advances on its own (branch
+  `feature/f-007-scheduler`).** F-006 had all the steps (`run_plan_day/reflect_day/compress/
+  update_goals`) but **nothing drove them**, so every persona's plan/activity/reflections/biography/
+  goals/future was frozen after seeding (only her derived age advanced). F-007 is the missing
+  driver+scheduler. Docs-first (new feature `F-007` + test spec + architecture §4.6), then code:
+  - **`life_engine_runner.py`** — `run_tick(persona, now)` runs the **due** steps (local morning ⇒
+    plan; local end-of-day ⇒ reflect → **compression cascade** day→week→month→year→epoch → goal
+    update → **future-self update**), idempotent per period, degrade-safe (a step's LLM failure
+    writes nothing, never raises); `scheduler_pass` ticks the whole active roster (one persona's
+    failure never stops the rest); `run_scheduler` is the dev in-process loop; `run_persona_now`
+    forces a full run (on-demand).
+  - **`run_update_future`** (new F-006 step + `update_future_v1.txt` prompt) — the missing authoring
+    step that **re-writes** her `FUTURE_PROJECTION` rows from her latest biography + goals, so the
+    future evolves instead of staying the seeded snapshot. `store_future_projection` upserts.
+  - **Wiring** — `app.py` launches `run_scheduler` as a background asyncio task (config
+    `life_engine_enabled` default on, `life_engine_interval_s` = 900), off the reply hot path;
+    `LifeEngineConfig` gains `future_prompt_version` + `tick_interval_s`.
+  - **`python -m services.bot.life_now [Persona]`** — on-demand CLI to advance one persona now
+    (FR-007-12), safe to run while the bot holds the vector store (runs without the index).
+  - **Tests:** `tests/test_f007_scheduler.py` — **34 automated** (FR-007-01..12, NFR-007-02/04/05/
+    06/07), LLM steps stubbed + controlled clock. **Full suite: 412 passed, 33 skipped.**
+  - **Live check (real model):** `run_persona_now(Alina)` generated a believable daily plan that
+    *continued her biography* ("after yesterday's spa at Атмосфера… a walk with Pavel through the
+    old Moscow courtyards"), wrote a reflection, added 2 goals, and re-authored her future-self
+    (week: seeded "finished the Карта желаний module" → new "host the first live Карта желаний
+    community meet-up"). **Known minor issue:** the reflection came out in English — the Life Engine
+    prompts don't yet force the persona's language (NFR-006-13); plan/future were correct Russian.
+
+- **F-006 biography extension — she now has a real, consistent past (and future) fed into every
+  reply (branch `feature/persona-time-biography`).** Fixes the reported gap: personas started
+  life-less (a one-line teaser + Big Five), so Alina **confabulated her childhood**. Docs-first
+  (architecture §4.2/§4.5/§5.1 + F-006 FR-006-22..28 / NFR-006-14/15 + test spec), then code:
+  - **models.py** — `Persona` gains fixed anchors **`birthdate`/`core_values`/`motivation`** and the
+    evolving **`interests`**; new **`FutureProjection`** table (+`Horizon` enum) for the forward
+    "future me" at week/month/year/epoch/lifetime.
+  - **`domain/persona_time.py`** — age is **derived from birthdate at her local date**
+    ("29 years and 150 days"), so the identity prompt is **daily-versioned** (persona-time);
+    leap-day safe, deterministic.
+  - **`persona_prompt.build_system_prompt`** — now injects persona-time identity: derived age +
+    values + motivation + current interests + current top goal.
+  - **`domain/biography.py`** — idempotent **`seed_biography`** (anchors + epoch/year/month/week/day
+    layers + goals + future-self, embedded into the persona-scoped `biography_layers` vector
+    collection) and the reply-time assembler: a bounded **graded recency block** (epoch→year→month→
+    week→recent days) + **semantically-retrieved deep layers** (a childhood question pulls her
+    childhood) + **future-self**. `MemoryIndex.for_collection` shares the one embedded-Qdrant client.
+  - **`orchestrator.handle_turn`** — fuses the biography context + persona-time goal into the single
+    system message; degrades cleanly for un-seeded personas.
+  - **`biographies/alina.py`** — Alina's authored biography imported from the source (birthdate
+    1997-02-15, values/motivation/interests, 3 epochs + years + months + weeks + recent days, 5
+    future-self horizons). Seeded at boot (`app._seed_biographies`), idempotent.
+  - **Tests:** `tests/test_f006_biography.py` — **21 automated** (FR-006-22..28, NFR-006-14/15), a
+    fake biography index exercises semantic recall. **Full suite: 378 passed, 33 skipped.**
+  - **Live check (real model):** asked about her childhood, Alina answers with the *seeded* memories
+    (Moscow courtyard, neighbours Masha/Sasha, morning runs with dad, grandma's records + "Katyusha",
+    chalk/garden) in natural first-person Russian — no more confabulation.
+
 - **F-005 + F-006 integrated into `master` — the full F-001…F-006 stack is now on one branch, green.**
   Both features had been built on independent branches off master (each unaware of the other). Merged
   F-005 (fast-forward-clean) then F-006 into `master`, resolving the shared-file conflicts so both

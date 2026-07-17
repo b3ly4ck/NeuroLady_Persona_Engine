@@ -297,6 +297,82 @@
 
 ---
 
+## Biography extension — seeded biography, persona-time & future-self (FR-006-22..28, NFR-006-14/15)
+
+### FR-006-22 — Seeded initial biography (imported at provisioning, idempotent) (CRITICAL)
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-22-01 | integration | happy | Seeding imports layers across every scope | Given a persona with an authored biography; When seeded; Then BIOGRAPHY_LAYER rows exist at scope epoch/year/month/week/day | automated |
+| TC-FR-006-22-02 | integration | idempotency | Re-seeding does not duplicate layers | Given an already-seeded persona; When seeded again; Then no layer is duplicated (same count) | automated |
+| TC-FR-006-22-03 | integration | happy | Childhood/youth epoch anchors are present | Given a seeded persona; When epoch layers are read; Then period_key childhood and youth exist with content | automated |
+
+### FR-006-23 — Fixed identity anchors as structured persona fields
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-23-01 | unit | happy | Persona carries birthdate/core_values/motivation | Given a seeded persona; When its anchors are read; Then birthdate, core_values, motivation are set | automated |
+| TC-FR-006-23-02 | consistency | mapping | Anchors appear verbatim in the identity prompt | Given a persona with anchors; When the identity prompt is built; Then values/motivation text is present verbatim | automated |
+
+### FR-006-24 — Birthdate-derived, daily-versioned age ("persona-time")
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-24-01 | unit | happy | Age derived as "N years and M days" | Given birthdate and a current date; When age is computed; Then it reads "N years and M days" | automated |
+| TC-FR-006-24-02 | unit | boundary | Exact on birthday and the day after | Given the current date is the birthday; When computed; Then M=0, and the next day M=1 | automated |
+| TC-FR-006-24-03 | unit | boundary | Leap-day birthdate handled without error | Given a Feb-29 birthdate; When computed on a non-leap year; Then it resolves without error | automated |
+
+### FR-006-25 — Evolving persona-time fields (interests + current goal) in identity
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-25-01 | unit | happy | Interests + current goal injected into identity | Given a persona with interests and an active goal; When the identity prompt is built; Then both appear | automated |
+| TC-FR-006-25-02 | integration | happy | Changing interests changes the prompt (not fixed) | Given the interests are updated; When the prompt is rebuilt; Then it reflects the new interests | automated |
+
+### FR-006-26 — Future-self projections (week/month/year/epoch/lifetime)
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-26-01 | integration | happy | Seeding stores all five horizons | Given an authored future-self; When seeded; Then FUTURE_PROJECTION rows exist for week/month/year/epoch/lifetime | automated |
+| TC-FR-006-26-02 | integration | idempotency | One row per horizon (upsert) | Given a re-seed; When projections are counted; Then there is exactly one per horizon | automated |
+
+### FR-006-27 — Biography served into every reply (graded + semantic, no anchor contradiction) (CRITICAL)
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-27-01 | integration | happy | Reply context includes the graded recency block | Given a seeded persona; When a turn is assembled; Then the system prompt carries the graded epoch→year→month→week→days summary | automated |
+| TC-FR-006-27-02 | integration | happy | A childhood question retrieves the childhood epoch | Given a semantic index; When the user asks about her childhood; Then the childhood epoch layer is recalled into context | automated |
+| TC-FR-006-27-03 | consistency | boundary | Served biography is present and does not contradict anchors | Given the assembled context; When inspected; Then the biography block is present and the fixed anchors are unchanged | automated |
+
+### FR-006-28 — Future-self served into reply context when relevant
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-28-01 | integration | happy | Future-self available in the reply context | Given seeded projections; When a turn is assembled; Then a "where she's heading" block is present | automated |
+| TC-FR-006-28-02 | integration | negative | No projections → block absent (degrade) | Given a persona with no projections; When a turn is assembled; Then no future-self block is added and the turn still works | automated |
+
+### FR-006-29 — She always knows her own local clock (reply context carries local date/time)
+
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-29-01 | integration | happy | Current local time line present in the turn context | Given a persona in Europe/Moscow at a fixed UTC instant; When the turn context is assembled; Then it contains her local weekday + approximate time of day | automated |
+| TC-FR-006-29-02 | unit | boundary | Clock line is timezone/DST-correct per persona | Given personas in different zones at one UTC instant; When each context is built; Then each carries its own correct local time | automated |
+| TC-FR-006-29-03 | e2e | manual | She answers "what time is it for you?" correctly | Given a live chat in a known timezone gap; When asked about her time of day; Then her answer matches her local clock (live-caught regression: said "noon" at 19:00) | planned |
+
+### FR-006-30 — Daily plans are time-addressable (parseable HH:MM markers)
+
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-FR-006-30-01 | unit | happy | Plan prompt demands clock-marked entries | Given the current plan prompt asset; When inspected; Then it instructs explicit HH:MM markers for the day's activities | automated |
+| TC-FR-006-30-02 | integration | happy | A marker-formatted plan slots correctly | Given a plan with HH:MM markers; When current_activity runs at a covered time; Then the matching slot (not the whole text) is returned | automated |
+
+### NFR-006-14 — Persona-time determinism (daily-versioned, stable within a day)
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-NFR-006-14-01 | consistency | happy | Same date + state → identical identity block | Given fixed date and state; When the identity prompt is built twice; Then the two outputs are identical | automated |
+| TC-NFR-006-14-02 | consistency | boundary | Next local day increments the age by one day | Given the local date advances by one day; When rebuilt; Then the derived age gains exactly one day | automated |
+
+### NFR-006-15 — Bounded biography context (length-capped for the reply budget)
+| TC | level | case | title | Gherkin | status |
+|----|-------|------|-------|---------|--------|
+| TC-NFR-006-15-01 | performance | boundary | Served biography stays under the length bound | Given a persona with a long history; When the biography block is built; Then its length is under the configured bound | automated |
+| TC-NFR-006-15-02 | performance | boundary | Graded block caps the number of layers | Given many layers per scope; When the graded block is built; Then the number of included layers is bounded | automated |
+
+---
+
 ## User-story acceptance (manual real-device E2E)
 
 One manual acceptance test per user story — judges the felt "she has a real, consistent, moving
@@ -351,7 +427,15 @@ life" quality that automation can't fully score.
   consistency / statistical / integration / error / persistence. **13/13 NFR covered. ✓**
 - **User stories:** US-006-01..08 — **8 manual real-device acceptance tests**
   (TC-US-006-01-01 .. TC-US-006-08-01). **8/8 US covered. ✓**
-- **Grand total: 103 enumerated tests** (60 FR + 35 NFR + 8 US) — within the 100-150 target band.
+- **Biography extension (FR-006-22..28, NFR-006-14/15):** **21 automated tests** — seeded biography
+  import + idempotency (FR-006-22 ×3), anchors-as-fields (FR-006-23 ×2), birthdate-derived versioned
+  age incl. birthday/leap boundaries (FR-006-24 ×3), evolving interests/goal in identity
+  (FR-006-25 ×2), future-self horizons + upsert (FR-006-26 ×2), biography-served graded + semantic +
+  no-anchor-contradiction (FR-006-27 ×3), future-self served + degrade (FR-006-28 ×2), persona-time
+  determinism (NFR-006-14 ×2), bounded biography context (NFR-006-15 ×2). All **automated** (fast,
+  no live model).
+- **Grand total: 129 enumerated tests** (86 FR + 37 NFR + 8 US: FR-006-01..30, NFR-006-01..15,
+  US-006-01..08) — within the 100-150 target band.
 - Every test ID embeds the `FR-`/`NFR-`/`US-` id it verifies, matching the feature file's IDs, so
   coverage is traceable in both directions.
 </content>

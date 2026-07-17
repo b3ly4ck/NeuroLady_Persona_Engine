@@ -12,7 +12,7 @@ import json
 import logging
 from dataclasses import dataclass
 
-from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
+from services.bot.chat_client import BRIEF_REASONING_DIRECTIVE, ChatClient, ChatRunnerUnavailable
 from services.bot.domain.relationship import RelState
 from services.bot.prompts import load_prompt
 
@@ -96,7 +96,7 @@ async def run_reflection(
         # Sent as a user message: the chat template requires at least one user query (a system-only
         # message 500s). The whole reflection instruction is self-contained.
         raw = await chat_client.complete(
-            [{"role": "user", "content": prompt}], temperature=0.3, max_tokens=400)
+            [{"role": "user", "content": BRIEF_REASONING_DIRECTIVE + prompt}], temperature=0.3, max_tokens=3072)  # CoT + JSON (reasoning ON)
     except ChatRunnerUnavailable as exc:
         log.warning("relationship reflection skipped (LLM unavailable): %s", exc)
         return None

@@ -239,8 +239,14 @@ Feature: F-001 Onboarding & Persona Selection
   There is now **no main menu screen and no `≡ Menu` button anywhere in the product** — the reply
   keyboard carries only **`💋 Choose Lady`** (FR-001-12). Do not reuse this id.
 - **FR-001-17** — Repeated **`/start`** (rapid resend) or repeated taps of **"Start Chat"**
-  (double-tap) must be **idempotent**: no duplicate `USER`/state and no duplicate session or intro
-  video note.
+  (double-tap) must be **idempotent**: no duplicate `USER`/state, no duplicate session, and no
+  duplicate opener — **rapid duplicate taps within a short guard window are deduplicated** (at most
+  one opener is delivered). However, idempotency must never produce an **empty chat**: when the
+  user picks a persona whose session is being **resumed** (same persona, active session — e.g.
+  returning via the gallery later, including after deleting the Telegram chat client-side, which
+  the bot cannot observe), Start Chat must send a **short in-character resume opener** (not the
+  full first-time intro) before the S2 messages are cleaned up. **Start Chat always ends with a
+  message from the persona** (see the §1.3 never-empty principle; ISS-001).
 - **FR-001-18** — If a persona has no `intro_videonote_ref`, the system must **fall back gracefully**
   (send a text and/or photo intro), still open the chat, and never leave the user on a broken/dead
   screen.

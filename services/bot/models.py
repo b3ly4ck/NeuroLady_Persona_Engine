@@ -7,10 +7,11 @@ comm_settings_json, the various media `*_ref` paths) are modelled now so later f
 from __future__ import annotations
 
 import enum
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     BigInteger,
+    Date,
     DateTime,
     Enum,
     ForeignKey,
@@ -56,6 +57,15 @@ class GoalStatus(str, enum.Enum):
     dropped = "dropped"
 
 
+class Horizon(str, enum.Enum):
+    """Future-self projection horizons (F-006 FR-006-26, architecture.md §5.1 FUTURE_PROJECTION)."""
+    week = "week"
+    month = "month"
+    year = "year"
+    epoch = "epoch"
+    lifetime = "lifetime"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -77,7 +87,16 @@ class Persona(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     name: Mapped[str] = mapped_column(String(64))
     profession: Mapped[str] = mapped_column(String(128), default="")
+    # `age` is a display fallback; her real age is DERIVED from `birthdate` (F-006 persona-time,
+    # FR-006-24). Kept for personas without an authored birthdate / for the gallery card.
     age: Mapped[int] = mapped_column(Integer, default=0)
+    # F-006 biography extension — FIXED identity anchors (immutable; FR-006-23). `birthdate` drives
+    # the daily-versioned age; `core_values`/`motivation` are used verbatim and never contradicted.
+    birthdate: Mapped[date | None] = mapped_column(Date, nullable=True)
+    core_values: Mapped[str] = mapped_column(Text, default="")
+    motivation: Mapped[str] = mapped_column(Text, default="")
+    # EVOLVING persona-time field (FR-006-25) — fed into the identity prompt, may change over time.
+    interests: Mapped[str] = mapped_column(Text, default="")
     timezone: Mapped[str] = mapped_column(String(64), default="UTC")
     # First-person gallery teaser (architecture.md §5.1 PERSONA.card_description).
     card_description: Mapped[str] = mapped_column(Text, default="")
@@ -295,6 +314,26 @@ class Goal(Base):
     status: Mapped[GoalStatus] = mapped_column(Enum(GoalStatus), default=GoalStatus.active, index=True)
     priority: Mapped[int] = mapped_column(Integer, default=3)  # 1 (low) .. 5 (high)
     horizon: Mapped[str] = mapped_column(String(16), default="medium")  # short|medium|long
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
+    )
+
+
+class FutureProjection(Base):
+    """A persona's first-person "future me" at one horizon (ERD §5.1 FUTURE_PROJECTION, F-006
+    FR-006-26). Forward-facing counterpart of BIOGRAPHY_LAYER; seeded and thereafter authorable,
+    kept consistent with goals + biography. One row per (persona, horizon) — upserted.
+    """
+
+    __tablename__ = "future_projections"
+    __table_args__ = (UniqueConstraint("persona_id", "horizon", name="uq_future_persona_horizon"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), index=True)
+    horizon: Mapped[Horizon] = mapped_column(Enum(Horizon), index=True)
+    content: Mapped[str] = mapped_column(Text, default="")
+    prompt_version: Mapped[str] = mapped_column(String(32), default="")  # audit (FR-006-21)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=_utcnow, onupdate=_utcnow
