@@ -26,6 +26,7 @@ from aiogram.types import (
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot import keyboards, views
+from services.bot.domain import presentation
 from services.bot.domain.gallery import list_gallery_personas
 from services.bot.domain.sessions import start_or_switch_session
 from services.bot.domain.users import get_or_create_user
@@ -35,6 +36,10 @@ from services.bot.views import CardContent
 
 log = logging.getLogger(__name__)
 router = Router(name="onboarding")
+
+# Sentinel for send_persona_intro's `photo_ref`: distinguishes "caller said no photo" (None) from
+# "caller didn't override — use her gallery photo" (_UNSET). Used by the F-013 greeting hook.
+_UNSET: object = object()
 
 _CHOOSE_LADY_LABELS = {t("btn_choose_lady", "en"), t("btn_choose_lady", "ru")}
 
@@ -156,13 +161,22 @@ async def send_persona_intro(
     chat_id: int,
     persona: Persona,
     reply_markup: ReplyKeyboardMarkup | None = None,
+    *,
+    opener: str | None = None,
+    photo_ref: str | None = _UNSET,
 ) -> str:
     """S3 intro (FR-001-11/18/20): video-note circle, else photo+opener, else text opener.
 
     The opener text always carries the reply keyboard (FR-001-12) — a single opener message, no
     separate "ready to chat" follow-up. Media (a circle or photo) is her first "she's real" hit.
-    """
-    opener = views.intro_opener(persona)
+
+    F-013 hook: `opener`/`photo_ref` let the caller substitute the live, time/context-aware greeting
+    (services/bot/domain/presentation.py) for the static default while reusing this single-send
+    fallback ladder. Both default to the F-001 static content, so callers that pass neither (and the
+    F-001 tests that call this directly) see the original behavior. A `photo_ref` of `None` means
+    "no photo" (text-only greeting), distinct from the `_UNSET` default ("use her gallery photo")."""
+    opener = opener if opener is not None else views.intro_opener(persona)
+    ref = persona.gallery_photo_ref if photo_ref is _UNSET else photo_ref
     circle = _photo_file(persona.intro_videonote_ref)
     if circle is not None:
         try:
@@ -172,7 +186,7 @@ async def send_persona_intro(
         except Exception:  # pragma: no cover - defensive; fall through to text opener
             log.warning("intro video note failed for persona %s; using opener only", persona.id)
 
-    photo = _photo_file(persona.gallery_photo_ref)
+    photo = _photo_file(ref)
     if photo is not None:
         await bot.send_photo(chat_id, photo, caption=opener, reply_markup=reply_markup)
         return "photo"
@@ -248,8 +262,15 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
     _, is_new_intro = await start_or_switch_session(db, user.id, persona_id)
     try:
         if is_new_intro:
+            # F-013 hook (the ONLY F-013 edit to this F-001 handler): compose the live,
+            # time/context-aware greeting card (greeting text + a fitting SFW archive photo) and
+            # send it as the ONE S3 opener message. Content only — this handler still owns the
+            # single send + the S2 cleanup + navigation (FR-013-03/10). Falls back to a text-only
+            # greeting when the archive is empty (FR-013-08).
+            card = await presentation.compose_presentation(db, persona)
             await send_persona_intro(
-                bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale)
+                bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale),
+                opener=card.text, photo_ref=card.photo_ref,
             )
             _mark_opener_sent(chat_id, persona_id)
         elif not _opener_recently_sent(chat_id, persona_id):  # resume — never silent (ISS-001)

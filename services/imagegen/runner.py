@@ -199,7 +199,9 @@ class ImageRunner:
             return
 
         asset = await store.store_asset(
-            db, persona, job, image_bytes, self.settings.media_root)
+            db, persona, job, image_bytes, self.settings.media_root,
+            kind=_kind_for_job(job.job_key))
+        _augment_keyframe_meta(asset, job.job_key)
         await queue_ops.mark_done(db, row, asset.id)
         self.metrics.jobs_done += 1
         self.metrics.gen_seconds.append(time.monotonic() - t0)
@@ -219,6 +221,33 @@ class ImageRunner:
             ):
                 return False
             return await queue_ops.pending_count(db) > 0
+
+
+def _kind_for_job(job_key: str):
+    """F-015 keyframe jobs (`<base>-first`/`<base>-last` keys) persist as kind=video_keyframe;
+    everything else is a photo. Keeps the engine generic while the linked pair stays queryable."""
+    from services.bot.models import MediaKind
+    from services.imagegen import keyframes
+    try:
+        keyframes.split_keyframe_key(job_key)
+        return MediaKind.video_keyframe
+    except ValueError:
+        return MediaKind.photo
+
+
+def _augment_keyframe_meta(asset, job_key: str) -> None:
+    """Stamp the pair linkage (`pair_id` + `frame`) into meta_json for keyframe assets (F-015
+    FR-015-04) so `load_keyframe_pair` finds both halves."""
+    import json as _json
+
+    from services.imagegen import keyframes
+    try:
+        pair_id, frame = keyframes.split_keyframe_key(job_key)
+    except ValueError:
+        return
+    meta = _json.loads(asset.meta_json or "{}")
+    meta["pair_id"], meta["frame"] = pair_id, frame
+    asset.meta_json = _json.dumps(meta, ensure_ascii=False)
 
 
 async def check_empty_archive_alert(

@@ -20,10 +20,13 @@ from aiogram.types import Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient
+from services.bot.domain.gate_adapter import F014GateAdapter
 from services.bot.domain.humanize import chunk_reply, pacing_delays, parse_settings
+from services.bot.domain.media_delivery import looks_like_photo_request
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.domain.vector_store import MemoryIndex
+from services.bot.handlers.media import serve_photo_request
 from services.bot.models import Persona
 from services.bot.orchestrator import handle_turn, update_relationship, update_user_memory
 
@@ -62,6 +65,18 @@ async def on_text(
     persona = await db.get(Persona, session.persona_id)
     if persona is None:  # defensive: session points at a removed persona
         await message.answer(_PICK_FIRST.get(user.locale, _PICK_FIRST["en"]))
+        return
+
+    # F-012/F-014 integration: a photo request short-circuits into media delivery (lookup+send,
+    # no generation — F-008 NFR-008-04); everything else stays a normal conversation turn.
+    if looks_like_photo_request(message.text):
+        await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
+        await serve_photo_request(
+            message, db,
+            user_id=user.id, persona=persona, request_text=message.text, context={},
+            chat_client=chat_client, gate=F014GateAdapter(db),
+        )
+        await db.commit()
         return
 
     # Immediate acknowledgement — the chat never looks frozen while we generate (FR-002-24).
