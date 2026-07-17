@@ -2,6 +2,47 @@
 
 ## Recent changes
 
+- **F-010 Generation Prompt Authoring IMPLEMENTED (branch `feature/f-010-prompt-authoring`, on top
+  of F-008) — turns a persona's Life Engine state into model-ready image prompts.** New module
+  `services/imagegen/prompt_author.py` (pure text composition, NO model/network/I-O — NFR-010-06):
+  - **Inputs.** `LifeSlot{activity, location, mood, time_of_day}` is what F-011 hands us, derived
+    from F-006 (`current_activity(...)` + local time). Helpers `time_of_day_from_hour()` and
+    `slot_from_activity(activity, now_local, ...)` derive the time-of-day bucket
+    (morning/afternoon/evening/night) so a caller with only the free-text activity still gets
+    time-coherent lighting (FR-010-01/07).
+  - **Style (config-driven, FR-010-06/NFR-010-04).** `PersonaStyle{aesthetic, palette, outfits,
+    locations}` per persona_slug; `PromptAuthorConfig{shot_count, subject_token, realism_cues,
+    negatives, framings, time_lighting, default_scene, default_style, styles{slug->style}, params}`
+    with `.from_dict()` (load from YAML/JSON — retune with no code change).
+  - **Composition (FR-010-02).** `author_prompt(slot, style, framing, cfg, seed, shot_index)` →
+    subject placeholder + scene/activity + location + outfit + framing/pose + time-of-day lighting +
+    mood + phone-photo realism cues + aesthetic/palette. Negatives are emitted separately onto
+    `GenParams.negative`.
+  - **Shot-set variety (FR-010-04).** `_select_framings()` rotates a curated vocabulary of 8
+    genuinely-distinct angles (`DEFAULT_FRAMINGS`: close selfie, wide establishing, candid side,
+    mirror, low/high angle, over-the-shoulder, medium portrait) by seed; distinct while count ≤ 8,
+    wrapping with a variation suffix beyond. Default N=6.
+  - **Never restates identity (FR-010-05).** `BANNED_IDENTITY_TERMS` (hair/eye/face/skin/body/age
+    descriptors) + `assert_no_identity_terms()` guard every authored prompt; the bare subject noun
+    ("woman") is allowed — face/body consistency is F-009's reference conditioning.
+  - **SFW-only (NFR-010-07).** `EXPLICIT_TERMS` + `assert_sfw()` — intimate vocabulary stays in
+    F-014.
+  - **Safe default (FR-010-09).** Empty/None/whitespace slot → `DEFAULT_SCENE` (config-defined),
+    never crashes.
+  - **Determinism (NFR-010-03).** Same slot + `base_seed` → byte-identical prompts, per-shot seeds
+    (`base_seed + i`) and idempotent `job_key`s (`<prefix>#<nn>`, prefix from a sha1 slot signature).
+  - **Output = F-008 job contract (FR-010-08/10/11).** `author_jobs(persona_slug, slot, style,
+    config, count, base_seed, job_key_prefix, references)` — the entry point **F-011** calls —
+    returns `list[GenerationJob]` with `SlotMeta{pose/background/location/activity/time_of_day}`;
+    F-008's `store.store_asset` writes `slot_meta_json()` (5 fields + prompt + seed) into
+    `MEDIA_ASSET.meta_json`, so provenance is fully traceable and On-Demand (F-012) can pick by
+    context. `references` (F-009 identity refs) are passed through untouched.
+  - **Tests:** `tests/test_f010_prompt_authoring.py` — 39 TCs (29 real, 10 skips for
+    benchmark/manual/GPU-judged image-level + user-story acceptance); mirrors the test spec. Whole
+    suite green (509 passed, 55 skipped).
+  - Base note: this branch was cut on top of the F-008 engine (services/imagegen/); it adds only the
+    additive `prompt_author.py` module + its test — no existing engine file was modified.
+
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
   (deliberately GPU-free: it orchestrates the model over the ComfyUI HTTP API, so torch/CUDA stay in
