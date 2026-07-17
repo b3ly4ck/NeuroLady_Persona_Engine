@@ -42,6 +42,81 @@
     suite green (509 passed, 55 skipped).
   - Base note: this branch was cut on top of the F-008 engine (services/imagegen/); it adds only the
     additive `prompt_author.py` module + its test — no existing engine file was modified.
+- **F-011 Daily SFW Photo Batch IMPLEMENTED (branch `feature/f-011-daily-batch`, v0.45.0) — the
+  NIGHTLY PLANNER that fills each persona's next-day SFW photo archive.** Additive module
+  `services/imagegen/batch_planner.py` (orchestration only — it holds no GPU, imports no backend,
+  and never renders; F-008 renders, F-011 enqueues):
+  - **Slot derivation (FR-011-02):** `derive_slots(plan_text)` turns a persona's F-006 free-text
+    `DAILY_PLAN` (HH:MM markers) into ordered `SlotContext`s via `life_engine._split_slots`, tagging
+    each with `time_of_day` (morning/afternoon/evening/night), a short `activity` summary, and a
+    best-effort `location` guess. A markerless-but-nonempty plan degrades to one whole-day slot
+    (never zero coverage — NFR-011-02).
+  - **Shot-set commissioning (FR-011-03/09):** per active persona, per slot, commission
+    `shots_per_slot` shots (default 6, rotating camera angles). `BatchPlanConfig` is the config-only
+    budget knob: `shots_per_slot`, `slots` filter, `plan_days_ahead` (default 1 = tomorrow),
+    `base_seed`, and `per_persona` overrides keyed by slug (FR-011-09/NFR-011-06 — data edits, no
+    code change).
+  - **Boundaries as injected Protocols:** `PromptAuthor.author(persona, slot, shot_index) ->
+    AuthoredShot{prompt, negative, SlotMeta}` is the **F-010** contract (a minimal
+    `DefaultPromptAuthor` ships so the planner runs standalone; F-010's real author is injected at
+    integration). `ReferenceProvider.references_for(persona)` is the **F-009** hook
+    (`DefaultReferenceProvider` forwards the persona's `face_ref`/`fullbody_ref` — TODO: F-009
+    replaces it behind the same Protocol with its reference-selection policy).
+  - **Idempotent + resumable (FR-011-06/NFR-011-04):** deterministic
+    `job_key_for(slug, date, slot_idx, shot_idx)` = `daily-<slug>-<date>-<slot>-<shot>`; re-running
+    the planner reuses the same keys so `queue_ops.enqueue` dedupes (proven: re-run → 0 new jobs).
+    Generation resume is the existing F-008 runner (`requeue_stale`).
+  - **Degrade + isolation (FR-011-07/NFR-011-07):** per-shot planning failures are caught + logged
+    and don't abort the slot; a whole-persona failure is caught and doesn't abort the roster
+    (per-persona commit after each persona). Metrics: `PlanMetrics.snapshot()` returns/logs
+    planned/enqueued/existing/failed counts overall + per persona (FR-011-11/NFR-011-08).
+  - **Window/GPU (FR-011-01/08/10, NFR-011-03):** `should_run(personas, now)` gates on the same
+    `in_media_window` the F-008 runner uses (planning is cheap but the batch is a night job).
+    `run_nightly(sessionmaker, runner, now)` = gate → `plan_day` → `runner.run_batch` (F-008 does
+    the `unload_chat → load → drain → close → reload_chat` handoff); returns `{"ran": False}` in the
+    day window so the batch waits and the chat model keeps the GPU. SFW only: every job asserts
+    `intimate=False`.
+  - **No engine files touched** — `contract.py`/`queue_ops.py`/`runner.py`/`store.py` are read-only;
+    F-011 is purely additive. Dating is via `MEDIA_ASSET.created_at` (same-day, NFR-011-01); slot
+    tags ride `SlotMeta` → `meta_json` for F-012/F-013 context selection (FR-011-05).
+  - **Tests: `tests/test_f011_daily_batch.py` — one test per declared TC (40): 32 runnable (real
+    plan→enqueue→drain against FakeBackend + tmp media root + in-memory DB, fake F-010 author),
+    8 explicit skips (GPU throughput/coverage benchmark + 5 manual US acceptance). Full suite:
+    512 passed, 53 skipped.** Test-spec statuses updated to `implemented`.
+- **F-009 Appearance & Identity Consistency IMPLEMENTED (branch `feature/f-009-identity`) — the
+  reference-conditioning POLICY on top of the F-008 engine.** New module `services/imagegen/
+  identity.py` (additive; no existing F-008 file touched), stdlib + pydantic-settings only, no
+  model/server code — model-agnostic (FR-009-10 / NFR-009-05):
+  - **`IdentityPolicy`** — decides *which* persona reference(s) condition a shot and *how strongly*,
+    then writes them into the fixed contract's `GenerationJob.references` (the single F-008
+    integration point). `classify_shot(job)` infers face-vs-full-body from the F-010-authored
+    prompt+slot text via config-driven keyword lists (full-body wins ties; configurable default).
+    `select()` is pure and reads ONLY the given persona's anchors (per-persona isolation, FR-009-07);
+    `apply()` mutates the job; `require()` raises `NoReferenceError` for strict callers.
+  - **Reference-per-shot (FR-009-03):** face shots lead with `face_ref`, full-figure shots with
+    `fullbody_ref`; a full-body shot with only a face anchor safely falls back to the face anchor
+    (right identity, never nothing). Optional secondary anchor attached for extra identity signal.
+  - **No-reference safe path (FR-009-08):** a persona with no anchors yields a typed *skipped*
+    `IdentitySelection` (empty references → the F-008 backend rejects the job with a defined error)
+    or a config-defined placeholder — NEVER a wrong-identity generation, never a crash.
+  - **`IdentityPolicySettings`** (env prefix `IDENTITY_`, NFR-009-07): `face_keywords`,
+    `full_body_keywords`, `default_shot_type`, `face_strength`/`full_body_strength`,
+    `include_secondary_reference`, `no_reference_action` (skip|placeholder), `placeholder_reference`
+    — selection + strength re-tunable with no code change. Canonical path helpers
+    `face_reference_path`/`fullbody_reference_path` (`media/<slug>/reference/{face,fullbody}.png`, §6.3).
+  - **Strength** is a policy-level decision on the selection (for logging / future weight-aware
+    backends); it deliberately does NOT ride the job contract, keeping identity decoupled from any
+    model's knobs.
+  - **Consumes, never captures** references (FR-009-09): reads `PERSONA.face_ref`/`fullbody_ref`
+    only; no upload/write/persistence code (asserted by a source-scan test). Persona Studio owns
+    authoring.
+  - **Tests: `tests/test_f009_identity.py` — one test per declared TC (41): 23 runnable (policy
+    selection, job forwarding, per-persona isolation across the roster, no-reference safety,
+    config-driven tuning, model-agnostic round-trip) + 18 explicit skips (GPU/benchmark + manual
+    US/fidelity acceptance).** Test-spec statuses updated (implemented / out-of-band per TC);
+    supplementary automatable TCs registered: TC-FR-009-04-03, -05-03, -08-03, TC-NFR-009-07-02.
+    Full suite: **504 passed, 62 skipped.** No shared file modified (models.py already carried
+    `face_ref`/`fullbody_ref`); no F-008/F-010/F-011/F-014 internals touched.
 
 - **F-008 Image Generation Runner IMPLEMENTED (branch `feature/f-008-image-runner`) — the night-
   batch engine that turns queued jobs into stored MEDIA_ASSETs.** New package `services/imagegen/`
