@@ -54,6 +54,8 @@
 |---------|-------|------|-------------|---------------------|--------|
 | TC-FR-008-05-01 | integration | happy | Reference forwarded to the model | Given a job with a reference image; When generating; Then the reference is supplied to the img-edit model as input | implemented |
 | TC-FR-008-05-02 | unit | empty | Missing reference handled | Given a job without a reference; When run; Then a defined behavior (reject or text-to-image per config), no crash | implemented |
+| TC-FR-008-05-03 | integration | happy | All references fed, not just the first | Given a job with face+fullbody references; When the workflow is built; Then BOTH are bound (image1, image2), ordered | implemented |
+| TC-FR-008-05-04 | unit | boundary | Reference count capped at the model limit | Given 4+ references; When built; Then only the first 3 are bound (node limit), no crash | implemented |
 
 ### FR-008-06 — Generation params in job/config, not hard-coded
 

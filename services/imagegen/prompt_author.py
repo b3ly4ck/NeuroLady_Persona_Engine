@@ -27,6 +27,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from services.imagegen.contract import GenerationJob, GenParams, SlotMeta
+# FR-010-13: the directive's wording is F-009's; F-010 only places it at the prompt opening.
+from services.imagegen.identity import preservation_directive
 
 # ── life-slot input (what F-006/F-011 hands us) ──────────────────────────────────────────────────
 
@@ -386,10 +388,16 @@ def author_jobs(
     prefix = job_key_prefix or f"{persona_slug}:{slot_signature(persona_slug, slot, base_seed)}"
     negative = ", ".join(config.negatives)
 
+    # FR-010-12: every prompt OPENS with F-009's identity-preservation directive, bound to the
+    # anchors actually supplied (Picture 1 = face, Picture 2 = body). Without it the model reads a
+    # generic subject and drifts off the reference (architecture.md §4.3b).
+    directive = preservation_directive(len(references or []))
+
     jobs: list[GenerationJob] = []
     for i, framing in enumerate(_select_framings(config, n, base_seed)):
         seed_i = base_seed + i
-        prompt = author_prompt(slot, style, framing, config, seed=base_seed, shot_index=i)
+        scene = author_prompt(slot, style, framing, config, seed=base_seed, shot_index=i)
+        prompt = f"{directive}{scene}" if directive else scene
         params = replace(config.params, seed=seed_i, negative=negative)
         meta = SlotMeta(
             pose=framing.pose,

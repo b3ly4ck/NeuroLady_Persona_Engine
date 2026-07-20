@@ -159,6 +159,24 @@ Feature: F-009 Appearance & Identity Consistency
 - **FR-009-10** — The conditioning must be applied through the **fixed F-008 job contract** (the
   reference is part of the job payload), so identity conditioning does not couple to a specific
   model and survives an A→B model swap.
+- **FR-009-11** — **Multi-anchor conditioning (CRITICAL).** When a persona has more than one anchor,
+  the policy must supply **all of them, ordered**, up to the model's input limit (3 for
+  `TextEncodeQwenImageEditPlus`, architecture.md §4.3b): **Picture 1 = `face_ref`** (facial
+  identity), **Picture 2 = `fullbody_ref`** (body proportions/anatomy, which a face crop cannot
+  convey). Supplying only the face anchor when a body anchor exists is a defect — the anatomy then
+  comes from the model's prior, not from her.
+- **FR-009-12** — **Identity-preservation directive (CRITICAL).** F-009 must define the mandatory
+  directive that binds the output to the supplied pictures — asserting preservation of the **exact
+  face, facial features and body proportions of the person in Picture 1/Picture 2** — and expose it
+  for F-010 to place at the **start** of every authored prompt (architecture.md §4.3b). A prompt
+  whose subject is a generic "a woman", with no binding to the input pictures, is a defect.
+- **FR-009-13** — **Preserve ≠ describe.** The directive must assert *preservation of the person in
+  the input pictures*; it must never *describe* her appearance (hair/eye colour, body type) — those
+  are carried by the anchors. It is consequently **exempt** from F-010's banned-identity-vocabulary
+  guard, which targets descriptions only (F-010 FR-010-05).
+- **FR-009-14** — The directive and the anchor ordering must be **model-agnostic**: expressed in the
+  fixed job contract (prompt text + ordered `references`), so a model swap keeps identity
+  conditioning intact (ties FR-009-10, NFR-009-05).
 
 ### Non-functional
 

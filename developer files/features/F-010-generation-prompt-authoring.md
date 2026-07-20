@@ -140,7 +140,16 @@ Feature: F-010 Generation Prompt Authoring
 - **FR-010-04** — For a single slot, authoring must produce a **set of several distinct
   framings/angles** (configurable N, default ≈5–6) — genuinely different shots, not near-duplicates.
 - **FR-010-05** — Prompt authoring must **not restate or override identity** — it describes scene/pose/
-  camera only; identity is supplied by F-009's reference conditioning.
+  camera only; identity is supplied by F-009's reference conditioning. The banned-identity-vocabulary
+  guard targets **descriptions** of her appearance and must **exempt** the preservation directive of
+  FR-010-12 (F-009 FR-009-13).
+- **FR-010-12** — **Every authored prompt must OPEN with F-009's identity-preservation directive
+  (CRITICAL)**, before any scene content: an explicit instruction to preserve the **exact face,
+  facial features and body proportions of the person in Picture 1/Picture 2**, then "place this same
+  person in …" + the scene (architecture.md §4.3b). Emitting a prompt whose subject is a generic
+  "a woman", unbound to the input pictures, is a defect — the model drifts off the reference.
+- **FR-010-13** — The directive's **wording is owned by F-009** and consumed here; F-010 places it,
+  does not author its identity semantics (boundary with FR-010-05).
 - **FR-010-06** — Authoring must honor **persona visual-style attributes** (aesthetic, palette, typical
   outfits, favorite locations), configurable per persona without code changes.
 - **FR-010-07** — **Time-of-day and location coherence:** lighting and setting in the prompt must match

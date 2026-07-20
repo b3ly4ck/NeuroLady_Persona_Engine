@@ -79,6 +79,19 @@
 | TC-FR-010-11-01 | integration | happy | Given authored shot meta (pose/bg/location/activity/time); When stored via F-008; Then meta_json holds them | pass |
 | TC-FR-010-11-02 | unit | mapping | Given the meta fields; When On-Demand (F-012) queries; Then they are selectable | pass |
 
+### FR-010-12 — Prompt OPENS with the identity-preservation directive (CRITICAL)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-12-01 | unit | happy | Given an authored prompt; When inspected; Then it BEGINS with the preservation directive, before any scene text | implemented |
+| TC-FR-010-12-02 | unit | negative | Given any authored prompt; When inspected; Then it never opens with a generic unbound subject ("candid photo of a woman") | implemented |
+| TC-FR-010-12-03 | unit | happy | Given two anchors supplied; When authored; Then the directive references both pictures and the scene follows after it | implemented |
+
+### FR-010-13 — Directive wording owned by F-009, only placed here
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-13-01 | unit | mapping | Given F-010 source; When inspected; Then the directive text comes from F-009, not re-authored locally | implemented |
+| TC-FR-010-13-02 | unit | consistency | Given F-009's directive changes; When prompts are authored; Then the new wording flows through unchanged | implemented |
+
 ---
 
 ## Non-functional requirements

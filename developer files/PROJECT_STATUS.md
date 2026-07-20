@@ -2,6 +2,30 @@
 
 ## Recent changes
 
+- **Identity-preservation directive + multi-anchor conditioning (v0.54.0) — fixes two defects found
+  in live review of the actual generated prompt.** Docs-first (architecture.md **§4.3b** new binding
+  "Reference-conditioning contract", F-009 FR-009-11..14, F-010 FR-010-12/13, F-008 FR-008-05
+  extended; +17 TCs across the three mirror test specs), then code:
+  - **Defect 1 — prompts had NO identity binding.** Authored prompts opened with
+    `candid photo of a woman, …` — a generic subject that invites an edit model to drift off the
+    reference. Root cause: F-010's banned-identity-vocabulary guard (correctly forbidding
+    *descriptions*) left nothing binding the output to the input picture. Fix:
+    `identity.preservation_directive(n)` (F-009 owns the wording) now OPENS every prompt —
+    *"Preserve the exact face, facial features, head shape, skin tone and body proportions of the
+    person in Picture 1 … Place this same person in the following scene: …"* (two-anchor variant
+    splits face=Picture 1 / anatomy=Picture 2). It **preserves, never describes**, so it is exempt
+    from the guard.
+  - **Defect 2 — only the FIRST reference reached the model.** `TextEncodeQwenImageEditPlus` binds
+    **image1/image2/image3** → `Picture 1/2/3`, but the workflow wired only `image1` and the backend
+    staged only `references[0]` — silently discarding the full-body anchor F-009 selects, so anatomy
+    came from the model prior instead of from her. Fix: `_stage_references` stages all anchors in
+    order (capped at 3) and `_bind_extra_references` injects extra `LoadImage` nodes into the
+    positive encoder's `image2`/`image3`. F-009 gained `max_references` (default 3).
+  - Tests: `tests/test_identity_directive.py` — 18 runnable (anchor ordering/cap, directive wording
+    per anchor count, preserve-not-describe scan, guard exemption, contract round-trip, prompt opens
+    with the directive, wording owned by F-009, both anchors bound in workflow order, 3-image cap).
+    Full suite: **724 passed, 109 skipped**.
+
 - **Image pipeline INTEGRATION WIRING (branch `feature/image-integration`, v0.52.0) — the seven
   parallel-built features now run as ONE pipeline.** The per-feature protocol stubs are replaced
   with the real implementations at a single seam each:

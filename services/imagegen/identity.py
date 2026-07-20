@@ -113,7 +113,10 @@ class IdentityPolicySettings(BaseSettings):
     face_strength: float = 0.9
     full_body_strength: float = 0.85
     # Attach the *other* anchor as a secondary reference (extra identity signal) when available.
+    # FR-009-11: the body anchor carries anatomy a face crop cannot — always send it when it exists.
     include_secondary_reference: bool = True
+    # Model input limit — TextEncodeQwenImageEditPlus binds image1..image3 (architecture.md §4.3b).
+    max_references: int = 3
     # No-reference behaviour (FR-009-08). With "placeholder", `placeholder_reference` is used.
     no_reference_action: NoReferenceAction = NoReferenceAction.skip
     placeholder_reference: str = ""
@@ -122,6 +125,40 @@ class IdentityPolicySettings(BaseSettings):
 @lru_cache
 def get_identity_settings() -> IdentityPolicySettings:
     return IdentityPolicySettings()
+
+
+# ── the identity-preservation directive (FR-009-12/13, architecture.md §4.3b) ────────────────────
+#
+# This is the single most important sentence in the whole image pipeline. The serving node injects
+# the anchors as "Picture 1: <img> Picture 2: <img>" ahead of our text, so the prompt MUST open by
+# binding the output to those pictures. Without it the model reads a generic subject ("a woman")
+# and drifts off the reference — the photo stops being *her*.
+#
+# It PRESERVES, it never DESCRIBES: no hair/eye colour, no body type — the pictures carry that
+# (FR-009-13), which is also why F-010's banned-appearance-vocabulary guard must exempt this text.
+
+_DIRECTIVE_ONE = (
+    "Preserve the exact face, facial features, head shape, skin tone and body proportions of the "
+    "person in Picture 1. This is the same person — do not change her identity or anatomy. "
+    "Place this same person in the following scene: "
+)
+_DIRECTIVE_TWO = (
+    "Preserve the exact face and facial features of the person in Picture 1, and the exact body "
+    "proportions and anatomy of the same person in Picture 2. Both pictures show the same person — "
+    "do not change her identity or anatomy. Place this same person in the following scene: "
+)
+
+
+def preservation_directive(reference_count: int) -> str:
+    """The mandatory opening of every generation prompt (FR-009-12; F-010 FR-010-12 places it).
+
+    Wording depends on how many anchors are bound, because the node numbers them Picture 1..N:
+    one anchor → everything is preserved from Picture 1; two → face from Picture 1, anatomy from
+    Picture 2. Returns "" for zero references (nothing to bind to — the no-reference safe path).
+    """
+    if reference_count <= 0:
+        return ""
+    return _DIRECTIVE_ONE if reference_count == 1 else _DIRECTIVE_TWO
 
 
 # ── selection result (a clear result type — never a silent wrong-identity, FR-009-08) ────────────
@@ -206,6 +243,7 @@ class IdentityPolicy:
         refs = [primary]
         if s.include_secondary_reference and secondary and secondary != primary:
             refs.append(secondary)
+        refs = refs[: max(1, s.max_references)]  # model binds at most N pictures (FR-009-11)
         return IdentitySelection(
             references=refs, strength=strength, shot_type=shot,
             reason=f"{shot.value} shot conditioned on {len(refs)} reference(s)",

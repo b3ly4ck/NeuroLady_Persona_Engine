@@ -196,7 +196,10 @@ Feature: F-008 Image Generation Runner
   (architecture.md §4.3), accelerated per the chosen model (LightX2V / distilled checkpoint).
 - **FR-008-05** — The runner must **pass the persona's reference image(s) to the model as
   conditioning** for identity consistency (the *which/how* is F-009; F-008 must accept and forward
-  them).
+  them). **All supplied references must be fed, not just the first**: the serving node accepts up to
+  **3** images (`image1/image2/image3` → `Picture 1/2/3`, architecture.md §4.3b), so a job carrying
+  a face anchor **and** a full-body anchor must reach the model with **both** bound in order.
+  Silently dropping references past the first is a defect (it discards F-009's anatomy anchor).
 - **FR-008-06** — Generation **parameters** (steps, guidance/CFG, resolution, seed, negative prompt)
   must be **part of the job / config**, not hard-coded, so quality/speed can be tuned per model.
 

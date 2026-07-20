@@ -572,6 +572,32 @@ and are quantized to fit our GPU, so the night batch fits the sleep window.
   edits). Guided by the day plan + current time (the external LLM writes the generation prompt for
   her current activity/setting, §3.5), it produces **SFW** shots (gym selfie, office photo, …) and
   **intimate** shots → the day's archive.
+
+#### 4.3b Reference-conditioning contract (identity preservation) — binding
+
+How the reference images and the text prompt must be combined. Both halves are mandatory: dropping
+either one is what makes a generated photo stop being *her*.
+
+- **Multi-reference input — up to 3 images.** The serving node
+  (`TextEncodeQwenImageEditPlus`, ComfyUI) accepts **`image1`, `image2`, `image3`** and injects them
+  ahead of the text as `Picture 1: <img> Picture 2: <img> …`. The runner must therefore feed **all
+  the anchors the identity policy selects (F-009), not just the first**:
+  - **Picture 1 = the face anchor** (`PERSONA.face_ref`) — carries facial identity;
+  - **Picture 2 = the full-body anchor** (`PERSONA.fullbody_ref`) — carries body proportions/
+    anatomy, which a face crop cannot convey;
+  - a third slot stays free for future use (e.g. an outfit/scene anchor).
+- **The prompt MUST open with an explicit identity-preservation directive** that binds the output to
+  those pictures **before** any scene content — e.g. *"Preserve the exact face, facial features and
+  body proportions of the person in Picture 1 and Picture 2. Place this same person in …"*. A prompt
+  that merely says "a woman" invites the model to drift off the reference and is a defect.
+- **Preserve ≠ describe.** The prompt still must not *describe* her appearance (hair colour, eye
+  colour, body type) — the pictures carry that. The directive asserts *preservation of the person in
+  the input pictures*; the scene text then varies setting/pose/outfit/lighting only. The
+  banned-identity-vocabulary guard (F-010) applies to descriptions and must explicitly **exempt** the
+  preservation directive.
+- Owner split: **F-009** owns *which* anchors and the directive's content (it is an identity
+  guarantee); **F-010** emits the directive as the prompt's opening; **F-008** feeds every supplied
+  reference into the model's image slots.
 - **Video — three content streams, one shared engine philosophy (fast, low-res, Telegram-sized):**
   - **(1) Intimate clips → `Wan 2.2` i2v (feature `F-016`), silent.** Best-in-class body anatomy
     and motion realism; **image+text → video** (conditioned on the persona's reference/keyframe

@@ -78,6 +78,32 @@
 | TC-FR-009-10-01 | integration | happy | Given the job contract; When conditioning is applied; Then it rides in the job payload, not model glue | implemented |
 | TC-FR-009-10-02 | integration | consistency | Given an A→B model swap; When jobs run; Then identity conditioning still applies unchanged | implemented |
 
+### FR-009-11 — Multi-anchor conditioning: face + full-body, ordered (CRITICAL)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-009-11-01 | unit | happy | Given a persona with face_ref AND fullbody_ref; When the policy selects; Then BOTH are returned, face first | implemented |
+| TC-FR-009-11-02 | unit | boundary | Given only a face_ref; When selecting; Then exactly one reference is returned (no fabricated body anchor) | implemented |
+| TC-FR-009-11-03 | unit | boundary | Given more anchors than the model limit (3); When selecting; Then the list is capped at 3, ordered by priority | implemented |
+
+### FR-009-12 — Identity-preservation directive exposed (CRITICAL)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-009-12-01 | unit | happy | Given one anchor; When the directive is built; Then it names Picture 1 and asserts preserving the exact face/features/body | implemented |
+| TC-FR-009-12-02 | unit | happy | Given two anchors; When built; Then it names Picture 1 AND Picture 2 | implemented |
+| TC-FR-009-12-03 | unit | negative | Given the directive; When inspected; Then it never yields a generic unbound subject ("a woman" alone) | implemented |
+
+### FR-009-13 — Preserve, never describe
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-009-13-01 | unit | negative | Given the directive; When scanned; Then it contains no appearance descriptors (hair/eye colour, body type) | implemented |
+| TC-FR-009-13-02 | unit | mapping | Given F-010's banned-vocabulary guard; When applied to a prompt opening with the directive; Then the directive is exempt and passes | implemented |
+
+### FR-009-14 — Directive + ordering are model-agnostic
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-009-14-01 | unit | mapping | Given the built job; When inspected; Then directive rides in prompt text and anchors in ordered `references` (fixed contract only) | implemented |
+| TC-FR-009-14-02 | integration | consistency | Given a backend swap; When jobs run; Then both the directive and the anchor order survive unchanged | implemented |
+
 ---
 
 ## Non-functional requirements
