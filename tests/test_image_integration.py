@@ -76,6 +76,34 @@ async def test_wiring_f010_author_produces_distinct_framings(db):
         assert "run" in (s.slot.activity + s.prompt).lower()
 
 
+async def test_wiring_author_emits_directive_through_production_path(db):
+    """REGRESSION: the adapter used to call author_jobs() WITHOUT references, so
+    preservation_directive(0) returned "" and production prompts opened with a generic
+    "candid photo of a woman" — no identity binding at all (F-010 FR-010-12)."""
+    persona = await make_persona(db)  # has both face_ref and fullbody_ref
+    shot = F010PromptAuthor().author(persona, SLOT, 0)
+    assert shot.prompt.startswith("Preserve the exact face")
+    assert "Picture 1" in shot.prompt and "Picture 2" in shot.prompt
+    assert not shot.prompt.lower().startswith("candid photo of a woman")
+
+
+async def test_wiring_planner_prompt_and_anchors_agree(sessionmaker, db, tmp_path):
+    """The directive must describe exactly as many pictures as the job actually binds."""
+    from services.bot.models import DailyPlan
+
+    persona = await make_persona(db, name="Agreegirl")
+    db.add(DailyPlan(persona_id=persona.id, date="2026-07-20",
+                     plan_text="13:00 coffee at the cafe"))
+    await db.commit()
+    planner = build_production_planner()
+    planner.config.shots_per_slot = 1
+    await planner.plan_day(sessionmaker, target_date="2026-07-20")
+    row = (await db.execute(select(MediaJob))).scalars().first()
+    job = GenerationJob.from_json(row.payload_json)
+    assert len(job.references) == 2
+    assert "Picture 2" in job.prompt, "two anchors bound → directive must name both pictures"
+
+
 async def test_wiring_f010_author_is_deterministic(db):
     persona = await make_persona(db)
     author = F010PromptAuthor()

@@ -41,8 +41,16 @@ class F010PromptAuthor:
     framing out of the authored set — same slot+index always yields the same prompt (NFR-010-03).
     """
 
-    def __init__(self, config: PromptAuthorConfig = PROMPT_CONFIG) -> None:
+    def __init__(
+        self,
+        config: PromptAuthorConfig = PROMPT_CONFIG,
+        references: "IdentityReferenceProvider | None" = None,
+    ) -> None:
         self._config = config
+        # The directive's wording depends on HOW MANY anchors get bound (Picture 1 vs 1+2), and the
+        # planner resolves references separately — so the author must resolve the same anchors here
+        # or it would emit a prompt with no identity binding at all (F-010 FR-010-12).
+        self._references = references or IdentityReferenceProvider()
 
     def author(self, persona: Persona, slot: SlotContext, shot_index: int) -> AuthoredShot:
         slug = persona_slug(persona.name)
@@ -55,6 +63,7 @@ class F010PromptAuthor:
         jobs: list[GenerationJob] = author_jobs(
             slug, slot=life_slot, config=self._config,
             count=shot_index + 1, base_seed=base_seed,
+            references=self._references.references_for(persona),
         )
         job = jobs[shot_index]
         return AuthoredShot(prompt=job.prompt, negative=job.params.negative, slot=job.slot)
@@ -92,8 +101,10 @@ def build_production_planner(
     identity_policy: IdentityPolicy | None = None,
 ) -> BatchPlanner:
     """The fully-wired nightly planner: F-010 authors, F-009 conditions, F-008 renders."""
+    refs = IdentityReferenceProvider(identity_policy)
     return BatchPlanner(
         config=config or BatchPlanConfig(),
-        author=F010PromptAuthor(prompt_config),
-        references=IdentityReferenceProvider(identity_policy),
+        # same provider on both seams: the prompt's directive and the bound anchors must agree
+        author=F010PromptAuthor(prompt_config, references=refs),
+        references=refs,
     )
