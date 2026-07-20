@@ -92,6 +92,25 @@
 | TC-FR-010-13-01 | unit | mapping | Given F-010 source; When inspected; Then the directive text comes from F-009, not re-authored locally | implemented |
 | TC-FR-010-13-02 | unit | consistency | Given F-009's directive changes; When prompts are authored; Then the new wording flows through unchanged | implemented |
 
+### FR-010-14 — iPhone hyperrealism block (CRITICAL)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-14-01 | unit | happy | Given an authored prompt; When inspected; Then it carries the labeled sections (Photo type/Scene/Composition/Lighting/Skin/Camera/Processing) with concrete imperfections | implemented |
+| TC-FR-010-14-02 | unit | negative | Given every framing; When inspected; Then each is a selfie-POV or companion-POV, no studio/editorial composition | implemented |
+| TC-FR-010-14-03 | unit | negative | Given the lighting map; When inspected; Then no beauty-light vocabulary (golden hour / cinematic), imperfect-light terms present | implemented |
+| TC-FR-010-14-04 | manual | happy | Given regenerated frames; When reviewed; Then they read as real iPhone shots (user acceptance) | out-of-band (GPU/manual) |
+
+### FR-010-15 — Anti-studio negative list
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-15-01 | unit | happy | Given the negative list; When inspected; Then studio/retouch/beauty-filter/bokeh terms are present | implemented |
+| TC-FR-010-15-02 | unit | negative | Given the negative list; When inspected; Then nothing suppresses natural phone artifacts (no bare "blurry") | implemented |
+
+### FR-010-16 — Quality budget params (8 steps / 1024²)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-16-01 | unit | happy | Given default config; When jobs are authored; Then params are steps=8, 1024x1024 (config-tunable) | implemented |
+
 ---
 
 ## Non-functional requirements

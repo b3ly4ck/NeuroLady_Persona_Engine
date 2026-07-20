@@ -59,7 +59,10 @@ class F010PromptAuthor:
             location=slot.location,
             time_of_day=slot.time_of_day,
         )
-        base_seed = abs(hash((slug, slot.activity, slot.time_of_day))) % 100_000
+        # Stable across processes (Python's hash() is salted per run — NFR-010-03 determinism).
+        import hashlib
+        raw = f"{slug}|{slot.activity}|{slot.time_of_day}".encode("utf-8")
+        base_seed = int(hashlib.sha1(raw).hexdigest()[:8], 16) % 100_000
         jobs: list[GenerationJob] = author_jobs(
             slug, slot=life_slot, config=self._config,
             count=shot_index + 1, base_seed=base_seed,

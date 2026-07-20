@@ -216,3 +216,55 @@ def test_fr_008_05_02_missing_reference_still_defined_error(tmp_path):
     backend = _backend(tmp_path)
     with pytest.raises(GenerationFailed, match="no reference"):
         backend._stage_references(job(refs=[]))
+
+
+# ═══ FR-010-14/15/16 — iPhone hyperrealism block (added after the "cartoonish" live review) ═════
+
+
+def test_fr_010_14_01_prompt_carries_labeled_realism_sections():
+    j = author_jobs("alina", slot=SLOT, count=1, references=[FACE, BODY])[0]
+    for section in ("Photo type:", "Scene:", "Composition:", "Outfit:", "Lighting:",
+                    "Skin and detail:", "Camera signature:", "Processing:"):
+        assert section in j.prompt, f"missing labeled section {section!r}"
+    # concrete imperfections, not vague niceties
+    for concrete in ("pores", "blemishes", "oily sheen", "sensor noise", "no retouching"):
+        assert concrete in j.prompt
+
+
+def test_fr_010_14_02_every_framing_is_selfie_or_companion_pov():
+    from services.imagegen.prompt_author import DEFAULT_FRAMINGS
+    for f in DEFAULT_FRAMINGS:
+        phrase = f.phrase.lower()
+        assert ("selfie" in phrase or "herself" in phrase or "friend" in phrase
+                or "companion" in phrase or "person she is with" in phrase), f.key
+        for studio in ("studio", "editorial", "tripod", "photoshoot"):
+            assert studio not in phrase, f.key
+
+
+def test_fr_010_14_03_lighting_map_has_no_beauty_light():
+    from services.imagegen.prompt_author import DEFAULT_TIME_LIGHTING
+    joined = " ".join(DEFAULT_TIME_LIGHTING.values()).lower()
+    for beauty in ("golden hour", "golden-hour", "cinematic", "soft warm morning"):
+        assert beauty not in joined
+    for imperfect in ("overexposed", "hard shadows", "underexposed", "noise"):
+        assert imperfect in joined
+
+
+def test_fr_010_15_01_negatives_target_the_studio_look():
+    from services.imagegen.prompt_author import DEFAULT_NEGATIVES
+    joined = " ".join(DEFAULT_NEGATIVES).lower()
+    for anti in ("studio lighting", "professional photoshoot", "retouched", "beauty filter",
+                 "bokeh", "cinematic"):
+        assert anti in joined
+
+
+def test_fr_010_15_02_negatives_never_suppress_phone_artifacts():
+    from services.imagegen.prompt_author import DEFAULT_NEGATIVES
+    for n in DEFAULT_NEGATIVES:
+        assert n.strip().lower() not in ("blurry", "lowres", "grainy", "noise", "noisy",
+                                         "motion blur", "jpeg artifacts")
+
+
+def test_fr_010_16_01_default_params_are_8_steps_1024():
+    j = author_jobs("alina", slot=SLOT, count=1, references=[FACE])[0]
+    assert (j.params.steps, j.params.width, j.params.height) == (8, 1024, 1024)

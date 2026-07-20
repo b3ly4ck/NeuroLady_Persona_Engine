@@ -173,6 +173,7 @@ def main() -> None:
     ap.add_argument("--a14b-unet", default="")
     ap.add_argument("--a14b-lora", default="Wan2.2-I2V-A14B-4steps-lora-rank64-Seko-V1/low_noise_model.safetensors")
     ap.add_argument("--prompt", default=DEFAULT_PROMPT)
+    ap.add_argument("--negative", default=DEFAULT_NEG)
     ap.add_argument("--tag", default="")
     args = ap.parse_args()
 
@@ -182,14 +183,14 @@ def main() -> None:
         tag = f"{cand}{args.tag}_{args.width}x{args.height}_{args.frames}f"
         prefix = f"wanbench_{tag}"
         if cand == "A":
-            g = graph_5b(args.ref, args.prompt, DEFAULT_NEG, args.width, args.height,
+            g = graph_5b(args.ref, args.prompt, args.negative, args.width, args.height,
                          args.frames, args.steps_5b, args.cfg_5b, args.seed, prefix)
             label = f"A TI2V-5B Q5 steps={args.steps_5b} cfg={args.cfg_5b}"
         else:
             if not args.a14b_unet:
                 print("!! candidate B needs --a14b-unet <file.gguf>")
                 continue
-            g = graph_a14b(args.ref, args.prompt, DEFAULT_NEG, args.width, args.height,
+            g = graph_a14b(args.ref, args.prompt, args.negative, args.width, args.height,
                            args.frames, args.steps_a14b, args.cfg_a14b, args.seed, prefix,
                            args.a14b_unet, args.a14b_lora)
             label = f"B A14B+Lightning steps={args.steps_a14b} cfg={args.cfg_a14b}"

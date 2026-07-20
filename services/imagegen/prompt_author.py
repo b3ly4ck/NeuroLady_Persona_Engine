@@ -119,60 +119,99 @@ class Framing:
 
 # Genuinely different angles/framings — not near-duplicates (FR-010-04, NFR-010-02). Ordered; a
 # slot's set rotates through these deterministically by seed.
+# FR-010-14 Composition: ONLY two kinds of POV exist in a real camera roll — she took the photo
+# herself, or someone she is with took it. Nothing tripod-ish, nothing editorial.
 DEFAULT_FRAMINGS: tuple[Framing, ...] = (
     Framing("selfie_closeup",
-            "close-up selfie held at arm's length, front-facing phone camera, looking into the lens",
+            "she is taking a selfie herself, phone in her outstretched hand, front camera at "
+            "arm's length, her arm visible at the edge of the frame, slightly awkward close angle",
             "close selfie"),
-    Framing("wide_establishing",
-            "wide establishing shot of the whole scene, subject small within the environment",
-            "wide shot"),
-    Framing("candid_side",
-            "candid medium shot from the side, three-quarter angle, subject unaware of the camera",
-            "candid side"),
+    Framing("companion_across",
+            "photo taken by a companion sitting across from her, casual eye-level snapshot, "
+            "she is aware of the camera and relaxed, framing slightly off-center",
+            "companion shot"),
+    Framing("candid_moment",
+            "candid photo a friend took of her mid-moment, she is not posing, caught naturally "
+            "in the middle of what she is doing, imperfect timing",
+            "candid moment"),
     Framing("mirror_fulllength",
-            "mirror selfie, phone visible in the reflection, full-length framing",
+            "mirror selfie, she is holding the phone which is visible in the reflection, "
+            "full-length framing, casual stance",
             "mirror selfie"),
-    Framing("low_angle",
-            "low-angle shot looking slightly upward, waist-up framing",
-            "low angle"),
-    Framing("high_angle",
-            "high-angle shot looking down, casual overhead snapshot",
-            "high angle"),
-    Framing("over_shoulder",
-            "over-the-shoulder shot from behind, subject facing the scene",
-            "over the shoulder"),
-    Framing("medium_portrait",
-            "medium waist-up framing, relaxed candid stance",
-            "medium waist-up"),
+    Framing("selfie_high_angle",
+            "selfie taken by herself from slightly above, front camera angled down, her arm "
+            "raised holding the phone, casual tilt to the frame",
+            "high-angle selfie"),
+    Framing("companion_steps_away",
+            "photo taken by a friend from a few steps away, ordinary standing snapshot, whole "
+            "scene visible around her, phone-camera perspective",
+            "friend snapshot"),
+    Framing("selfie_walking",
+            "walking selfie, she holds the phone in front of her while moving, slight motion in "
+            "the frame, spontaneous",
+            "walking selfie"),
+    Framing("companion_table",
+            "snapshot taken by the person she is with, from just across the table, casual and "
+            "close, everyday framing with the table edge in the shot",
+            "table snapshot"),
 )
 
 
 # ── vocabularies (config-driven — NFR-010-04) ────────────────────────────────────────────────────
 
-DEFAULT_REALISM_CUES: tuple[str, ...] = (
-    "candid smartphone photo",
-    "shot on a phone camera",
-    "natural lighting",
-    "authentic amateur snapshot",
-    "true-to-life skin texture",
-    "slight imperfect framing",
+# The iPhone hyperrealism block (FR-010-14): labeled sections with CONCRETE physical detail —
+# the difference between "rendered" and "shot". Wording avoids every banned identity substring
+# (no "face"/"eyes"/"nose"/"skin tone" — the guard is substring-based).
+REALISM_SKIN_DETAIL: str = (
+    "Skin and detail: visible skin pores, natural skin texture, a few minor skin blemishes, "
+    "slight oily sheen on the T-zone, a couple of stray hairs out of place, slightly flushed "
+    "cheeks, natural asymmetry, no makeup airbrushing"
+)
+REALISM_CAMERA_SIGNATURE: str = (
+    "Camera signature: shot on an iPhone, handheld, slight motion softness, mild sensor noise in "
+    "the shadows, smartphone dynamic range with slightly blown-out highlights, everything mostly "
+    "in focus with minimal depth-of-field falloff, tiny lens smudge glare"
+)
+REALISM_PROCESSING: str = (
+    "Processing: completely unedited, straight off the camera roll, no retouching, no beauty "
+    "filter, no smoothing, natural color response, tiny white-balance drift, ordinary JPEG "
+    "compression from the phone"
+)
+REALISM_PHOTO_TYPE: str = (
+    "Photo type: amateur unedited iPhone photo from a real person's camera roll, casual and "
+    "unposed, ordinary everyday snapshot"
 )
 
+# Kept as a tuple for config compatibility (from_dict overrides) — joined into the Realism
+# sections in author_prompt.
+DEFAULT_REALISM_CUES: tuple[str, ...] = (
+    REALISM_SKIN_DETAIL,
+    REALISM_CAMERA_SIGNATURE,
+    REALISM_PROCESSING,
+)
+
+# FR-010-15: negatives target the STUDIO look — never natural phone artifacts (no bare "blurry",
+# no "lowres": those would fight sensor noise / motion softness we explicitly ask for).
 DEFAULT_NEGATIVES: tuple[str, ...] = (
+    "studio lighting", "softbox lighting", "professional photoshoot", "editorial photo",
+    "magazine cover", "posed fashion model", "retouched skin", "airbrushed skin",
+    "beauty filter", "flawless glossy skin", "porcelain skin", "cinematic color grading",
+    "dramatic rim lighting", "DSLR bokeh portrait", "shallow depth of field",
+    "oversharpened", "HDR look",
     "watermark", "text", "logo", "signature",
     "extra limbs", "extra fingers", "deformed hands", "disfigured",
-    "lowres", "blurry artifacts", "jpeg artifacts", "oversaturated",
-    "cartoon", "anime", "3d render", "cgi", "plastic skin",
-    "duplicate", "cropped face", "out of frame",
+    "cartoon", "anime", "3d render", "cgi", "doll-like",
 )
 
-# Time-of-day → lighting/setting phrase (FR-010-07). Unknown/empty tod → neutral daylight.
+# Time-of-day → REALISTIC imperfect light (FR-010-07 + FR-010-14): how phones actually see the
+# world, not how ad campaigns light it. No "golden hour", no "cinematic".
 DEFAULT_TIME_LIGHTING: dict[str, str] = {
-    "morning": "soft warm morning light, gentle early sunlight",
-    "afternoon": "bright natural daytime light",
-    "evening": "warm golden-hour evening light",
-    "night": "low ambient night lighting, artificial indoor and street lights, dark sky outside",
-    "": "natural daylight",
+    "morning": "flat soft morning light, slightly overexposed sky, pale colors",
+    "afternoon": "harsh direct midday light with real hard shadows, slightly squinting brightness",
+    "evening": "mixed warm indoor lamp light, slightly underexposed, uneven light across the frame",
+    "night": "night time, dim indoor lighting, visible noise in the dark areas, warm artificial"
+             " light, dark window reflections",
+    "": "plain unremarkable daylight, neutral and a little flat",
 }
 
 # Identity descriptors F-010 must NEVER emit — they would fight F-009's reference conditioning
@@ -211,7 +250,9 @@ class PromptAuthorConfig:
     """All prompt-authoring tunables — edit/replace to retune without code changes (NFR-010-04)."""
 
     shot_count: int = 6                       # default set size per slot (FR-010-04, ≈5-6)
-    subject_token: str = "candid photo of a woman"   # generic subject; identity is F-009's job
+    # Empty → the FR-010-14 "Photo type" opening (amateur unedited iPhone photo). A subject like
+    # the old "candid photo of a woman" is a DEFECT: it unbinds the output from the reference.
+    subject_token: str = ""
     realism_cues: tuple[str, ...] = DEFAULT_REALISM_CUES
     negatives: tuple[str, ...] = DEFAULT_NEGATIVES
     framings: tuple[Framing, ...] = DEFAULT_FRAMINGS
@@ -219,7 +260,8 @@ class PromptAuthorConfig:
     default_scene: LifeSlot = DEFAULT_SCENE
     default_style: PersonaStyle = field(default_factory=PersonaStyle)
     styles: dict[str, PersonaStyle] = field(default_factory=dict)   # per persona_slug
-    params: GenParams = field(default_factory=GenParams)            # template gen knobs
+    # FR-010-16: quality budget ≤ ~2 min/photo → 8 distilled steps at 1024² by default.
+    params: GenParams = field(default_factory=lambda: GenParams(steps=8))
 
     def style_for(self, persona_slug: str) -> PersonaStyle:
         return self.styles.get(persona_slug, self.default_style)
@@ -309,27 +351,29 @@ def author_prompt(
     seed: int = 0,
     shot_index: int = 0,
 ) -> str:
-    """Compose one structured, model-ready positive prompt (FR-010-02).
+    """Compose one large, fully-structured, model-ready positive prompt (FR-010-02 / FR-010-14).
 
-    Order: subject + scene/activity + location + outfit + framing/pose + time-of-day lighting + mood
-    + phone-photo realism cues + aesthetic/palette. Identity is deliberately absent (F-009). The
-    negative list is emitted separately onto `GenParams.negative` (see `author_jobs`)."""
+    Labeled sections (Photo type → Scene → Composition → Outfit → Lighting → Skin/Camera/Processing
+    realism blocks) — the "shot, not rendered" contract of §FR-010-14. Identity is deliberately
+    absent (F-009 owns it; the preservation directive is prepended in `author_jobs`). The negative
+    list is emitted separately onto `GenParams.negative`."""
     if slot.is_empty():
         slot = config.default_scene
     lighting = config.time_lighting.get(slot.time_of_day, config.time_lighting.get("", ""))
-    parts = [
-        config.subject_token,
-        _scene_activity(slot),
-        _location_phrase(slot, style, seed),
-        _pick_outfit(style, seed, shot_index),
-        framing.phrase,
-        lighting,
-        (f"{slot.mood.strip()} mood" if slot.mood.strip() else ""),
+    mood = f", {slot.mood.strip()} mood" if slot.mood.strip() else ""
+    style_tail = ", ".join(p for p in (style.aesthetic, style.palette) if p and p.strip())
+    sections = [
+        config.subject_token or REALISM_PHOTO_TYPE,
+        f"Scene: {_scene_activity(slot)}, {_location_phrase(slot, style, seed)}"
+        f"{mood}".rstrip(", "),
+        f"Composition: {framing.phrase}",
+        f"Outfit: {_pick_outfit(style, seed, shot_index)}",
+        f"Lighting: {lighting}",
         *config.realism_cues,
-        style.aesthetic,
-        style.palette,
     ]
-    prompt = ", ".join(p.strip() for p in parts if p and p.strip())
+    if style_tail:
+        sections.append(f"Style: {style_tail}")
+    prompt = ". ".join(s.strip().rstrip(".") for s in sections if s and s.strip()) + "."
     # Belt-and-braces: authored text must never restate identity nor drift NSFW.
     assert_no_identity_terms(prompt)
     assert_sfw(prompt)

@@ -150,6 +150,33 @@ Feature: F-010 Generation Prompt Authoring
   "a woman", unbound to the input pictures, is a defect — the model drifts off the reference.
 - **FR-010-13** — The directive's **wording is owned by F-009** and consumed here; F-010 places it,
   does not author its identity semantics (boundary with FR-010-05).
+- **FR-010-14** — **iPhone hyperrealism block (CRITICAL).** After the directive, the prompt must be
+  a **large, fully-structured composition with labeled sections** (not a short comma list of vague
+  cues), asserting a photo **indistinguishable from a real iPhone shot** — "a continuation of the
+  actress's own camera roll". Mandatory sections, each with **concrete physical detail**:
+  - **Photo type** — amateur unedited iPhone photo straight off the camera roll;
+  - **Scene** — the F-006 slot (activity/location/time), as before;
+  - **Composition** — ONLY candid POVs: **she shot it herself** (front-camera arm's-length selfie,
+    mirror selfie with the phone visible) **or someone is photographing her** (a companion's candid
+    from across the table / a few steps away, caught mid-moment). Studio/editorial compositions are
+    forbidden;
+  - **Lighting** — realistic *imperfect* light per time of day (flat morning light, blown-out sky,
+    harsh midday shadows, mixed indoor lamps, underexposed evening, shadow noise at night) — never
+    "golden hour"/"cinematic" beauty-light vocabulary;
+  - **Skin & detail** — concrete imperfections: visible pores, minor blemishes, oily sheen on the
+    T-zone, stray hairs, slightly flushed cheeks (never appearance *descriptors* — FR-010-05 still
+    applies);
+  - **Camera signature** — handheld, slight motion softness, mild sensor noise in shadows,
+    smartphone dynamic range with slightly blown highlights, mostly-in-focus (no DSLR bokeh);
+  - **Processing** — no retouching, no beauty filter, natural color response, JPEG straight from
+    the phone.
+- **FR-010-15** — The **negative list must target the studio look**, not ask for cleanliness:
+  studio lighting/softbox, professional photoshoot, retouched/airbrushed skin, beauty filter,
+  glossy/flawless skin, cinematic color grading, editorial/magazine, posed fashion model, DSLR
+  bokeh portrait — plus the structural safety negatives (watermark/text, deformed hands,
+  cartoon/3d/cgi). Negatives that suppress *natural* phone artifacts (e.g. "blurry") are forbidden.
+- **FR-010-16** — Default generation params target the **quality budget of ≤ ~2 minutes/photo** on
+  the production GPU: 8 distilled steps at 1024² (config-tunable, NFR-010-04).
 - **FR-010-06** — Authoring must honor **persona visual-style attributes** (aesthetic, palette, typical
   outfits, favorite locations), configurable per persona without code changes.
 - **FR-010-07** — **Time-of-day and location coherence:** lighting and setting in the prompt must match

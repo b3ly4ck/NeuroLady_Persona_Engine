@@ -1,339 +1,819 @@
 [
   {
-    "label": "A TI2V-5B Q5 steps=20 cfg=5.0",
-    "seconds": 117.8,
+    "label": "A TI2V-5B Q5 steps=8 cfg=5.0",
+    "seconds": 95.6,
     "peak_vram_mb": 6386,
     "base_vram_mb": 466,
     "frames": [
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00001_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00001_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00002_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00002_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00003_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00003_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00004_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00004_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00005_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00005_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00006_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00006_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00007_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00007_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00008_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00008_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00009_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00009_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00010_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00010_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00011_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00011_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00012_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00012_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00013_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00013_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00014_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00014_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00015_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00015_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00016_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00016_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00017_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00017_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00018_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00018_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00019_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00019_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00020_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00020_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00021_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00021_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00022_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00022_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00023_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00023_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00024_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00024_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00025_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00025_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00026_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00026_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00027_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00027_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00028_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00028_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00029_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00029_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00030_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00030_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00031_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00031_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00032_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00032_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00033_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00033_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00034_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00034_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00035_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00035_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00036_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00036_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00037_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00037_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00038_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00038_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00039_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00039_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00040_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00040_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00041_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00041_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00042_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00042_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00043_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00043_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00044_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00044_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00045_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00045_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00046_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00046_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00047_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00047_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00048_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00048_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00049_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00049_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00050_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00050_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00051_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00051_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00052_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00052_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00053_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00053_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00054_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00054_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00055_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00055_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00056_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00056_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00057_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00057_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00058_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00058_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00059_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00059_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00060_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00060_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00061_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00061_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00062_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00062_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00063_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00063_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00064_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00064_.png",
         "subfolder": "",
         "type": "output"
       },
       {
-        "filename": "wanbench_A_s20_640_640x640_65f_00065_.png",
+        "filename": "wanbench_A_10sec_480x480_161f_00065_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00066_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00067_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00068_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00069_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00070_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00071_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00072_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00073_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00074_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00075_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00076_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00077_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00078_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00079_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00080_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00081_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00082_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00083_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00084_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00085_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00086_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00087_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00088_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00089_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00090_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00091_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00092_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00093_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00094_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00095_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00096_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00097_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00098_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00099_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00100_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00101_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00102_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00103_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00104_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00105_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00106_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00107_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00108_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00109_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00110_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00111_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00112_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00113_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00114_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00115_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00116_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00117_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00118_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00119_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00120_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00121_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00122_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00123_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00124_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00125_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00126_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00127_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00128_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00129_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00130_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00131_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00132_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00133_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00134_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00135_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00136_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00137_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00138_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00139_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00140_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00141_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00142_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00143_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00144_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00145_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00146_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00147_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00148_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00149_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00150_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00151_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00152_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00153_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00154_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00155_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00156_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00157_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00158_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00159_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00160_.png",
+        "subfolder": "",
+        "type": "output"
+      },
+      {
+        "filename": "wanbench_A_10sec_480x480_161f_00161_.png",
         "subfolder": "",
         "type": "output"
       }
     ],
     "error": null,
-    "mp4": "/home/human/NeuroLady_Final/video/bench_out/A_s20_640_640x640_65f.mp4",
-    "clip_seconds": 4.0625,
-    "ratio_gen_per_clip": 29.0
+    "mp4": "/home/human/NeuroLady_Final/video/bench_out/A_10sec_480x480_161f.mp4",
+    "clip_seconds": 10.0625,
+    "ratio_gen_per_clip": 9.5
   }
 ]
