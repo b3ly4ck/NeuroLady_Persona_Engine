@@ -2,6 +2,52 @@
 
 ## Recent changes
 
+- **Image pipeline: first LIVE generations + hyperrealism pass (v0.54.0–0.55.0).** The whole
+  F-008…F-015 stack ran end-to-end on the GPU for the first time. Three review rounds, each fixing a
+  defect the previous one exposed:
+  1. **Identity was not bound to the reference at all.** The authored prompt opened with
+     `candid photo of a woman, …` — a generic subject. Root cause: F-010's banned-appearance guard
+     (correctly forbidding *descriptions*) left nothing tying the output to the input picture.
+     Fix (v0.54.0, docs-first: architecture **§4.3b**, F-009 FR-009-11..14, F-010 FR-010-12/13,
+     F-008 FR-008-05): F-009 now owns a **preservation directive** that OPENS every prompt
+     ("Preserve the exact face … of the person in Picture 1 … body proportions … in Picture 2 …"),
+     and the engine feeds **all** anchors (the node binds `image1..image3` → `Picture 1..3`; it
+     previously staged only `references[0]`, silently discarding the anatomy anchor).
+  2. **The directive never reached production prompts** (v0.54.1). The F-011→F-010 adapter called
+     `author_jobs()` without `references`, so `preservation_directive(0)` returned empty — unit
+     tests passed because they called the author directly. The adapter now shares one
+     `IdentityReferenceProvider` with the planner. +2 regression tests on that seam.
+  3. **Output read as rendered, not photographed** (v0.55.0, F-010 FR-010-14..16). Rewrote the
+     realism vocabulary from vague niceties ("true-to-life skin texture") to **concrete physical
+     defects** (pores, blemishes, T-zone sheen, stray hairs, sensor noise, blown highlights, WB
+     drift), added **labeled prompt sections** (Photo type/Scene/Composition/Outfit/Lighting/Skin/
+     Camera/Processing), restricted every framing to **selfie-POV or companion-POV**, made the
+     lighting map *imperfect-real* per time of day (no golden-hour/cinematic), inverted the
+     negatives to target the **studio look**, and raised default steps 4→8.
+  - **Live results (Alina, 3 slots from her day plan).** Round 1: identity held but glossy/CGI-like.
+     Round 2 after the hyperrealism pass: **realism solved** — frames read as genuine iPhone
+     snapshots (visible pores, oily T-zone, harsh/uneven light, handheld tilt). **184 s/photo** at
+     8 steps/1024². Assets `MED-alina-00001..00006` + rows, atomic 1:1. The six reference-less jobs
+     (Vika/Olivia) failed fast on F-009's **no-reference safe path** — proven live, no wrong-identity
+     image was ever produced.
+  - **Three defects remain open, all traced to ANCHOR FRAMING** (documented as binding constraints
+    in architecture §4.3b "Anchor framing constraints" + requirements F-009 FR-009-15..19 /
+    F-010 FR-010-17/18, with 15 planned TCs — implementation is the next session's work):
+    * **Weak identity ("same type, not the same person").** The node rescales every anchor to
+      **~384×384** for the vision encoder; our face anchor is a loose selfie where the face fills
+      ~35 % of frame → ≈230×230 px of actual face. **Fix: tight head crop** (≈3× the face area).
+    * **Wardrobe leak + duplicated subject.** The body anchor is a complete styled photo (pose,
+      outfit, visible head), so the model copies its clothing into every scene and once rendered the
+      subject **twice** in one frame. **Fix: head-cropped anatomy-only body crop**, directive scoping
+      Picture 2 to proportions with clothing explicitly excluded, anti-duplication negatives.
+    * **Muddied face from two competing faces.** The body anchor also shows the face, at a different
+      scale/angle → the model blends two facial signals. **Fix: the face must appear in exactly one
+      anchor**; plus attach the body anchor **only for full-body framings** (F-009's `classify_shot`
+      already provides the signal).
+  - Also this session: recovered the image stack after the symlink incident (28G v23 checkpoint
+    re-downloaded, ComfyUI + venv rebuilt), Alina's anchors provisioned from real photos, live DB
+    migrated for the media tables, and the anti-pattern recorded in CLAUDE.md.
+
 - **Identity-preservation directive + multi-anchor conditioning (v0.54.0) — fixes two defects found
   in live review of the actual generated prompt.** Docs-first (architecture.md **§4.3b** new binding
   "Reference-conditioning contract", F-009 FR-009-11..14, F-010 FR-010-12/13, F-008 FR-008-05

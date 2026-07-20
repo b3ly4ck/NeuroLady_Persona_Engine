@@ -177,6 +177,30 @@ Feature: F-009 Appearance & Identity Consistency
 - **FR-009-14** — The directive and the anchor ordering must be **model-agnostic**: expressed in the
   fixed job contract (prompt text + ordered `references`), so a model swap keeps identity
   conditioning intact (ties FR-009-10, NFR-009-05).
+- **FR-009-15** — **Anchor framing (CRITICAL, measured 2026-07-20).** Anchors must be **cropped to
+  maximize identity signal**, because the serving node rescales every reference to ~384×384 for the
+  vision encoder (architecture.md §4.3b "Anchor framing constraints"):
+  - the **face anchor** must be a **tight head crop** (head fills the frame; no raised arms, minimal
+    background) — a loose selfie leaves ≈230×230 px of face and yields "same type", not *her*;
+  - the **body anchor** must be a **head-cropped** torso/figure crop carrying anatomy only.
+  Provisioning (Persona Studio, F-009 FR-009-09) is responsible for producing anchors in this shape;
+  the policy must **validate** them and surface a warning when an anchor is out of spec.
+- **FR-009-16** — **The face must appear in exactly ONE anchor.** A body anchor that also shows the
+  face gives the model two competing facial signals at different scales/angles and measurably
+  degrades identity ("muddied face"). Anchors showing a second face must be rejected/cropped.
+- **FR-009-17** — **Anti-duplication.** The directive must state that the pictures show **one single
+  person** who must appear **exactly once** in the output ("single person in the frame, do not
+  duplicate her"). Live runs produced frames containing the subject twice (the second figure wearing
+  the body anchor's outfit) when this was absent.
+- **FR-009-18** — **The body anchor must not dictate wardrobe.** The directive must scope Picture 2
+  to **body proportions/anatomy only** and state explicitly that its **clothing is not to be
+  copied** — the outfit comes from the scene prompt (F-010). Observed defect: the anchor's black
+  top + tights appeared in every generated scene.
+- **FR-009-19** — **Shot-type-conditional anchoring.** The secondary (body) anchor should be attached
+  **only when the shot needs anatomy** (full-body/mirror framings). For face-focused framings
+  (close selfie, portrait) the policy should send the face anchor alone, removing the wardrobe- and
+  second-face-leak paths entirely. The existing `classify_shot` already provides the signal;
+  behaviour must stay config-tunable (NFR-009-07).
 
 ### Non-functional
 

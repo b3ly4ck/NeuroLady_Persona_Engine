@@ -176,7 +176,16 @@ Feature: F-010 Generation Prompt Authoring
   bokeh portrait — plus the structural safety negatives (watermark/text, deformed hands,
   cartoon/3d/cgi). Negatives that suppress *natural* phone artifacts (e.g. "blurry") are forbidden.
 - **FR-010-16** — Default generation params target the **quality budget of ≤ ~2 minutes/photo** on
-  the production GPU: 8 distilled steps at 1024² (config-tunable, NFR-010-04).
+  the production GPU: 8 distilled steps at 1024² (config-tunable, NFR-010-04). *Measured
+  2026-07-20: 8 steps @1024² ≈ 184 s/photo including per-generation weight reload; resident weights
+  should bring this under the budget.*
+- **FR-010-17** — **Wardrobe is authored here, never inherited from an anchor.** The `Outfit:`
+  section is authoritative; the prompt must reinforce that the reference pictures' clothing is not
+  to be copied (pairs with F-009 FR-009-18). Observed defect: the body anchor's outfit appeared in
+  every scene, overriding the authored one.
+- **FR-010-18** — **Anti-duplication negatives.** The negative list must include duplication terms
+  (`two people`, `duplicate person`, `multiple women`, `same person twice`, `cloned figure`), since
+  multi-anchor conditioning demonstrably produced frames containing the subject twice.
 - **FR-010-06** — Authoring must honor **persona visual-style attributes** (aesthetic, palette, typical
   outfits, favorite locations), configurable per persona without code changes.
 - **FR-010-07** — **Time-of-day and location coherence:** lighting and setting in the prompt must match

@@ -598,6 +598,27 @@ either one is what makes a generated photo stop being *her*.
 - Owner split: **F-009** owns *which* anchors and the directive's content (it is an identity
   guarantee); **F-010** emits the directive as the prompt's opening; **F-008** feeds every supplied
   reference into the model's image slots.
+
+##### Anchor framing constraints — measured on the serving node (2026-07-20)
+
+Three defects observed on the first live runs traced back to *how the anchors are framed*, not to
+the prompt. These are binding constraints on reference authoring:
+
+- **The vision encoder sees each anchor at only ~384×384 total pixels.**
+  `TextEncodeQwenImageEditPlus` rescales every input to `total = 384*384` before the VL encoder
+  (the VAE `reference_latents` path uses `1024*1024`). Therefore **whatever fraction of the anchor
+  the subject occupies is the fraction of identity signal the model receives.** A face filling ~35 %
+  of the frame (the rest being a raised arm, hair and wall) leaves ≈230×230 px of face — enough for
+  "same type of person", not for *the same person*. **Face anchors must be tightly cropped to the
+  head**, which roughly triples the effective face area.
+- **A body anchor that is a complete styled photo leaks its whole look.** When Picture 2 is a full
+  figure with pose, outfit and a visible head, the model copies the outfit into every scene
+  (overriding the prompt's outfit) and sometimes renders the person **twice** in one frame (once as
+  the subject, once as a second figure wearing the anchor's clothes). **Body anchors must be
+  head-cropped torso/figure crops** carrying anatomy only.
+- **Two visible faces at different scales muddy identity.** If the body anchor also shows the face,
+  the model receives two competing facial signals (different size, angle, lighting) and blends them.
+  The face must appear in **exactly one** anchor.
 - **Video — three content streams, one shared engine philosophy (fast, low-res, Telegram-sized):**
   - **(1) Intimate clips → `Wan 2.2` i2v (feature `F-016`), silent.** Best-in-class body anatomy
     and motion realism; **image+text → video** (conditioned on the persona's reference/keyframe

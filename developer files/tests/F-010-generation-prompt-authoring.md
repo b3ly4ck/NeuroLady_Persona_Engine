@@ -111,6 +111,17 @@
 |---------|-------|------|---------------------|--------|
 | TC-FR-010-16-01 | unit | happy | Given default config; When jobs are authored; Then params are steps=8, 1024x1024 (config-tunable) | implemented |
 
+### FR-010-17 — Wardrobe authored here, not inherited from anchors
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-17-01 | unit | happy | Given an authored prompt; When inspected; Then it states the reference clothing must not be copied | planned |
+| TC-FR-010-17-02 | benchmark | negative | Given regenerated frames; When reviewed; Then the outfit follows the prompt, not the body anchor | planned |
+
+### FR-010-18 — Anti-duplication negatives
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-18-01 | unit | happy | Given the negative list; When inspected; Then duplication terms are present | planned |
+
 ---
 
 ## Non-functional requirements
