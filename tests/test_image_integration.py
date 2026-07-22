@@ -83,7 +83,7 @@ async def test_wiring_author_emits_directive_through_production_path(db):
     persona = await make_persona(db)  # has both face_ref and fullbody_ref
     shot = F010PromptAuthor().author(persona, SLOT, 0)
     assert shot.prompt.startswith("Preserve the exact face")
-    assert "Picture 1" in shot.prompt and "Picture 2" in shot.prompt
+    assert "Picture 1" in shot.prompt  # identity is bound to the reference (was: generic subject)
     assert not shot.prompt.lower().startswith("candid photo of a woman")
 
 
@@ -100,8 +100,13 @@ async def test_wiring_planner_prompt_and_anchors_agree(sessionmaker, db, tmp_pat
     await planner.plan_day(sessionmaker, target_date="2026-07-20")
     row = (await db.execute(select(MediaJob))).scalars().first()
     job = GenerationJob.from_json(row.payload_json)
-    assert len(job.references) == 2
-    assert "Picture 2" in job.prompt, "two anchors bound → directive must name both pictures"
+    # the directive must name exactly as many pictures as the job actually binds (FR-009-19: a
+    # selfie binds 1, a full-body shot binds 2) — they must never disagree.
+    assert 1 <= len(job.references) <= 2
+    if len(job.references) == 2:
+        assert "Picture 2" in job.prompt
+    else:
+        assert "Picture 2" not in job.prompt and "Picture 1" in job.prompt
 
 
 async def test_wiring_f010_author_is_deterministic(db):

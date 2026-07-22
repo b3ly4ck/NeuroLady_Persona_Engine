@@ -113,8 +113,14 @@ class IdentityPolicySettings(BaseSettings):
     face_strength: float = 0.9
     full_body_strength: float = 0.85
     # Attach the *other* anchor as a secondary reference (extra identity signal) when available.
-    # FR-009-11: the body anchor carries anatomy a face crop cannot — always send it when it exists.
+    # FR-009-11: the body anchor carries anatomy a face crop cannot.
     include_secondary_reference: bool = True
+    # FR-009-19: attach the body anchor ONLY for full-body/mirror shots. For face-focused selfies a
+    # body anchor only leaks its wardrobe + a competing second face. Set False for the old
+    # always-both behaviour (config-tunable, NFR-009-07).
+    secondary_only_for_full_body: bool = True
+    # FR-009-15/16: warn when a body anchor looks un-head-cropped (advisory; provisioning fixes it).
+    validate_anchors: bool = True
     # Model input limit — TextEncodeQwenImageEditPlus binds image1..image3 (architecture.md §4.3b).
     max_references: int = 3
     # No-reference behaviour (FR-009-08). With "placeholder", `placeholder_reference` is used.
@@ -137,15 +143,26 @@ def get_identity_settings() -> IdentityPolicySettings:
 # It PRESERVES, it never DESCRIBES: no hair/eye colour, no body type — the pictures carry that
 # (FR-009-13), which is also why F-010's banned-appearance-vocabulary guard must exempt this text.
 
+# Anti-duplication (FR-009-17) + wardrobe-not-inherited (FR-009-18) clauses are appended to every
+# directive: live runs put the subject in the frame TWICE (once wearing the body anchor's outfit)
+# and leaked that outfit into every scene.
+_SINGLE_PERSON = (
+    "There is only ONE person: she must appear exactly once in the frame, never duplicated, never "
+    "a second copy of her anywhere in the image. "
+)
 _DIRECTIVE_ONE = (
     "Preserve the exact face, facial features, head shape, skin tone and body proportions of the "
     "person in Picture 1. This is the same person — do not change her identity or anatomy. "
+    + _SINGLE_PERSON +
     "Place this same person in the following scene: "
 )
 _DIRECTIVE_TWO = (
-    "Preserve the exact face and facial features of the person in Picture 1, and the exact body "
-    "proportions and anatomy of the same person in Picture 2. Both pictures show the same person — "
-    "do not change her identity or anatomy. Place this same person in the following scene: "
+    "Preserve the exact face and facial features of the person in Picture 1, and take ONLY the body "
+    "proportions and anatomy of the same person from Picture 2 — do NOT copy the clothing, outfit, "
+    "pose or background of Picture 2, use only her body shape. Both pictures show the same person — "
+    "do not change her identity or anatomy. "
+    + _SINGLE_PERSON +
+    "Place this same person in the following scene: "
 )
 
 
@@ -233,21 +250,42 @@ class IdentityPolicy:
         if face is None and body is None:
             return self._no_reference(shot)
 
-        if shot is ShotType.full_body:
-            primary, secondary = (body or face), (face if body else None)
-            strength = s.full_body_strength
-        else:
-            primary, secondary = (face or body), (body if face else None)
-            strength = s.face_strength
-
-        refs = [primary]
-        if s.include_secondary_reference and secondary and secondary != primary:
-            refs.append(secondary)
+        # Face is ALWAYS Picture 1 (the strongest identity signal, and the order the directive
+        # assumes: face=Picture 1, anatomy=Picture 2). The body anchor is attached as Picture 2
+        # ONLY when the shot actually needs anatomy (full-body/mirror framings) — for a face-focused
+        # selfie it only leaks the anchor's wardrobe and a competing second face (FR-009-19).
+        strength = s.full_body_strength if shot is ShotType.full_body else s.face_strength
+        if face is not None:
+            refs = [face]
+            attach_body = shot is ShotType.full_body or not s.secondary_only_for_full_body
+            if s.include_secondary_reference and attach_body and body and body != face:
+                refs.append(body)
+        else:  # only a body anchor exists — use it alone (still the right identity)
+            refs = [body]
         refs = refs[: max(1, s.max_references)]  # model binds at most N pictures (FR-009-11)
+        if s.validate_anchors and body is not None and body in refs:
+            self._warn_if_body_anchor_uncropped(body)
         return IdentitySelection(
             references=refs, strength=strength, shot_type=shot,
             reason=f"{shot.value} shot conditioned on {len(refs)} reference(s)",
         )
+
+    @staticmethod
+    def _warn_if_body_anchor_uncropped(body_ref: str) -> None:
+        """Surface a warning when the body anchor still looks un-head-cropped (FR-009-16). Best
+        effort: if the file/Pillow isn't reachable, stay silent (validation is advisory)."""
+        try:
+            from services.imagegen.anchor_prep import validate_body_anchor
+            from services.imagegen.config import get_image_settings
+            root = Path(get_image_settings().media_root).parent
+            path = Path(body_ref)
+            path = path if path.is_absolute() else root / path
+            if path.exists():
+                check = validate_body_anchor(path)
+                if not check.ok:
+                    log.warning("identity anchor: %s (%s)", check.reason, body_ref)
+        except Exception:  # pragma: no cover - advisory only
+            pass
 
     def _no_reference(self, shot: ShotType) -> IdentitySelection:
         s = self.settings

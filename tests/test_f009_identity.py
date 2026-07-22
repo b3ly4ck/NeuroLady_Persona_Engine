@@ -118,11 +118,14 @@ def test_fr_009_03_01_face_shot_selects_face_anchor():
     assert sel.primary == p.face_ref
 
 
-def test_fr_009_03_02_full_body_shot_selects_full_body_anchor():
+def test_fr_009_03_02_full_body_shot_attaches_the_body_anchor():
     p = make_persona()
     sel = policy().select(p, full_body_job())
     assert sel.shot_type is ShotType.full_body
-    assert sel.primary == p.fullbody_ref
+    # face is ALWAYS Picture 1 (directive order); the body anchor is attached as Picture 2 for a
+    # full-body shot (FR-009-19). It is *used*, just never primary.
+    assert sel.references == [p.face_ref, p.fullbody_ref]
+    assert p.fullbody_ref in sel.references
 
 
 def test_fr_009_03_03_edited_config_changes_selection_and_strength():
@@ -132,10 +135,11 @@ def test_fr_009_03_03_edited_config_changes_selection_and_strength():
     tuned = policy(full_body_keywords=("cafe",), full_body_strength=0.5, face_strength=0.99)
     sel = tuned.select(p, job)
     assert sel.shot_type is ShotType.full_body  # keyword re-tuned selection
-    assert sel.primary == p.fullbody_ref
+    assert sel.references == [p.face_ref, p.fullbody_ref]  # body anchor attached, face first
     assert sel.strength == 0.5                   # strength honored from config
-    # and the default policy still classifies the same job as a face shot
-    assert policy().select(p, job).strength == 0.9
+    # and the default policy still classifies the same job as a face shot (face anchor only)
+    default = policy().select(p, job)
+    assert default.strength == 0.9 and default.references == [p.face_ref]
 
 
 # ═══ FR-009-04 — identity holds across varied settings within a day (GPU/manual) ═════════════════
@@ -198,7 +202,8 @@ def test_fr_009_06_02_same_reference_yields_stable_anchor():
     p = make_persona()
     first = policy().select(p, face_job("day-1"))
     later = policy().select(p, face_job("day-30"))
-    assert first.references == later.references == [p.face_ref, p.fullbody_ref]
+    # a face shot conditions on the face anchor alone (FR-009-19); the point here is STABILITY
+    assert first.references == later.references == [p.face_ref]
 
 
 # ═══ FR-009-07 — strict per-persona isolation (CRITICAL) ════════════════════════════════════════
@@ -209,8 +214,8 @@ def test_fr_009_07_01_each_job_uses_only_its_own_reference():
     ja, jb = face_job("a", "alina"), face_job("b", "kira")
     policy().apply(a, ja)
     policy().apply(b, jb)
-    assert ja.references == [a.face_ref, a.fullbody_ref]
-    assert jb.references == [b.face_ref, b.fullbody_ref]
+    assert ja.references == [a.face_ref]  # face shots → face anchor only (FR-009-19)
+    assert jb.references == [b.face_ref]
     assert not (set(ja.references) & set(jb.references))  # zero overlap
 
 

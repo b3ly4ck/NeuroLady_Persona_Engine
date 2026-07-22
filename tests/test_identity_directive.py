@@ -55,7 +55,9 @@ BODY = "media/alina/reference/body.png"
 
 
 def test_fr_009_11_01_both_anchors_returned_face_first():
-    sel = IdentityPolicy().select(FakePersona(FACE, BODY), job())
+    # a full-body shot attaches both anchors, face always Picture 1 (FR-009-11 + FR-009-19)
+    sel = IdentityPolicy().select(FakePersona(FACE, BODY),
+                                  job(prompt="a full body standing shot of her outfit"))
     assert sel.references == [FACE, BODY], "face anchor first, body anchor second (Picture 1/2)"
 
 

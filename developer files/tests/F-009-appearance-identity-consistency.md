@@ -107,34 +107,34 @@
 ### FR-009-15 — Anchor framing validated (tight face crop / head-cropped body)
 | Test ID | Level | Case | Given / When / Then | Status |
 |---------|-------|------|---------------------|--------|
-| TC-FR-009-15-01 | unit | happy | Given a tight head-crop face anchor; When validated; Then it passes the framing check | planned |
-| TC-FR-009-15-02 | unit | negative | Given a loose anchor (face < configured frame fraction); When validated; Then a warning/rejection is surfaced, never silent | planned |
-| TC-FR-009-15-03 | benchmark | happy | Given tight vs loose anchors; When identity is measured on output; Then the tight crop scores materially higher | planned |
+| TC-FR-009-15-01 | unit | happy | Given a tight head-crop face anchor; When validated; Then it passes the framing check | implemented |
+| TC-FR-009-15-02 | unit | negative | Given a loose anchor (face < configured frame fraction); When validated; Then a warning/rejection is surfaced, never silent | out-of-band (GPU/detector) |
+| TC-FR-009-15-03 | benchmark | happy | Given tight vs loose anchors; When identity is measured on output; Then the tight crop scores materially higher | out-of-band (GPU/detector) |
 
 ### FR-009-16 — Face appears in exactly one anchor
 | Test ID | Level | Case | Given / When / Then | Status |
 |---------|-------|------|---------------------|--------|
-| TC-FR-009-16-01 | unit | negative | Given a body anchor containing a visible face; When validated; Then it is rejected/flagged for cropping | planned |
-| TC-FR-009-16-02 | benchmark | happy | Given a head-cropped body anchor; When compared to the uncropped one; Then identity is less muddied | planned |
+| TC-FR-009-16-01 | unit | negative | Given a body anchor containing a visible face; When validated; Then it is rejected/flagged for cropping | out-of-band (GPU/detector) |
+| TC-FR-009-16-02 | benchmark | happy | Given a head-cropped body anchor; When compared to the uncropped one; Then identity is less muddied | implemented |
 
 ### FR-009-17 — Anti-duplication in the directive
 | Test ID | Level | Case | Given / When / Then | Status |
 |---------|-------|------|---------------------|--------|
-| TC-FR-009-17-01 | unit | happy | Given the directive; When inspected; Then it asserts a single person appearing exactly once | planned |
-| TC-FR-009-17-02 | benchmark | negative | Given regenerated frames; When reviewed; Then the subject never appears twice | planned |
+| TC-FR-009-17-01 | unit | happy | Given the directive; When inspected; Then it asserts a single person appearing exactly once | implemented |
+| TC-FR-009-17-02 | benchmark | negative | Given regenerated frames; When reviewed; Then the subject never appears twice | out-of-band (GPU/detector) |
 
 ### FR-009-18 — Body anchor does not dictate wardrobe
 | Test ID | Level | Case | Given / When / Then | Status |
 |---------|-------|------|---------------------|--------|
-| TC-FR-009-18-01 | unit | happy | Given the directive; When inspected; Then Picture 2 is scoped to anatomy and its clothing is explicitly excluded | planned |
-| TC-FR-009-18-02 | benchmark | negative | Given regenerated frames; When reviewed; Then the outfit matches the prompt, not the anchor | planned |
+| TC-FR-009-18-01 | unit | happy | Given the directive; When inspected; Then Picture 2 is scoped to anatomy and its clothing is explicitly excluded | implemented |
+| TC-FR-009-18-02 | benchmark | negative | Given regenerated frames; When reviewed; Then the outfit matches the prompt, not the anchor | out-of-band (GPU/detector) |
 
 ### FR-009-19 — Shot-type-conditional secondary anchor
 | Test ID | Level | Case | Given / When / Then | Status |
 |---------|-------|------|---------------------|--------|
-| TC-FR-009-19-01 | unit | happy | Given a full-body framing; When selecting; Then both anchors are attached | planned |
-| TC-FR-009-19-02 | unit | boundary | Given a close-selfie framing; When selecting; Then only the face anchor is attached | planned |
-| TC-FR-009-19-03 | integration | happy | Given the config toggle off; When selecting; Then the previous always-both behaviour is restored | planned |
+| TC-FR-009-19-01 | unit | happy | Given a full-body framing; When selecting; Then both anchors are attached | implemented |
+| TC-FR-009-19-02 | unit | boundary | Given a close-selfie framing; When selecting; Then only the face anchor is attached | implemented |
+| TC-FR-009-19-03 | integration | happy | Given the config toggle off; When selecting; Then the previous always-both behaviour is restored | implemented |
 
 ---
 

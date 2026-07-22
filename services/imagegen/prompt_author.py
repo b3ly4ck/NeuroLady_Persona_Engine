@@ -201,6 +201,9 @@ DEFAULT_NEGATIVES: tuple[str, ...] = (
     "watermark", "text", "logo", "signature",
     "extra limbs", "extra fingers", "deformed hands", "disfigured",
     "cartoon", "anime", "3d render", "cgi", "doll-like",
+    # FR-010-18: multi-anchor conditioning produced frames with the subject rendered twice.
+    "two people", "duplicate person", "multiple women", "same person twice", "cloned figure",
+    "second person in background",
 )
 
 # Time-of-day → REALISTIC imperfect light (FR-010-07 + FR-010-14): how phones actually see the
@@ -367,7 +370,10 @@ def author_prompt(
         f"Scene: {_scene_activity(slot)}, {_location_phrase(slot, style, seed)}"
         f"{mood}".rstrip(", "),
         f"Composition: {framing.phrase}",
-        f"Outfit: {_pick_outfit(style, seed, shot_index)}",
+        # FR-010-17: wardrobe is authored HERE and is authoritative — the reference pictures'
+        # clothing must not carry over (the body anchor's outfit leaked into every scene).
+        f"Outfit: she is wearing {_pick_outfit(style, seed, shot_index)}, "
+        f"not the clothing from the reference pictures",
         f"Lighting: {lighting}",
         *config.realism_cues,
     ]
