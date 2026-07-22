@@ -2,6 +2,47 @@
 
 ## Recent changes
 
+- **Image pipeline: anchor-framing fixes + black-frame robustness (v0.56.0 + pending) — identity is
+  now the SAME person, and the batch can't store corrupt frames.** Continuation of the live-review
+  loop; every fix here traced to *how the reference anchors are framed* or to *checkpoint numerical
+  flakiness*, never the prompt.
+  - **Anchor framing (v0.56.0, F-009 FR-009-15..19 / F-010 FR-010-17/18, architecture §4.3b "Anchor
+    framing constraints"):**
+    * `select()` now puts the **face anchor ALWAYS as Picture 1** (it used to lead with the body
+      anchor for full-body shots, contradicting the directive) and attaches the **body anchor only
+      for full-body/mirror framings** (config-tunable `secondary_only_for_full_body`). Face-focused
+      selfies — most content — now bind the **face anchor alone**, which removed the two worst
+      defects at the source: the body anchor's **wardrobe leaking** into every scene and a **second
+      person** appearing in frame.
+    * **Directive hardened:** forbids duplicating the subject ("only one person… exactly once… never
+      duplicated") and scopes Picture 2 to **anatomy only, clothing/pose/background NOT copied.**
+    * **Negatives:** added `two people / duplicate person / multiple women / same person twice`.
+      **Prompt Outfit section:** wardrobe authored here, "not the clothing from the reference
+      pictures".
+    * **`services/imagegen/anchor_prep.py`** (Pillow-only, bot-env safe): `head_crop_body` (drop the
+      top fraction → torso/anatomy anchor with **no competing face**), `tighten_face` (center crop →
+      the face fills the frame, not ~35 %), `validate_body_anchor` (advisory orientation check).
+      Rationale is measured: the serving node rescales every anchor to **~384×384** for the vision
+      encoder, so a loose face crop leaves ≈230×230 px of identity signal → "same type, not her".
+  - **Alina's anchors reprovisioned** from the real photos: `face.jpg` tightened to the head
+    (499×499, face now ~65 % of frame), `body.jpg` head-cropped to a torso (640×495). Originals kept
+    in `media/alina/reference/_orig/`.
+  - **Live result (single tightened face anchor):** identity is now **clearly the same person**
+    (the reference woman, her wavy bob, her features), realism holds (freckles/pores/candid cafe
+    selfie), **no duplicate**, **no wardrobe leak**. This is the best round yet — the anchor fixes
+    landed. ~197 s/photo at 8 steps.
+  - **Black-frame robustness (pending commit, F-008 FR-008-17/18, architecture §4.3b "Output
+    validity"):** the batch had stored three **all-black frames**. Diagnosed with a 4-case A/B
+    (seed 7/42, 6/8 steps, 1/2 refs) — **all four re-ran fine**, proving the black frames are a
+    transient **NaN latent** in the distilled AIO checkpoint that ComfyUI still reports as success,
+    NOT the prompt/anchor/seed/refcount. Fixes: `is_black_frame()` in the backend rejects an
+    all-black output as a **retryable** failure (never stored — "model success" ≠ "usable image"),
+    and the runner **jitters the seed on each retry** so a NaN-seed self-heals. Tests:
+    `tests/test_black_frame_retry.py` (5) + F-008 test spec TC-FR-008-17/18.
+  - **Test discipline:** behaviour changes rippled into the F-009 selection tests (face-only on
+    selfies is now correct) — updated to the new contract. Full suite green at each step
+    (743 passed before the black-frame code; black-frame + F-008 subset 57 passed).
+
 - **Image pipeline: first LIVE generations + hyperrealism pass (v0.54.0–0.55.0).** The whole
   F-008…F-015 stack ran end-to-end on the GPU for the first time. Three review rounds, each fixing a
   defect the previous one exposed:

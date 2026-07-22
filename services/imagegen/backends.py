@@ -31,6 +31,29 @@ class GenerationFailed(RuntimeError):
     """One generation attempt failed (model error / OOM / timeout) — retryable (FR-008-13)."""
 
 
+def is_black_frame(data: bytes, threshold: float = 2.0) -> bool:
+    """True if the PNG bytes decode to an (essentially) black image — the NaN-latent signature.
+
+    Pillow-based; if Pillow/decoding is unavailable, returns False (never block a real frame on a
+    missing dep). `threshold` is the mean-luminance cutoff (0–255).
+    """
+    try:
+        import io
+
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(data)).convert("L")
+        extrema = img.getextrema()  # (min, max) — a NaN frame is a uniform 0
+        if extrema[1] == 0:
+            return True
+        # cheap mean over a downscaled copy
+        small = img.resize((32, 32))
+        px = list(small.getdata())
+        return (sum(px) / len(px)) < threshold
+    except Exception:  # pragma: no cover - never reject a frame because of a decode hiccup
+        return False
+
+
 class ModelBackend(Protocol):
     """The whole surface a model must implement — generate bytes, then release the GPU."""
 
@@ -95,6 +118,11 @@ class ComfyUIBackend:
         data = new[-1].read_bytes()
         for p in new:  # the archive copy is written by store.py; the staging dir stays clean
             p.unlink(missing_ok=True)
+        # Distilled AIO checkpoints occasionally emit a NaN latent → an all-black frame that ComfyUI
+        # still reports as "success". Treat it as a retryable failure so the batch never stores a
+        # black photo (measured 2026-07-22; the runner retries with a jittered seed).
+        if is_black_frame(data):
+            raise GenerationFailed("all-black output frame (NaN latent) — retrying")
         return data
 
     # -- internals --

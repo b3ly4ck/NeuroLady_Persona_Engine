@@ -140,6 +140,21 @@
 | TC-FR-008-16-01 | integration | happy | GPU released after the batch | Given a completed batch; When the runner exits; Then GPU memory is freed | implemented |
 | TC-FR-008-16-02 | integration | error | Crash still frees GPU on teardown | Given a crash mid-batch; When the scheduler tears down; Then no leaked GPU memory blocks the chat reload | implemented |
 
+### FR-008-17 — Output-validity gate (never store a black/NaN frame)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-008-17-01 | unit | happy | Black frame detected | Given all-black / near-black PNG bytes; When checked; Then it is flagged invalid | implemented |
+| TC-FR-008-17-02 | unit | negative | Real frame not flagged | Given a normal PNG; When checked; Then it is accepted | implemented |
+| TC-FR-008-17-03 | unit | error | Undecodable bytes never block | Given non-image bytes; When checked; Then a frame is never rejected on a decode hiccup | implemented |
+| TC-FR-008-17-04 | integration | error | Black output never stored | Given every attempt is black; When the batch runs; Then no asset/file is written (not a black one) | implemented |
+
+### FR-008-18 — Seed jitter on retry
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-008-18-01 | integration | error | Retry uses a different seed | Given a first black attempt; When retried; Then the retry seed differs and a valid asset is stored | implemented |
+
 ---
 
 ## Non-functional requirements

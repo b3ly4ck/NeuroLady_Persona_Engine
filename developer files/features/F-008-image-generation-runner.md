@@ -236,6 +236,16 @@ Feature: F-008 Image Generation Runner
   reloaded + warmed (F-002 pre-warm, §4.1).
 - **FR-008-16** — The runner must be **brought up and torn down cleanly** each night (start model,
   process batch, release GPU), leaving no leaked GPU memory that would starve the daytime chat model.
+- **FR-008-17** — **Output-validity gate (measured 2026-07-22).** A "successful" model run is NOT
+  proof of a usable image: distilled AIO checkpoints occasionally emit a **NaN latent → an
+  all-black frame** that the serving backend still reports as success. The runner must **validate
+  the produced image** and treat an invalid frame (all-black / NaN) as a **retryable generation
+  failure** (FR-008-13 path) — it must **never store a black frame as a MEDIA_ASSET**. A "done" job
+  always means a *valid, non-black* image on disk (ties NFR-008-01 realism, NFR-008-05 integrity).
+- **FR-008-18** — **Seed jitter on retry.** Because a black frame can be **seed-deterministic** (the
+  same seed re-rolls the same NaN), each retry of a failed generation must use a **different seed**
+  (offset by the attempt count), so a bad seed self-heals instead of looping to give-up. Same-seed
+  reproducibility (FR-008-06 / TC-FR-008-06-03) still holds for the *first* attempt.
 
 ### Non-functional
 

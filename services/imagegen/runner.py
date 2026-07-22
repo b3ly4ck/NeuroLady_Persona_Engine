@@ -184,6 +184,11 @@ class ImageRunner:
             self.metrics.jobs_given_up += 1
             return
 
+        # Jitter the seed by the attempt count so a retry never re-rolls the SAME (possibly
+        # NaN-producing) seed — a black-frame failure must self-heal, not loop deterministically.
+        if row.attempts:
+            job.params.seed += 1000 * row.attempts
+
         t0 = time.monotonic()
         try:
             image_bytes = await asyncio.to_thread(self.backend.generate, job)

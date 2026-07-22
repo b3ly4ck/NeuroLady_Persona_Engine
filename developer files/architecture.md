@@ -619,6 +619,20 @@ the prompt. These are binding constraints on reference authoring:
 - **Two visible faces at different scales muddy identity.** If the body anchor also shows the face,
   the model receives two competing facial signals (different size, angle, lighting) and blends them.
   The face must appear in **exactly one** anchor.
+
+##### Output validity — distilled checkpoints occasionally emit NaN (measured 2026-07-22)
+
+The **Rapid-AIO v23** distilled checkpoint intermittently produces a **NaN latent → an all-black
+frame**, and the serving backend still reports the run as **success** (the failure is numerical, not
+a workflow error). It is **not** caused by the prompt, the anchors, the seed range, the reference
+count, or the step count — the same inputs re-run fine (verified by a 4-case A/B). It is transient
+checkpoint flakiness. Two engine rules follow (owned by **F-008**, FR-008-17/18):
+
+- the runner must **validate the produced image** and treat an all-black/NaN frame as a *retryable*
+  failure — **never store a black frame** as a MEDIA_ASSET ("model success" ≠ "usable image");
+- because a black frame can be **seed-deterministic**, each **retry uses a jittered seed** so a bad
+  seed self-heals rather than looping to give-up. This is the general posture for any self-hosted
+  distilled media model, image or video.
 - **Video — three content streams, one shared engine philosophy (fast, low-res, Telegram-sized):**
   - **(1) Intimate clips → `Wan 2.2` i2v (feature `F-016`), silent.** Best-in-class body anatomy
     and motion realism; **image+text → video** (conditioned on the persona's reference/keyframe
