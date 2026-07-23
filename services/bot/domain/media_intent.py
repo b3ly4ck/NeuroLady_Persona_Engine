@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from functools import lru_cache
 from enum import Enum
 
 # The prompt asset is versioned like the other prompt assets (FR-020-09 / NFR-020-06).
@@ -121,16 +122,45 @@ _SIGNAL_RE = re.compile(
 _STRIP_RE = re.compile(r"<<\s*MEDIA\b[^>]*>{0,2}", re.IGNORECASE)
 
 
+@lru_cache(maxsize=8)
+def _matchers(open_token: str, close_token: str) -> tuple[re.Pattern, re.Pattern]:
+    """Build the (parse, strip) matchers for a configured signal grammar (FR-020-09).
+
+    The default `<<MEDIA:` / `>>` pair has precompiled constants; a deployment that changes the
+    tokens gets equivalent matchers derived from them, so the grammar really is configuration and
+    not just a documented string. An empty token is a broken config: the defaults are used and the
+    turn still completes (FR-020-05 — a bad config never crashes a turn, never invents media).
+    """
+    if not open_token or not close_token:
+        return _SIGNAL_RE, _STRIP_RE
+    if (open_token, close_token) == (DEFAULT_INTENT_CONFIG.open_token,
+                                     DEFAULT_INTENT_CONFIG.close_token):
+        return _SIGNAL_RE, _STRIP_RE
+    o, c = re.escape(open_token.rstrip(":")), re.escape(close_token)
+    parse = re.compile(
+        rf"{o}\s*:?\s*(none|photo|video)\s*(?::\s*([a-z_]+)\s*)?{c}", re.IGNORECASE)
+    strip = re.compile(rf"{o}[^{re.escape(close_token[0])}]*(?:{c})?", re.IGNORECASE)
+    return parse, strip
+
+
+def active_prompt_version(cfg: MediaIntentConfig = DEFAULT_INTENT_CONFIG) -> str:
+    """The version stamp of the prompt addition currently in force (NFR-020-06).
+
+    Read at runtime rather than compiled in, so an operator can tell from a live process which
+    instruction wording produced a given batch of verdicts."""
+    return cfg.prompt_version or INTENT_PROMPT_VERSION
+
+
 def intent_instruction(cfg: MediaIntentConfig = DEFAULT_INTENT_CONFIG) -> str:
     """The block appended to the system context so the model emits the signal (FR-020-01)."""
-    return cfg.instruction
+    return cfg.instruction or DEFAULT_INTENT_CONFIG.instruction
 
 
 def parse_intent(reply: str, cfg: MediaIntentConfig = DEFAULT_INTENT_CONFIG) -> MediaIntent:
     """Extract the verdict from the model's reply. Never raises (FR-020-05)."""
     if not reply:
         return NO_INTENT
-    matches = _SIGNAL_RE.findall(reply)
+    matches = _matchers(cfg.open_token, cfg.close_token)[0].findall(reply)
     if not matches:
         return NO_INTENT
 
@@ -170,7 +200,7 @@ def strip_signal(reply: str, cfg: MediaIntentConfig = DEFAULT_INTENT_CONFIG) -> 
     """
     if not reply:
         return ""
-    cleaned = _STRIP_RE.sub(" ", reply)
+    cleaned = _matchers(cfg.open_token, cfg.close_token)[1].sub(" ", reply)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return "\n".join(line.rstrip() for line in cleaned.splitlines()).strip()

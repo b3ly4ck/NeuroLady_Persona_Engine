@@ -33,6 +33,7 @@ from enum import Enum
 from typing import Any, Protocol
 
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.domain.relationship import STAGES, stage_index
@@ -157,20 +158,43 @@ _PHOTO_NOUNS = (
     "фото", "фотку", "фотка", "фотографи", "селфи", "фотки", "пикчу",
     "photo", " pic ", " pic?", " pic!", "a pic", "picture", "selfie", " snap",
 )
+# FR-020-07/08: request verbs only. "take" and "got a" were dropped — they match photo *topic*
+# talk ("my phone takes bad photos", "i should take a photo of that"), and a fallback that fires on
+# topic mentions sends an unwanted photo, which derails the conversation. Anything subtler than this
+# is the model's job (F-020), not the fallback's.
 _PHOTO_VERBS = (
     "пришли", "скинь", "отправь", "покажи", "сфоткай", "шли", "хочу увидеть", "можно",
-    "send", "show", "share", "take", "got a", "can i see", "let me see", "wanna see",
+    "send", "show", "share", "can i see", "let me see", "wanna see",
 )
 
 
-def looks_like_photo_request(text: str) -> bool:
+@dataclass(frozen=True)
+class RequestVocabulary:
+    """The keyword FALLBACK's vocabulary — data, not code (F-020 FR-020-09).
+
+    This list stopped being the decision path when F-020 landed: it speaks only when the model
+    emitted no signal at all. It stays configurable anyway, because the languages a deployment
+    serves are a deployment concern (see ISS-009, where an English-only list left a Russian bot
+    with no fallback at all).
+    """
+
+    nouns: tuple[str, ...] = _PHOTO_NOUNS
+    verbs: tuple[str, ...] = _PHOTO_VERBS
+
+
+DEFAULT_VOCABULARY = RequestVocabulary()
+
+
+def looks_like_photo_request(
+    text: str, vocab: RequestVocabulary = DEFAULT_VOCABULARY
+) -> bool:
     """True when the message asks for a photo (verb+noun pair, or an intimate ask that names
     imagery). Intent only — SFW/intimate classification stays `classify_photo_request`."""
     t = f" {(text or '').lower().strip()} "
-    has_noun = any(n in t for n in _PHOTO_NOUNS)
+    has_noun = any(n in t for n in vocab.nouns)
     if not has_noun:
         return False
-    if any(v in t for v in _PHOTO_VERBS):
+    if any(v in t for v in vocab.verbs):
         return True
     # an explicitly intimate ask that names a photo counts even without a request verb
     return classify_photo_request(t) is not PhotoRequestClass.sfw
@@ -511,12 +535,25 @@ async def recent_sends(
 
 async def record_send(
     db: AsyncSession, *, user_id: int, asset: MediaAsset, now: datetime | None = None
-) -> MediaSend:
-    """Append the send to per-user history (which user, which asset, when) — FR-012-02/10."""
-    send = MediaSend(user_id=user_id, asset_id=asset.id, sent_at=now or _utcnow())
-    db.add(send)
-    await db.flush()
-    return send
+) -> MediaSend | None:
+    """Append the send to per-user history (which user, which asset, when) — FR-012-02/10.
+
+    Returns `None` when this user already has this asset — the losing side of a race between two
+    concurrent turns (ISS-011). The uniqueness lives in the schema because a read-then-write check
+    cannot express "never twice": both turns read "unsent" before either wrote, and the user got the
+    same photo twice. The SAVEPOINT keeps the conflict from poisoning the surrounding transaction,
+    which still has the inbound message in it.
+    """
+    try:
+        async with db.begin_nested():
+            send = MediaSend(user_id=user_id, asset_id=asset.id, sent_at=now or _utcnow())
+            db.add(send)
+            await db.flush()
+        return send
+    except IntegrityError:
+        log.info("asset %s was already sent to user %s — losing a concurrent race", asset.id,
+                 user_id)
+        return None
 
 
 # ── in-voice text via the chat client (FR-012-05, FR-012-08) ─────────────────────────────────────
@@ -730,7 +767,13 @@ async def deliver_photo(
     caption = await request_caption(
         caption_client, persona=persona, asset=asset, context=context, stage=stage
     )
-    await record_send(db, user_id=user_id, asset=asset, now=now)
+    if await record_send(db, user_id=user_id, asset=asset, now=now) is None:
+        # A concurrent turn claimed this exact frame first (ISS-011). Never send it twice — degrade
+        # in voice; the next turn draws from the pool normally.
+        line = await request_deflection(
+            caption_client, persona=persona, reason="exhausted", context=context
+        )
+        return DeliveryResult(outcome=DeliveryOutcome.deflected, deflection=line)
     # FR-012-14 (ISS-006): hand the scene back so the turn pipeline can put it in her context.
     return DeliveryResult(
         outcome=DeliveryOutcome.delivered, asset=asset, caption=caption, meta=asset_scene(asset)
@@ -746,6 +789,7 @@ async def maybe_proactive_share(
     caption_client: CaptionClient,
     cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
     now: datetime | None = None,
+    media_root: str | Path | None = None,
 ) -> DeliveryResult | None:
     """Maybe send a photo unprompted when the conversation matches her activity and pacing allows
     (FR-012-09). Returns a delivered result, or None when she shouldn't share right now."""
@@ -758,8 +802,9 @@ async def maybe_proactive_share(
     if not await pacing_allows(db, user_id=user_id, stage=stage, cfg=cfg, now=now):
         return None
 
-    asset = await select_asset(
-        db, persona_id=persona_id, user_id=user_id, context=context, cfg=cfg, now=now
+    asset = await select_deliverable_asset(
+        db, persona_id=persona_id, user_id=user_id, context=context, cfg=cfg, now=now,
+        media_root=media_root,
     )
     if asset is None:
         return None
@@ -769,7 +814,10 @@ async def maybe_proactive_share(
     caption = await request_caption(
         caption_client, persona=persona, asset=asset, context=context, stage=stage
     )
-    await record_send(db, user_id=user_id, asset=asset, now=now)
+    if await record_send(db, user_id=user_id, asset=asset, now=now) is None:
+        # Lost the race to a concurrent turn (ISS-011). An UNPROMPTED share simply does not happen —
+        # unlike a request, there is nothing here the user is waiting for.
+        return None
     return DeliveryResult(
         outcome=DeliveryOutcome.delivered, asset=asset, caption=caption, meta=asset_scene(asset)
     )

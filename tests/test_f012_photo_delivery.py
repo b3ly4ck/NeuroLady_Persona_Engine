@@ -413,9 +413,10 @@ async def test_TC_FR_012_09_02_no_share_when_pacing_blocks(db):
     u = await make_user(db, 1018)
     await set_stage(db, u, p, "Friend")  # Friend cap = 4
     await plant_asset(db, p, 1, meta={"time_of_day": "evening", "activity": "at home", "location": "home"})
-    # Fill the window to the cap so pacing blocks.
+    # Fill the window to the cap so pacing blocks. Distinct assets: one asset can only ever be
+    # sent to a user once (NFR-012-02, now enforced by uq_media_send_user_asset).
     for i in range(4):
-        db.add(MediaSend(user_id=u.id, asset_id=f"MED-{persona_slug(p.name)}-00001", sent_at=NOW))
+        db.add(MediaSend(user_id=u.id, asset_id=f"MED-{persona_slug(p.name)}-9000{i}", sent_at=NOW))
     await db.flush()
     result = await maybe_proactive_share(
         db, user_id=u.id, persona=p, context=ctx(), caption_client=FakeCaptionClient(), now=NOW

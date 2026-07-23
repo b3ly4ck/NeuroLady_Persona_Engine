@@ -45,6 +45,7 @@ architecture).
 | ISS-006 | She invents a background for a photo she just sent — the sent photo is not in her context | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-009 | The intimate-request keyword classifier is English-only — a Russian intimate ask reads as SFW | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-010 | A send is recorded for a photo that was never delivered (missing file) — the frame is burned forever | [x] | 2026-07-23 | 2026-07-23 |
+| ISS-011 | Two concurrent turns can send the same photo twice — no-repeat was a read-then-write check | [x] | 2026-07-23 | 2026-07-23 |
 
 ---
 
@@ -401,3 +402,38 @@ architecture).
   Tests: `TC-NFR-021-01-03` in `tests/test_f021_retention_and_reuse.py` (executes the real
   `on_text` with the files deleted under it and asserts the turn is not silent **and** no
   `MediaSend` row was written).
+
+
+---
+
+## ISS-011 — Two concurrent turns can deliver the same photo twice
+
+- **Status:** [x] fixed
+- **Reported:** 2026-07-23 (found while writing TC-NFR-020-05-04)
+- **Report (as stated):** F-012's "no asset is ever resent to the same user" (NFR-012-02) was
+  implemented as *read the send history, then write a new row*. Two turns in flight both read
+  "unsent" before either wrote, both recorded a send, and the user received the same photo twice.
+- **Observed vs expected:** two `media_sends` rows for one `(user, asset)` pair vs exactly one, ever.
+- **Root cause:** the invariant was expressed in application code at a point where it cannot hold.
+  Between the read and the write there is a window — widened by the caption LLM call sitting exactly
+  in the middle of it — and nothing in the schema forbade the duplicate.
+- **Why tests didn't catch it (the gap):** every no-repeat test was **sequential**. The in-memory
+  `StaticPool` fixture also hands every session the *same* connection, so "two sessions" in a test
+  were never actually concurrent — the suite had no way to express the failure at all.
+- **Honest scope note (important):** on **SQLite this race is not reachable through the handler**,
+  because a turn holds a write transaction from the moment it persists the inbound message until it
+  commits, so the second turn simply waits. It **is** reachable on the Postgres production target
+  (architecture.md §6.2). This was verified rather than assumed: with the constraint removed, the
+  handler-level concurrency test stayed **green**, while a direct double `record_send` produced two
+  rows. A test that cannot fail is not evidence, so the invariant is pinned by
+  `TC-NFR-020-05-04b` (direct, fails without the fix) and the handler-level test documents in its
+  own docstring what it does *not* prove.
+- **Resolution (2026-07-23):** F-012 **FR-012-19** — uniqueness moved into the schema
+  (`uq_media_send_user_asset` on `MEDIA_SEND (user_id, asset_id)`). `record_send()` inserts inside a
+  SAVEPOINT and returns `None` on conflict, so the losing side is refused without poisoning the
+  turn's transaction (which still holds the inbound message — the ISS-007 lesson). A **requested**
+  photo then degrades in voice; an **unprompted** share simply does not happen. `init_models` also
+  creates the index idempotently, because `create_all` never adds a constraint to an already-created
+  table and this one carries a correctness invariant.
+  The constraint immediately caught an impossible state baked into an existing fixture: a test that
+  filled the pacing window with four sends *of the same asset* to the same user.

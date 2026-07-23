@@ -453,6 +453,12 @@ class MediaSend(Base):
     asset_id: Mapped[str] = mapped_column(String(96), index=True)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
 
+    # NFR-012-02 / NFR-020-05-04 (ISS-011): "never the same asset twice to the same user" was
+    # enforced only by reading the history before writing — two concurrent turns both read "unsent"
+    # and both wrote, and the user got the same photo twice. A read-then-write check cannot express
+    # this invariant; the database can.
+    __table_args__ = (UniqueConstraint("user_id", "asset_id", name="uq_media_send_user_asset"),)
+
 
 class GateDecision(Base):
     """Append-only audit log of one F-014 intimacy-gate decision (FR-014-12 / NFR-014-08).

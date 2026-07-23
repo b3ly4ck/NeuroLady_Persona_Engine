@@ -1,6 +1,6 @@
 # F-020 — LLM Media-Intent Detection
 
-- **Status:** Draft
+- **Status:** Implemented (2026-07-23)
 - **Summary:** Decide **whether the user is actually asking for a photo** using the **LLM turn**,
   not a keyword list. Today a hardcoded noun×verb matcher sits *in front of* the conversation
   (`looks_like_photo_request`), and it demonstrably misses natural phrasing — measured live,
@@ -127,6 +127,12 @@ Feature: F-020 LLM Media-Intent Detection
   prompt assets (F-006 FR-006-21 convention).
 - **FR-020-10** — Detection must be **language-agnostic across the personas' languages** (RU/EN at
   minimum), since it rides the multilingual model rather than a per-language word list.
+- **FR-020-11** — **A labeled corpus and a measurable harness ship with the feature.** NFR-020-02
+  (recall) and NFR-020-03 (precision) are claims about the *model's judgement*, so they need a
+  RU/EN corpus labeled `request` / `topic` — including the ISS-005 phrasing and adversarial
+  near-misses — plus a harness that scores any client over it. The harness must itself be tested
+  with scripted models (perfect / silent / always-firing), or a benchmark reporting 100% proves
+  nothing about the model and everything about a broken harness.
 
 ### Resolved design decisions
 

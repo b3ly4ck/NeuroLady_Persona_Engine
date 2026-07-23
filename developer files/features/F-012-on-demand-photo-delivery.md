@@ -206,6 +206,12 @@ Feature: F-012 On-Demand Photo Delivery
   pool degrades in voice. Recording a send for an undelivered photo burns the frame forever via
   per-user no-repeat (ties F-021 NFR-021-01).
 
+- **FR-012-19** — **"Never the same asset twice" is a schema constraint, not a code check
+  (ISS-011).** `MEDIA_SEND` must carry a uniqueness constraint on `(user_id, asset_id)`. A
+  read-then-write check cannot express the invariant: two concurrent turns both read "unsent" before
+  either writes. The losing insert must be **refused and handled** — a requested photo degrades in
+  voice, an unprompted share simply does not happen — without poisoning the turn's transaction.
+
 ### Non-functional
 
 - **NFR-012-01** — **Instant delivery (CRITICAL):** photo delivery adds no generation latency — it is a

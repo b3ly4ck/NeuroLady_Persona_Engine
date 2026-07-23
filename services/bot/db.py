@@ -43,6 +43,15 @@ def make_sessionmaker(engine: AsyncEngine) -> async_sessionmaker[AsyncSession]:
 async def init_models(engine: AsyncEngine) -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        # `create_all` only creates tables that do not exist yet, so a constraint added to an
+        # already-created table never lands on an existing dev DB. This one carries a correctness
+        # invariant (ISS-011: the same photo delivered twice), so it is applied explicitly and
+        # idempotently rather than waiting for a fresh database.
+        if conn.dialect.name == "sqlite":
+            await conn.exec_driver_sql(
+                "CREATE UNIQUE INDEX IF NOT EXISTS uq_media_send_user_asset "
+                "ON media_sends (user_id, asset_id)"
+            )
 
 
 @asynccontextmanager

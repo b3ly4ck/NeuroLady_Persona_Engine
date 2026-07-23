@@ -2,6 +2,42 @@
 
 ## Recent changes
 
+- **F-020 coverage closed + three defects it uncovered.** The feature's *code* was live since
+  v0.59, but its test spec was only **31 of 86 TCs** backed by runnable tests — `FR-020-10`,
+  `NFR-020-01/02/03/06` and all four user stories had **zero**, and the feature file still said
+  Draft. Closing that gap turned up real holes rather than just bookkeeping:
+  - **The signal grammar was not actually configurable.** `MediaIntentConfig.open_token` /
+    `close_token` existed and were documented as tunable (FR-020-09), but the parser used hardcoded
+    module-level regexes, so changing them did nothing. `_matchers()` now derives both the parse and
+    strip patterns from the configured tokens (cached), with the defaults short-circuited and an
+    empty token treated as a broken config that falls back rather than crashing a turn.
+  - **The fallback vocabulary was not configurable** (`RequestVocabulary`), and it fired on photo
+    *topic* talk: `"take"` matched "my phone takes bad photos" and "i should take a photo of that".
+    `take` / `got a` were dropped — a fallback that sends an unwanted photo derails the conversation,
+    and anything subtler than a request verb is the model's job (FR-020-07).
+  - **`active_prompt_version()`** added so the in-force prompt version is readable at runtime
+    (NFR-020-06), instead of only existing as a constant.
+  - **`services/bot/domain/media_intent_corpus.py`** (new, FR-020-11): the RU/EN corpus labeled
+    `request` / `topic` — including the ISS-005 phrasing and adversarial near-misses — plus
+    `measure()`, which scores any client through the **real** `parse_intent`. The harness is itself
+    exercised with perfect / silent / always-firing scripted models, because a benchmark that
+    reports 100% may be measuring a broken harness.
+  - Tests: `tests/test_f020_media_intent.py` grew 31 → 96. All 86 spec TCs are now `implemented`
+    (14 of them are out-of-band live-model benchmarks by design).
+
+- **ISS-011 — two concurrent turns could deliver the same photo twice.** F-012's no-repeat
+  guarantee was a *read-then-write* check, with the caption LLM call sitting in the middle of the
+  window. Fixed at the schema: `uq_media_send_user_asset` on `MEDIA_SEND (user_id, asset_id)`;
+  `record_send()` inserts in a SAVEPOINT and returns `None` on conflict, so the loser is refused
+  without poisoning the turn's transaction (ISS-007 lesson). A requested photo degrades in voice; an
+  unprompted share just does not happen. `init_models` creates the index idempotently since
+  `create_all` never adds a constraint to an existing table.
+  **Scope stated honestly:** on SQLite the race is unreachable through the handler (a turn holds its
+  write transaction end to end), and this was *verified* — with the constraint removed the
+  handler-level concurrency test stayed green while a direct double `record_send` produced two rows.
+  So the invariant is pinned by a direct test that genuinely fails without the fix, and the
+  handler-level test documents what it does not prove.
+
 - **F-021 implemented — the archive is a living library, not a one-day window.** Two halves of one
   economics argument (a frame costs ~155 s of GPU and ~1.4 MB of disk): never hide a frame by age,
   never destroy one nobody has seen.
