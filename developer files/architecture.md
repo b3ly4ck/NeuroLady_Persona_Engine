@@ -327,8 +327,32 @@ Owns a single user turn end-to-end:
    deliberate human **pacing** (a "typing…" indicator + a bounded, length-scaled delay *added on top
    of* the fast compute) and, when long, **split into several shorter messages**. Styling/pacing
    never change the reply's content or correctness (that stays owned by this loop / §4.2).
+   **The conversational intimacy gate (`F-019`) runs here, on the generated reply**, *before*
+   styling/pacing — see §3.2a.
 6. If the user asked for media, call **Media Delivery**; otherwise return text.
 7. Persist the exchange (Memory) and update relationship signals.
+
+#### 3.2a Intimacy gating is enforced on OUTPUT, not requested in the prompt
+
+**Prompt steering is not enforcement.** F-005 injects a per-stage behaviour line (`STAGE_BEHAVIOR`,
+e.g. *"you just met him — reserved, not intimate"*), but it is a *request* to a deliberately
+**uncensored** chat model (§4.1) and is routinely overridden — measured live: a brand-new `Stranger`
+user could steer the conversation explicit from the first message, while the very same content was
+correctly refused as a *photo*. A soft prompt line and a hard media gate cannot be the same policy.
+
+Therefore intimacy is gated **on the produced reply**:
+
+- the **policy core is F-014's** (hard safety scan, stage→level mapping, per-persona ceiling clamp,
+  `GATE_DECISION` audit) — **one policy, two channels**: media (`F-014`/`F-015`) and text (`F-019`);
+- the text gate is a **local deterministic check** (no extra LLM round-trip, so no latency cost);
+- a withheld reply is replaced by an **in-character deflection**, never a system/assistant message —
+  the illusion (§1) must survive a refusal;
+- ordinary warmth, flirting within the unlocked stage and emotional intimacy pass through
+  **unmodified** — over-blocking is treated as a defect, not as safety.
+
+`STAGE_BEHAVIOR` remains as *proactive steering* (it makes the model produce the right thing most of
+the time); F-019 is the *enforcement* that makes the guarantee real.
+
 - Handles media-intent detection ("send me a pic") and routes to Media Delivery with the intimate
   flag + entitlement check.
 
