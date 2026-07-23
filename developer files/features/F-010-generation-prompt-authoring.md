@@ -200,6 +200,20 @@ Feature: F-010 Generation Prompt Authoring
   **carried into the MEDIA_ASSET `meta_json`** (via F-008) so On-Demand delivery (F-012) can pick by
   context.
 
+- **FR-010-19** — **Author a human-readable scene description (ISS-008).** Alongside the technical
+  prompt, F-010 must emit a short **`scene_description`** — one plain sentence naming **what is
+  visible in the frame** (setting + the few concrete things around her + light), written the way a
+  person would describe their own photo: *"уютная гостиная вечером, диван, торшер, телевизор с
+  сериалом"*. It is authored from the same slot/framing/lighting the prompt is built from, so it
+  costs nothing extra to produce.
+- **FR-010-20** — **In the persona's language.** The description is spoken by her later
+  (F-002 context, F-012 captions), so it must be written in `PERSONA.language`, not in the
+  English generation vocabulary (pairs with F-012 FR-012-12).
+- **FR-010-21** — **Human words, never generation jargon.** It must contain no framing/technical
+  terms (`high-angle selfie`, `Camera signature`, step counts, negatives) and must never be the raw
+  prompt — leaking the technical prompt into her voice is worse than saying nothing. It must also
+  respect the identity rule (FR-010-05): describe the *scene*, not her appearance.
+
 ### Non-functional
 
 - **NFR-010-01** — **Coherence (CRITICAL):** on a labeled sample, the generated photo must match the

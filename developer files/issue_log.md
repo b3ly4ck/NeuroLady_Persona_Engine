@@ -40,6 +40,7 @@ architecture).
 | ISS-003 | Photo caption arrives in English for a Russian-speaking persona | [ ] | 2026-07-23 | — |
 | ISS-004 | Photo is delivered instantly — no human pacing, unlike text | [ ] | 2026-07-23 | — |
 | ISS-005 | Keyword photo-intent detection misses natural phrasing | [ ] | 2026-07-23 | — |
+| ISS-008 | Photo metadata describes the generation REQUEST, not the rendered image | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-007 | A slow turn locks SQLite → the next message dies and the user gets total silence | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-006 | She invents a background for a photo she just sent — the sent photo is not in her context | [x] | 2026-07-23 | 2026-07-23 |
 
@@ -270,4 +271,60 @@ architecture).
   test** — the in-memory fixture cannot reproduce lock contention, which is exactly why the suite
   never caught this.
 - **Resolved:** 2026-07-23
+
+---
+
+## ISS-008 — Photo metadata describes the generation REQUEST, not the rendered image
+
+- **Status:** [x] fixed
+- **Reported:** 2026-07-23
+- **Report (as stated):** Follow-up to ISS-006. She no longer invents a scene from her biography,
+  but she still cannot answer *"а что у тебя на фоне?"* — because what reaches her context is
+  `на фоне: home; поза: high-angle selfie`, i.e. the generation request, not a description of the
+  photo. The frame actually showed a dim bedroom with a bed, a lit TV and a lamp; none of that is
+  recorded anywhere.
+- **Observed vs expected:** request-shaped tokens (`home`, `high-angle selfie`, `evening`, half of
+  them English under a Russian persona) vs a short human description of **what is visible** in the
+  frame, in her language, that she can speak from naturally.
+- **Root cause:** `SlotMeta` carries only planner fields — `pose / background / location /
+  activity / time_of_day` — and `background` is populated from the *location phrase*
+  (`batch_planner`: `background = _location_phrase(...) or slot.activity`), so it duplicates
+  `location` rather than describing a background. `pose` holds framing jargon ("high-angle selfie").
+  The rich scene text does exist inside `meta_json["prompt"]`, but it is the English technical
+  generation prompt (with "Camera signature: shot on an iPhone…") and is deliberately stripped at
+  the delivery boundary — leaking it into her voice would be worse than saying nothing.
+- **Why tests didn't catch it (the gap):** F-008 FR-008-08 requires the five slot fields to be
+  stored, and they are — the tests assert *presence*, never *usefulness*. **No requirement ever
+  said the metadata must describe the rendered image** or be readable in the persona's language, so
+  a field that merely echoes another field satisfies every existing assertion.
+- **Second consequence (blocks F-021):** archive reuse and specific-request matching
+  (F-021 FR-021-11, US-021-05 "покажи, где ты гуляла") can only be as good as this metadata — with
+  `background: home` there is nothing to match on. One fix pays for both features.
+- **Resolution (2026-07-23):** a new `SlotMeta.scene_description` — one plain sentence, authored
+  from the same slot as the prompt, in `PERSONA.language`, containing no framing/technical
+  vocabulary and never her appearance (FR-010-19/20/21). Stored in `meta_json` by F-008
+  (FR-008-19), served by F-012 (`SCENE_FIELDS`, `recent_sends`, delivery meta — FR-012-16), and
+  rendered by F-002's context block as the line itself, with the labelled request-fields kept only
+  as the fallback for pre-fix assets.
+
+  **The non-obvious half of the fix:** authoring a description that names a sofa and a blanket while
+  the prompt's `Scene:` section said only *"at home"* would have moved the confabulation out of her
+  mouth and into our code — the objects would still not be in the frame. So `scene_objects()` is now
+  the single source read by BOTH: the prompt requests the objects (`…with the sofa, a floor lamp,
+  the TV on and a blanket visible around her`) and the description names the same ones in her
+  language. `TC-FR-010-19-05` pins that agreement.
+
+  Two defects were caught by the new tests rather than in production:
+  - the F-011 wiring adapter never passed `PERSONA.language`, so production would have authored
+    English descriptions for a Russian persona (`TC-FR-010-20-04` now executes the adapter);
+  - adding `language` as a positional parameter of `author_jobs()` silently shifted `style` — two
+    existing F-010 tests went red because the persona's palette and outfit stopped being applied.
+    `language` is keyword-only for that reason.
+
+  `SCENE_OBJECTS` covers the full canonical location vocabulary emitted by
+  `batch_planner._guess_location` (`home / cafe / office / restaurant / gym / outdoors`) plus a
+  safe default, so an unmapped location degrades instead of producing an empty scene.
+
+  Tests: `tests/test_iss_008_scene_description.py` (22, all executing the real path —
+  `author_jobs` → `store_asset` → `deliver_photo` → `recent_sends` → `handle_turn`).
 

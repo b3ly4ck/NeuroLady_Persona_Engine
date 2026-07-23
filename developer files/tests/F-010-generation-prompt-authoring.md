@@ -122,6 +122,19 @@
 |---------|-------|------|---------------------|--------|
 | TC-FR-010-18-01 | unit | happy | Given the negative list; When inspected; Then duplication terms are present | implemented |
 
+### FR-010-19/20/21 — Human-readable scene description (ISS-008)
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-010-19-01 | unit | happy | A description is emitted per shot | Given a slot; When jobs are authored; Then each carries a non-empty `scene_description` | implemented |
+| TC-FR-010-19-02 | unit | happy | It names visible things, not just the place | Given an evening-at-home slot; When authored; Then the text mentions concrete objects/light, not only the location token | implemented |
+| TC-FR-010-19-03 | unit | boundary | Empty slot degrades safely | Given no life state; When authored; Then a default description is produced, never empty/None | implemented |
+| TC-FR-010-19-05 | unit | integration | Prompt and description agree | Given a slot; When authored; Then every object named in the description was also requested in the prompt's Scene section (one source — otherwise the description invents furniture) | implemented |
+| TC-FR-010-20-01 | unit | happy | Written in the persona's language (ru) | Given a ru persona; When authored; Then the description is Russian | implemented |
+| TC-FR-010-20-02 | unit | mapping | English persona gets English | Given an en persona; When authored; Then the description is English | implemented |
+| TC-FR-010-21-01 | unit | negative | No generation jargon | Given any description; When scanned; Then no framing/technical terms ("high-angle selfie", "Camera signature", "negative") appear | implemented |
+| TC-FR-010-21-02 | unit | negative | Never the raw prompt | Given the description; When compared; Then it is not the technical prompt nor a substring of it | implemented |
+| TC-FR-010-21-03 | unit | negative | No appearance descriptors | Given the description; When scanned by the identity guard; Then it describes the scene, never her looks (FR-010-05) | implemented |
+
 ---
 
 ## Non-functional requirements

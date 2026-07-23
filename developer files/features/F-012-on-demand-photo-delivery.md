@@ -188,6 +188,11 @@ Feature: F-012 On-Demand Photo Delivery
 - **FR-012-11** — Selection/pacing/caption behavior must be **config-driven** (match weighting,
   per-stage frequency caps, **recent-sends count/window for context**) without code changes.
 
+- **FR-012-16** — **Serve the scene description (ISS-008).** The delivered asset's metadata and the
+  `recent_sends` descriptors must include `scene_description` when present, so the "what she
+  recently sent" block (F-002 FR-002-25) tells her **what is visible in the photo**, not merely
+  where she was. When it is absent (older assets), the existing slot fields remain the fallback.
+
 ### Non-functional
 
 - **NFR-012-01** — **Instant delivery (CRITICAL):** photo delivery adds no generation latency — it is a

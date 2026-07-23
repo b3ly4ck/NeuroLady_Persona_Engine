@@ -221,7 +221,9 @@ class DeliveryOutcome(str, Enum):
 # FR-008-08, authored by F-010's SlotMeta). Only these ever leave the delivery boundary: meta_json
 # also carries generation provenance (`prompt`, `seed`) which must never reach the chat prompt
 # (FR-012-14).
-SCENE_FIELDS = ("background", "location", "activity", "pose", "time_of_day")
+# FR-012-16 (ISS-008): `scene_description` first — it is the only field that says what is VISIBLE;
+# the rest describe the generation request and remain as fallback for older assets.
+SCENE_FIELDS = ("scene_description", "background", "location", "activity", "pose", "time_of_day")
 
 
 def asset_scene(asset: MediaAsset) -> dict:

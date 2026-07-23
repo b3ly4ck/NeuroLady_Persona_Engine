@@ -106,6 +106,14 @@
 | TC-FR-012-15-02 | integration | boundary | Given ten sends, some older than the window; When the lookup runs; Then at most the configured count is returned and out-of-window sends are excluded | automated |
 | TC-FR-012-15-03 | integration | security | Given user A's and user B's sends of the same persona; When A's lookup runs; Then only A's sends appear (NFR-012-06) | automated |
 
+### FR-012-16 — Scene description served to context (ISS-008)
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-012-16-01 | unit | happy | Delivery result carries it | Given an asset with a scene description; When delivered; Then the result meta includes it | implemented |
+| TC-FR-012-16-02 | integration | happy | recent_sends carries it | Given a sent asset; When recent_sends runs; Then the descriptor includes the scene description | implemented |
+| TC-FR-012-16-03 | integration | regression | **ISS-008 pinned** | Given a photo was sent; When the context block is built; Then it states what is VISIBLE, not just `на фоне: home` | implemented |
+| TC-FR-012-16-04 | unit | empty | Older assets fall back | Given an asset without a description; When served; Then the slot fields are used and nothing breaks | implemented |
+
 ---
 
 ## Non-functional requirements

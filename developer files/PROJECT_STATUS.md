@@ -2,6 +2,40 @@
 
 ## Recent changes
 
+- **ISS-008 — she can now say what is IN the photo (scene descriptions).** Follow-up to ISS-006:
+  she had the asset's metadata, but the metadata is written in *generation* vocabulary — `background`
+  was populated from `_location_phrase()` so it merely echoed `location`, and `pose` held framing
+  jargon ("candid high-angle selfie"). Asked "а что у тебя на фоне?" she was handed `на фоне: home`
+  and nothing visible to name. The rich text existed only inside `meta_json["prompt"]`, which is the
+  English technical prompt and is deliberately stripped at the delivery boundary.
+  - **Requirements (docs-first):** F-010 `FR-010-19` (author a human-readable scene description per
+    shot), `FR-010-20` (in `PERSONA.language`), `FR-010-21` (no generation jargon, no appearance);
+    F-008 `FR-008-19` (persist it, must not echo another field); F-012 `FR-012-16` (serve it in the
+    delivery meta and `recent_sends`).
+  - **Code:**
+    - `services/imagegen/prompt_author.py` — `SCENE_OBJECTS` (the full canonical location vocabulary
+      `batch_planner._guess_location` emits: `home / cafe / office / restaurant / gym / outdoors`,
+      plus a `""` default), `SCENE_LIGHT` per time-of-day, `_SCENE_TEMPLATE` (ru/en),
+      `scene_objects(location, language)` and `author_scene_description(slot, language)`.
+      **`scene_objects()` is read by both sides:** `author_prompt()`'s `Scene:` section now requests
+      the objects (`…with the sofa, a floor lamp, the TV on and a blanket visible around her`) and the
+      description names the same ones in her language. Without that, a description mentioning a sofa
+      would just be *our code* inventing furniture the frame never contained.
+      `language` on `author_jobs()` is **keyword-only** — as a positional it shifted `style` and
+      silently disabled persona palette/outfit (caught by two existing F-010 tests going red).
+    - `services/imagegen/contract.py` — `SlotMeta.scene_description`, so it flows into
+      `slot_meta_json()` → `MEDIA_ASSET.meta_json` with no store-side change.
+    - `services/imagegen/wiring.py` — `F010PromptAuthor` passes `PERSONA.language` through (it did
+      not, which would have shipped English descriptions for a Russian persona).
+    - `services/bot/domain/media_delivery.py` — `scene_description` leads `SCENE_FIELDS`.
+    - `services/bot/orchestrator.py` — `_recent_media_block()` renders the description *as the line*
+      when present; the labelled request-fields remain only as the fallback for pre-fix assets, so
+      "поза: candid high-angle selfie" never reaches her voice again.
+  - **Tests:** `tests/test_iss_008_scene_description.py` (22), all executing the real path
+    (`author_jobs` → `store_asset` → `deliver_photo` → `recent_sends` → `handle_turn`), including
+    `TC-FR-010-19-05` pinning prompt/description agreement and `TC-FR-012-16-03` as the ISS-008
+    regression. Suite: **858 passed, 109 skipped**.
+
 - **ISS-006 — she now knows what she just sent (conversation ⋈ media).** Live defect: right after
   sending a photo of her dim bedroom, she answered "а что у тебя на фоне" with bookshelves, a
   saxophone and watercolours — a scene invented from her biography. Root cause: `MEDIA_ASSET.meta_json`

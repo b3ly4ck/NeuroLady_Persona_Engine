@@ -367,7 +367,11 @@ def author_prompt(
     style_tail = ", ".join(p for p in (style.aesthetic, style.palette) if p and p.strip())
     sections = [
         config.subject_token or REALISM_PHOTO_TYPE,
+        # FR-010-19 (ISS-008): the surrounding objects are named IN THE PROMPT, so the frame really
+        # contains them — the same list is what she is given to describe afterwards. Describing
+        # objects that were never requested would just move the confabulation into our own code.
         f"Scene: {_scene_activity(slot)}, {_location_phrase(slot, style, seed)}"
+        f", with {scene_objects(slot.location, 'en')} visible around her"
         f"{mood}".rstrip(", "),
         f"Composition: {framing.phrase}",
         # FR-010-17: wardrobe is authored HERE and is authoritative — the reference pictures'
@@ -384,6 +388,87 @@ def author_prompt(
     assert_no_identity_terms(prompt)
     assert_sfw(prompt)
     return prompt
+
+
+# ── scene description (FR-010-19/20/21, ISS-008) ────────────────────────────────────────────────
+#
+# The five slot fields describe the generation REQUEST ("background: home", "pose: high-angle
+# selfie"). When she is later asked "а что у тебя на фоне?" that is useless — measured live, she
+# could say where she was but not what was behind her. This authors, from the same slot the prompt
+# is built from, ONE plain sentence naming what is visible, IN HER LANGUAGE, in words a person would
+# use. It never contains framing jargon and is never the technical prompt.
+
+# Concrete things that plausibly surround her, per location. Keyed by the location token F-010
+# already derives; "" is the safe default.
+SCENE_OBJECTS: dict[str, dict[str, str]] = {
+    "home": {
+        "ru": "диван, торшер, включённый телевизор и плед",
+        "en": "the sofa, a floor lamp, the TV on and a blanket",
+    },
+    "cafe": {
+        "ru": "деревянный столик, чашка кофе, окно и другие посетители",
+        "en": "a wooden table, a coffee cup, the window and other customers",
+    },
+    "outdoors": {
+        "ru": "деревья, дорожка парка и трава",
+        "en": "trees, the park path and grass",
+    },
+    "gym": {
+        "ru": "тренажёры, зеркальная стена и коврик",
+        "en": "the machines, the mirrored wall and a mat",
+    },
+    "office": {
+        "ru": "рабочий стол, ноутбук, кружка и жалюзи на окне",
+        "en": "a desk, a laptop, a mug and window blinds",
+    },
+    "restaurant": {
+        "ru": "накрытый стол, бокалы, свеча и приглушённый зал",
+        "en": "a laid table, glasses, a candle and the dim dining room",
+    },
+    "": {"ru": "обычная домашняя обстановка", "en": "an ordinary everyday setting"},
+}
+
+SCENE_LIGHT: dict[str, dict[str, str]] = {
+    "morning": {"ru": "утренний свет из окна", "en": "morning light from the window"},
+    "afternoon": {"ru": "яркий дневной свет", "en": "bright daylight"},
+    "evening": {"ru": "тёплый вечерний свет ламп", "en": "warm evening lamplight"},
+    "night": {"ru": "приглушённый ночной свет", "en": "dim night lighting"},
+    "": {"ru": "обычный дневной свет", "en": "ordinary daylight"},
+}
+
+_SCENE_TEMPLATE = {
+    "ru": "{activity}; вокруг {objects}; {light}",
+    "en": "{activity}; around her {objects}; {light}",
+}
+
+
+def scene_objects(location: str, language: str) -> str:
+    """The concrete things surrounding her at `location`, in `language` (FR-010-19).
+
+    Shared by the prompt (so they are rendered) and the description (so she can name them) — the
+    single source that keeps what she says and what he sees the same thing."""
+    lang = language if language in ("ru", "en") else "en"
+    key = (location or "").strip().lower()
+    return SCENE_OBJECTS.get(key, SCENE_OBJECTS[""])[lang]
+
+
+def author_scene_description(slot: LifeSlot, language: str = "en",
+                             config: PromptAuthorConfig = DEFAULT_CONFIG) -> str:
+    """One human sentence describing what is visible in the frame (FR-010-19/20/21).
+
+    Authored from the same slot as the prompt, so it costs nothing extra. Written in the persona's
+    language because SHE speaks it later (F-002 context, F-012 captions). Contains no framing or
+    technical vocabulary, and never describes her appearance (FR-010-05 still applies).
+    """
+    lang = language if language in ("ru", "en") else "en"
+    if slot is None or slot.is_empty():
+        slot = config.default_scene
+    activity = (slot.activity or "").strip() or (
+        "обычный момент дня" if lang == "ru" else "an ordinary moment")
+    loc_key = (slot.location or "").strip().lower()
+    objects = scene_objects(loc_key, lang)
+    light = SCENE_LIGHT.get((slot.time_of_day or "").strip().lower(), SCENE_LIGHT[""])[lang]
+    return _SCENE_TEMPLATE[lang].format(activity=activity, objects=objects, light=light)
 
 
 def _select_framings(config: PromptAuthorConfig, count: int, seed: int) -> list[Framing]:
@@ -420,6 +505,9 @@ def author_jobs(
     style: PersonaStyle | None = None,
     config: PromptAuthorConfig = DEFAULT_CONFIG,
     *,
+    # keyword-only: the positional slots are a published API (F-011 and the tests call them
+    # positionally), so a new parameter must never shift `style` out from under a caller.
+    language: str = "en",
     count: int | None = None,
     base_seed: int = 0,
     job_key_prefix: str | None = None,
@@ -450,6 +538,9 @@ def author_jobs(
         prompt = f"{directive}{scene}" if directive else scene
         params = replace(config.params, seed=seed_i, negative=negative)
         meta = SlotMeta(
+            # FR-010-19 (ISS-008): what is VISIBLE in the frame, in her language — the answer to
+            # "а что у тебя на фоне?". The other fields describe the generation request.
+            scene_description=author_scene_description(slot, language, config),
             pose=framing.pose,
             background=_location_phrase(slot, style, base_seed) or slot.activity,
             location=slot.location or _location_phrase(slot, style, base_seed),

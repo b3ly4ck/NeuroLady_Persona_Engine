@@ -33,6 +33,25 @@ directly and backfill the docs (or skip them). Concretely, for any such request:
 The documentation is the source of truth; code follows the docs, not the other way around. This
 applies even to small tweaks — write the intended behavior down first, then make the code match it.
 
+**Docs-first is the DEFAULT, never a question.** Do not ask "docs-first or straight to code?" and do
+not wait to be told — the user should never have to repeat it. On any reported defect or change
+request, start by writing: the `ISS-<NNN>` entry (for defects), the `FR-`/`NFR-` requirements in the
+owning feature file, the `TC-` cases in its mirror test spec, and any `architecture.md` change —
+**then** implement. If a request seems too small for docs, it still gets the requirement it was
+missing: every defect found so far in this project traced to a **missing requirement**, not a typo.
+
+**Tests must EXECUTE the path, never grep the source.** A test that asserts on implementation *text*
+(e.g. "does the handler mention `foo` before `bar`") stays green while that code path raises on its
+first line — this exact mistake shipped a bug where every photo request died with a `TypeError` and
+the user got **silence**, with 766 tests passing. Behavioural tests invoke the real function/handler
+with fakes and assert on **observable outcomes**. A structural check may only ever be *additive* to
+an executing test, never a substitute. Likewise, if a defect class cannot occur in the test
+environment (e.g. lock contention under an in-memory DB with no concurrency), build the environment
+that can reproduce it rather than assuming it is covered.
+
+**Silence is always a defect.** No path — including an unhandled exception — may leave the user with
+zero outbound messages. Any turn either answers or degrades in character.
+
 ## Git workflow: commit and push after every change
 
 After **any** change made to the project (new file, code edit, config change, etc.),
@@ -176,6 +195,15 @@ explicitly asks for it elsewhere.
 
 ## Preferences and feedback
 
+- [2026-07-23] **Stop asking whether to do docs-first — just do it.** The user had to repeat
+  "docs-first" on nearly every request despite the rule already existing. Docs-first is the default
+  for *every* defect and change: ISS entry → requirements → TC cases → architecture → then code.
+  Also reinforced from this session's real failures: (a) **tests must execute the path, not grep the
+  source** — a source-grepping regression test stayed green while every photo request died with a
+  `TypeError` and the user got silence; (b) **silence is always a defect** — every inbound message
+  must end in a visible reply; (c) when a defect class cannot occur in the test environment (no
+  concurrency under in-memory SQLite), build an environment that reproduces it instead of assuming
+  coverage.
 - [2026-07-17] **NEVER commit worktree/machine-local plumbing — it destroyed a 28G model and cost
   the developer real time/money.** Root cause chain (all must be avoided): (1) to share heavy
   gitignored assets (`image/models` = 28G v23 checkpoint, `image/comfyui`, `image/.venv`) across

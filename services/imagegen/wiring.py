@@ -65,6 +65,9 @@ class F010PromptAuthor:
         base_seed = int(hashlib.sha1(raw).hexdigest()[:8], 16) % 100_000
         jobs: list[GenerationJob] = author_jobs(
             slug, slot=life_slot, config=self._config,
+            # FR-010-20 (ISS-008): the scene description is spoken by HER later, so it is authored
+            # in her language, not in the English generation vocabulary.
+            language=getattr(persona, "language", "en") or "en",
             count=shot_index + 1, base_seed=base_seed,
             references=self._references.references_for(persona),
         )

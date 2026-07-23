@@ -155,6 +155,14 @@
 |---------|-------|------|-------------|---------------------|--------|
 | TC-FR-008-18-01 | integration | error | Retry uses a different seed | Given a first black attempt; When retried; Then the retry seed differs and a valid asset is stored | implemented |
 
+### FR-008-19 — Scene description persisted (ISS-008)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-008-19-01 | integration | happy | Stored in meta_json | Given a job carrying a scene description; When the asset is stored; Then meta_json contains it | implemented |
+| TC-FR-008-19-02 | unit | empty | Absent description is tolerated | Given a job without one (older payloads); When stored; Then no crash and the slot fields still persist | implemented |
+| TC-FR-008-19-03 | integration | negative | Not an echo of another field | Given the stored meta; When compared; Then scene_description differs from `location` (the ISS-008 defect was a field echoing another) | implemented |
+
 ---
 
 ## Non-functional requirements

@@ -36,6 +36,10 @@ class SlotMeta:
     location: str = ""
     activity: str = ""
     time_of_day: str = ""
+    # F-010 FR-010-19 (ISS-008): a short, human-readable sentence naming WHAT IS VISIBLE in the
+    # frame, in the persona's language — the thing she can actually say when asked "что у тебя на
+    # фоне?". The five fields above describe the generation *request*; this one describes the photo.
+    scene_description: str = ""
 
 
 @dataclass

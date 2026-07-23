@@ -247,6 +247,12 @@ Feature: F-008 Image Generation Runner
   (offset by the attempt count), so a bad seed self-heals instead of looping to give-up. Same-seed
   reproducibility (FR-008-06 / TC-FR-008-06-03) still holds for the *first* attempt.
 
+- **FR-008-19** — **Persist the scene description (ISS-008).** `MEDIA_ASSET.meta_json` must carry
+  F-010's `scene_description` alongside the five slot fields, so Media Delivery (F-012), the
+  conversation context (F-002 FR-002-25) and archive matching (F-021 FR-021-11) all read the same
+  human description of what the frame shows. Storing a field that merely echoes another (today's
+  `background` duplicates `location`) does not satisfy this requirement.
+
 ### Non-functional
 
 - **NFR-008-01** — **Realism:** at the chosen model + step count, output must read as a real phone

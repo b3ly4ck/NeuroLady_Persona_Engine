@@ -177,10 +177,19 @@ def _recent_media_block(sends: list, language: str, now: datetime | None = None)
     labels = _SCENE_LABELS.get(language, _SCENE_LABELS["en"])
     lines = []
     for send in sends:
-        parts = [f"{label}: {send.scene[key]}" for key, label in labels if send.scene.get(key)]
-        if not parts:
-            continue
-        lines.append(f"- {_when_phrase(send.sent_at, now, language)} — " + "; ".join(parts))
+        # FR-012-16 (ISS-008): when the asset carries a human-readable scene description, that IS
+        # the line — it says what is visible. The labelled fields describe the generation request
+        # ("pose: candid selfie"), which she must never read out loud; they stay only as the
+        # fallback for assets rendered before descriptions existed.
+        described = (send.scene.get("scene_description") or "").strip()
+        if described:
+            body = described
+        else:
+            parts = [f"{label}: {send.scene[key]}" for key, label in labels if send.scene.get(key)]
+            if not parts:
+                continue
+            body = "; ".join(parts)
+        lines.append(f"- {_when_phrase(send.sent_at, now, language)} — " + body)
     if not lines:
         return None
     if language == "ru":
