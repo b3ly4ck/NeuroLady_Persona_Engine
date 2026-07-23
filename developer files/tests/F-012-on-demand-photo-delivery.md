@@ -78,6 +78,20 @@
 |---------|-------|------|---------------------|--------|
 | TC-FR-012-11-01 | integration | happy | Given edited match-weight/frequency config; When applied; Then honored, no code change | automated |
 
+### FR-012-12 — Caption in the persona's language (ISS-003)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-012-12-01 | unit | happy | Given a ru persona; When the caption is requested; Then the request carries her language and asks for a Russian caption | planned |
+| TC-FR-012-12-02 | unit | mapping | Given an en persona; When requested; Then English is asked for | planned |
+| TC-FR-012-12-03 | regression | negative | **ISS-003:** given a ru persona; When a caption is produced; Then it is not English | out-of-band (live model) |
+
+### FR-012-13 — Paced photo send (ISS-004)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-012-13-01 | unit | happy | Given a photo delivery; When it runs; Then upload_photo action precedes a bounded delay before the send | planned |
+| TC-FR-012-13-02 | unit | boundary | Given the configured budget; When timed; Then the delay stays within min/max bounds | planned |
+| TC-FR-012-13-03 | unit | consistency | Given NFR-012-01; When measured; Then no GENERATION happens on the hot path (instant lookup) while the user-visible send is still paced | planned |
+
 ---
 
 ## Non-functional requirements

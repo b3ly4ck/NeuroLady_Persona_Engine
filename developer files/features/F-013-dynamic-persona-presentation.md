@@ -153,6 +153,12 @@ Feature: F-013 Dynamic Persona Presentation
 - **FR-013-11** — After the greeting, control must **hand off to normal chat** (F-002/F-003) — F-013
   does not manage the ongoing conversation.
 
+- **FR-013-12** — **Source the gallery card photo from the persona's generated archive (ISS-002).**
+  The nightly batch (F-011) already produces a per-persona archive; provisioning must promote a
+  suitable **SFW, identity-consistent** frame to `PERSONA.gallery_photo_ref` so the S2 card
+  (F-001 FR-001-25) always has a photo. Selection prefers a neutral, face-clear shot; it is refreshed
+  when the archive is regenerated, and never uses an intimate asset.
+
 ### Non-functional
 
 - **NFR-013-01** — **Instant (CRITICAL):** the greeting card is composed and sent with no generation

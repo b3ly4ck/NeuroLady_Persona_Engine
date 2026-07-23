@@ -77,6 +77,12 @@
 |---------|-------|------|---------------------|--------|
 | TC-FR-013-11-01 | integration | happy | Given the greeting sent; When the user replies; Then control is F-002/F-003 | passing |
 
+### FR-013-12 — Gallery photo sourced from the archive (ISS-002)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-013-12-01 | integration | happy | Given a persona with an archive; When provisioning runs; Then gallery_photo_ref points at a real SFW frame from it | planned |
+| TC-FR-013-12-02 | unit | negative | Given the archive; When a card photo is chosen; Then an intimate asset is never selected | planned |
+
 ---
 
 ## Non-functional requirements

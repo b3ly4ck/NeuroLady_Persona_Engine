@@ -150,6 +150,15 @@ Feature: F-012 On-Demand Photo Delivery
   activity and pacing allows, she may send a fitting unsent asset unprompted.
 - **FR-012-10** — Delivery must go through the **Media Delivery path** (architecture.md §3.6) and record
   the send (which user, which asset, when) for history and audit.
+- **FR-012-12** — **The caption must be written in the persona's own language (ISS-003).** The
+  caption request must pass `PERSONA.language` (and honour her comm settings) so the caption matches
+  the language she speaks in the conversation. An English caption under a Russian-speaking persona's
+  photo is a defect — it breaks the single-voice illusion as hard as an out-of-character line.
+- **FR-012-13** — **A delivered photo must be paced like a human send (ISS-004).** "Instant" in
+  NFR-012-01 means **no generation on the hot path**, NOT instant to the user. Before the photo
+  lands the user must see the `upload_photo` action for a **believable, bounded delay** (a real
+  person takes a moment to pick/take and send a photo), reusing the F-003 pacing budget
+  (F-003 FR-003-42). Caption and photo arrive as one message, after that delay.
 - **FR-012-11** — Selection/pacing/caption behavior must be **config-driven** (match weighting,
   per-stage frequency caps) without code changes.
 

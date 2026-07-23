@@ -214,6 +214,13 @@
 | TC-FR-001-24-01 | unit | happy | Tap deleted after the gallery is shown | Given a "💋 Choose Lady" tap; When the gallery card sends successfully; Then the tap message is deleted | planned |
 | TC-FR-001-24-02 | integration | error | Failed response → tap is NOT deleted | Given the gallery send raises; When the tap is handled; Then the tap message is left in place | planned |
 
+### FR-001-25/26 — Published persona must have a resolvable gallery photo (ISS-002)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-001-25-01 | integration | happy | Given every active persona; When gallery_photo_ref is resolved; Then the file exists on disk | planned |
+| TC-FR-001-25-02 | integration | negative | Given a persona with a missing gallery photo; When the roster is checked; Then an operator-visible warning is raised (not silently text-only) | planned |
+| TC-FR-001-26-01 | unit | error | Given the file vanishes at runtime; When the card renders; Then it degrades to text, never an error/broken image | implemented |
+
 ---
 
 ## Non-functional requirements

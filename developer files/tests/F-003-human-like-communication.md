@@ -324,6 +324,13 @@
 | TC-FR-003-41-02 | unit | happy | Closed think block is stripped from delivery | Given a raw reply with a closed <think> block; When post-processed; Then only the visible reply remains | automated |
 | TC-FR-003-41-03 | unit | error | Truncated think block degrades, never leaks | Given a raw reply whose <think> never closes (token-truncated); When post-processed; Then raw reasoning is NOT delivered — the turn falls back in-character | automated |
 
+### FR-003-42 — Pacing applies to media sends (ISS-004)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-003-42-01 | unit | happy | Given a media send; When it runs; Then the upload action + a bounded delay precede delivery | planned |
+| TC-FR-003-42-02 | unit | boundary | Given the pacing budget; When applied to media; Then the delay is bounded and length-independent | planned |
+| TC-FR-003-42-03 | regression | negative | **ISS-004:** given a photo request; When served; Then the photo does NOT land instantly | planned |
+
 ---
 
 ## Non-functional requirements
