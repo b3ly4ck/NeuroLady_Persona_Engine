@@ -25,6 +25,7 @@ from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
 from services.bot.domain import biography as bio_domain
 from services.bot.domain import life_engine_store as life_store
 from services.bot.domain import media_delivery
+from services.bot.domain import media_intent as intent_domain
 from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
 from services.bot.domain import relationship_store as rel_store
@@ -205,6 +206,18 @@ def _life_engine_block(activity: str | None, language: str) -> str | None:
     return f"What you're currently up to in your own life (mention it naturally if relevant): {activity}"
 
 
+# F-020: `handle_turn` must keep returning a plain string (24 call sites depend on it), so the
+# turn's media-intent verdict is handed over out-of-band, keyed by session. Read it immediately
+# after the call with `take_media_intent(session.id)`; it is consumed (pop) so a later turn can
+# never act on a stale verdict.
+_LAST_INTENT: dict[int, "intent_domain.MediaIntent"] = {}
+
+
+def take_media_intent(session_id: int) -> "intent_domain.MediaIntent":
+    """Pop the media-intent verdict produced by the most recent `handle_turn` for this session."""
+    return _LAST_INTENT.pop(session_id, intent_domain.NO_INTENT)
+
+
 async def handle_turn(
     db: AsyncSession,
     session: Session,
@@ -269,6 +282,10 @@ async def handle_turn(
     media_block = _recent_media_block(sends, persona.language)
     if media_block:
         system_content += "\n\n" + media_block
+    # F-020 (FR-020-01): the turn instructs the model to emit a media-intent signal alongside its
+    # reply, so intent is judged by the model that understands the conversation — not by a keyword
+    # list that missed natural phrasing (ISS-005). No extra round-trip: it rides this same call.
+    system_content += "\n\n" + intent_domain.intent_instruction()
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     llm_messages += msg_domain.to_openai_messages(history)
     prompt_log.maybe_dump(persona.name, user_text, llm_messages)  # dev observability (opt-in via env)
@@ -278,18 +295,29 @@ async def handle_turn(
     # the long reasoning-inclusive generation: holding a SQLite write transaction open for 30-60s
     # locked out concurrent writers live ("database is locked" on the user's next message).
     await db.commit()
+    raw = ""
     try:
-        reply = _postprocess(await chat_client.complete(llm_messages))
-        if not reply:  # empty or truncated-reasoning output — degrade, never a blank/leaked reply
+        raw = _postprocess(await chat_client.complete(llm_messages))
+        if not raw:  # empty or truncated-reasoning output — degrade, never a blank/leaked reply
             log.warning("post-processed reply empty (truncated reasoning?), using fallback")
-            reply = _fallback_text(persona)
+            raw = _fallback_text(persona)
     except ChatRunnerUnavailable as exc:
         log.warning("chat runner unavailable, using in-character fallback: %s", exc)
+        raw = _fallback_text(persona)
+
+    # F-020: pull the media-intent verdict out of the reply and STRIP the signal before anything
+    # user-visible or persisted (FR-020-04) — the token must never reach the chat or the history.
+    # The keyword matcher is now only a fallback for a missing signal (FR-020-08 / D2).
+    reply, media_intent = intent_domain.resolve(
+        raw, user_text, keyword_fallback=media_delivery.looks_like_photo_request
+    )
+    if not reply:  # a signal-only reply still has to say something (FR-020-04, silence invariant)
         reply = _fallback_text(persona)
 
     # 4. Persist the persona reply so the thread stays coherent (FR-002-09).
     await msg_domain.append_message(db, session.id, MessageSender.persona, reply)
     # (F-005 relationship update + F-003 styling/pacing run in the handler after the reply is sent.)
+    _LAST_INTENT[session.id] = media_intent
     return reply
 
 

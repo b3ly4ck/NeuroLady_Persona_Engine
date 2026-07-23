@@ -48,6 +48,7 @@ async def serve_photo_request(
     gate: IntimacyGate,
     cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
     media_root: str | Path | None = None,
+    force_gate: bool = False,
 ) -> DeliveryResult:
     """Run F-012 delivery for one request and emit the result over Telegram (§3.6 Media path).
 
@@ -63,6 +64,7 @@ async def serve_photo_request(
         caption_client=chat_client,
         gate=gate,
         cfg=cfg,
+        force_gate=force_gate,
     )
     if result.delivered and result.asset is not None:
         path = asset_abspath(result.asset, media_root)

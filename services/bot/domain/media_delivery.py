@@ -556,6 +556,7 @@ async def deliver_photo(
     gate: IntimacyGate,
     cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
     now: datetime | None = None,
+    force_gate: bool = False,
 ) -> DeliveryResult:
     """Serve an SFW photo on request (the on-request flow, feature §2).
 
@@ -565,8 +566,11 @@ async def deliver_photo(
     now = now or _utcnow()
     persona_id = persona.id
 
+    # F-020: when the MODEL's signal judged the ask intimate, that verdict is authoritative — it
+    # understands phrasing the keyword classifier cannot. The local classifier still runs as a
+    # second opinion, and either saying "gate" sends it to the gate (never leak an intimate asset).
     kind = classify_photo_request(request_text)
-    if routes_to_gate(kind):
+    if force_gate or routes_to_gate(kind):
         stage = await _stage_for(db, user_id, persona_id)
         gate_result = await gate.handle_intimate_request(
             user_id=user_id,

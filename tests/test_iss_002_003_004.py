@@ -122,9 +122,14 @@ def test_iss_004_faster_persona_is_quicker():
 
 
 def test_iss_004_photo_path_sleeps_before_sending():
-    """REGRESSION: the photo branch used to send the upload action and deliver immediately."""
+    """REGRESSION: the photo branch used to send the upload action and deliver immediately.
+
+    Structural check ONLY — the authoritative, executing coverage is
+    tests/test_photo_path_e2e.py::test_photo_request_is_paced_before_sending (a source-grepping
+    test like this one is exactly what let a TypeError ship silently; it stays as a cheap
+    ordering assertion, never as the proof)."""
     src = (BOT_DIR / "handlers" / "conversation.py").read_text()
-    photo_branch = src.split("looks_like_photo_request(message.text):", 1)[1].split("return", 1)[0]
+    photo_branch = src.split("if intent.requested:", 1)[1].split("# F-003 human-likeness", 1)[0]
     assert "media_pacing_delay" in photo_branch and "_sleep" in photo_branch
     assert photo_branch.index("_sleep") < photo_branch.index("serve_photo_request"), \
         "the delay must precede the send"

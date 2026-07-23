@@ -39,9 +39,9 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-01-01 | unit | happy | The assembled turn instructs the model to emit the intent signal | Given a persona + session; When the turn's message list is assembled; Then the system context contains the media-intent instruction block and its declared signal format | planned |
-| TC-FR-020-01-02 | integration | happy | Intent is taken from the model's signal in post-process | Given a fake chat client whose reply carries a well-formed "media requested, sfw" signal for a message containing **no** keyword at all; When `on_text` runs; Then a photo is sent | planned |
-| TC-FR-020-01-03 | integration | negative | A keyword-rich message with a "no media" signal stays text | Given the user writes "пришли фото" but the model's signal says *not* a media request; When `on_text` runs; Then the decision follows the signal, the turn stays text, and no photo is sent | planned |
+| TC-FR-020-01-01 | unit | happy | The assembled turn instructs the model to emit the intent signal | Given a persona + session; When the turn's message list is assembled; Then the system context contains the media-intent instruction block and its declared signal format | implemented |
+| TC-FR-020-01-02 | integration | happy | Intent is taken from the model's signal in post-process | Given a fake chat client whose reply carries a well-formed "media requested, sfw" signal for a message containing **no** keyword at all; When `on_text` runs; Then a photo is sent | implemented |
+| TC-FR-020-01-03 | integration | negative | A keyword-rich message with a "no media" signal stays text | Given the user writes "пришли фото" but the model's signal says *not* a media request; When `on_text` runs; Then the decision follows the signal, the turn stays text, and no photo is sent | implemented |
 | TC-FR-020-01-04 | unit | structural | The keyword pre-filter is no longer the decision mechanism | Given the turn pipeline; When inspected; Then no pre-LLM keyword call decides the branch (`looks_like_photo_request` appears only inside the FR-020-08 fallback) — **additive to** TC-FR-020-01-02/03 which execute the path | planned |
 | TC-FR-020-01-05 | inter-service | happy | Composed path Bot Gateway → Orchestrator (post-process parse) → Media Delivery | Given the real handler wired to F-012 delivery with one archive asset; When a signalled request arrives; Then the parse happens after the model call and the asset reaches the Telegram send API exactly once | planned |
 | TC-FR-020-01-06 | e2e | happy | Scripted client: natural request with no keyword yields a photo | Given a scripted Telegram client and a signal-emitting fake model; When it sends "а может сфоткаешься сидя на диване?"; Then a photo message arrives | planned |
@@ -63,8 +63,8 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-02-01 | integration | happy | Exactly one model call for a media turn | Given a call-counting fake chat client; When `on_text` handles a signalled photo request; Then the reply-generation client was called exactly once for intent+reply | planned |
-| TC-FR-020-02-02 | integration | happy | Exactly one model call for a non-media turn | Given the same counter; When an ordinary chat message is handled; Then still one generation call — the instruction adds no second request | planned |
+| TC-FR-020-02-01 | integration | happy | Exactly one model call for a media turn | Given a call-counting fake chat client; When `on_text` handles a signalled photo request; Then the reply-generation client was called exactly once for intent+reply | implemented |
+| TC-FR-020-02-02 | integration | happy | Exactly one model call for a non-media turn | Given the same counter; When an ordinary chat message is handled; Then still one generation call — the instruction adds no second request | implemented |
 | TC-FR-020-02-03 | integration | negative | No re-classification call downstream | Given the signal already reports the nature; When delivery/gate run; Then neither F-012 nor F-014 issues an additional LLM classification call (caption/deflection calls are counted separately and allowed) | planned |
 | TC-FR-020-02-04 | performance | boundary | Call count holds across 50 mixed turns | Given 50 alternating media/non-media turns; When processed; Then total generation calls == 50 | planned |
 
@@ -74,12 +74,12 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-03-01 | unit | happy | Parse an sfw request signal | Given a well-formed signal "requested=true, nature=sfw"; When parsed; Then the intent object reports requested=True, nature=sfw | planned |
-| TC-FR-020-03-02 | unit | happy | Parse an intimate request signal | Given "requested=true, nature=intimate"; When parsed; Then nature=intimate and `routes_to_gate` is true | planned |
-| TC-FR-020-03-03 | unit | negative | Unknown nature value is not trusted as sfw | Given "requested=true, nature=weird"; When parsed; Then nature falls back to the gate-routed side, never sfw | planned |
+| TC-FR-020-03-01 | unit | happy | Parse an sfw request signal | Given a well-formed signal "requested=true, nature=sfw"; When parsed; Then the intent object reports requested=True, nature=sfw | implemented |
+| TC-FR-020-03-02 | unit | happy | Parse an intimate request signal | Given "requested=true, nature=intimate"; When parsed; Then nature=intimate and `routes_to_gate` is true | implemented |
+| TC-FR-020-03-03 | unit | negative | Unknown nature value is not trusted as sfw | Given "requested=true, nature=weird"; When parsed; Then nature falls back to the gate-routed side, never sfw | implemented |
 | TC-FR-020-03-04 | integration | happy | sfw signal reaches F-012 delivery | Given an sfw signal and an available SFW asset; When `on_text` runs; Then the SFW archive path serves it and the F-014 gate is not invoked | planned |
-| TC-FR-020-03-05 | inter-service | happy | intimate signal reaches the F-014 gate | Given an intimate signal; When `on_text` runs; Then the gate adapter receives the request with the intimate flag and **no** SFW asset is sent | planned |
-| TC-FR-020-03-06 | unit | boundary | Nature is carried even when the prose is empty | Given a reply that is only the signal; When parsed; Then requested/nature survive and the empty prose is handled by FR-020-04's rules | planned |
+| TC-FR-020-03-05 | inter-service | happy | intimate signal reaches the F-014 gate | Given an intimate signal; When `on_text` runs; Then the gate adapter receives the request with the intimate flag and **no** SFW asset is sent | implemented |
+| TC-FR-020-03-06 | unit | boundary | Nature is carried even when the prose is empty | Given a reply that is only the signal; When parsed; Then requested/nature survive and the empty prose is handled by FR-020-04's rules | implemented |
 
 ---
 
@@ -87,11 +87,11 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-04-01 | unit | happy | Signal removed from the reply text | Given a reply "вот, держи <signal>"; When post-processed; Then the returned prose contains no signal token or delimiter | planned |
-| TC-FR-020-04-02 | unit | boundary | Signal at start / middle / end | Given three replies with the signal in each position; When stripped; Then the surviving prose is clean, whitespace-normalised and not broken mid-sentence | planned |
-| TC-FR-020-04-03 | integration | happy | Nothing signal-shaped reaches Telegram | Given a signalled reply; When `on_text` runs; Then every captured outbound message body is free of the signal token (asserted on the fake bot's send calls, not on source) | planned |
-| TC-FR-020-04-04 | unit | negative | A user quoting the signal format is not stripped from his own text | Given the user's message itself contains signal-looking text; When the turn is processed; Then the user's text is untouched and no intent is inferred from it (no injection) | planned |
-| TC-FR-020-04-05 | integration | empty | Signal-only reply still yields a visible message | Given a reply that is nothing but the signal; When `on_text` runs; Then the user still receives media or an in-character line — never an empty send and never zero sends | planned |
+| TC-FR-020-04-01 | unit | happy | Signal removed from the reply text | Given a reply "вот, держи <signal>"; When post-processed; Then the returned prose contains no signal token or delimiter | implemented |
+| TC-FR-020-04-02 | unit | boundary | Signal at start / middle / end | Given three replies with the signal in each position; When stripped; Then the surviving prose is clean, whitespace-normalised and not broken mid-sentence | implemented |
+| TC-FR-020-04-03 | integration | happy | Nothing signal-shaped reaches Telegram | Given a signalled reply; When `on_text` runs; Then every captured outbound message body is free of the signal token (asserted on the fake bot's send calls, not on source) | implemented |
+| TC-FR-020-04-04 | unit | negative | A user quoting the signal format is not stripped from his own text | Given the user's message itself contains signal-looking text; When the turn is processed; Then the user's text is untouched and no intent is inferred from it (no injection) | implemented |
+| TC-FR-020-04-05 | integration | empty | Signal-only reply still yields a visible message | Given a reply that is nothing but the signal; When `on_text` runs; Then the user still receives media or an in-character line — never an empty send and never zero sends | implemented |
 | TC-FR-020-04-06 | integration | regression | Chunking never re-exposes the signal | Given a long reply with an embedded signal; When F-003 chunking splits it; Then no chunk contains a signal fragment | planned |
 
 ---
@@ -100,12 +100,12 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-05-01 | unit | empty | Absent signal → no media intent | Given a reply with no signal; When parsed; Then requested=False and nature is undefined | planned |
-| TC-FR-020-05-02 | unit | error | Malformed signal → no media intent, no exception | Given a truncated/half-open signal; When parsed; Then requested=False and no exception propagates | planned |
+| TC-FR-020-05-01 | unit | empty | Absent signal → no media intent | Given a reply with no signal; When parsed; Then requested=False and nature is undefined | implemented |
+| TC-FR-020-05-02 | unit | error | Malformed signal → no media intent, no exception | Given a truncated/half-open signal; When parsed; Then requested=False and no exception propagates | implemented |
 | TC-FR-020-05-03 | unit | negative | Garbage in the signal slot never triggers a send | Given random bytes/emoji/JSON-ish garbage where the signal belongs; When parsed; Then requested=False | planned |
-| TC-FR-020-05-04 | integration | error | Degrade is observable end-to-end | Given a fake client returning a malformed signal; When `on_text` runs; Then a normal text reply is delivered, no photo is sent, and the handler returns without raising | planned |
-| TC-FR-020-05-05 | unit | boundary | Duplicated/contradictory signals | Given a reply containing two signals with opposite verdicts; When parsed; Then a single deterministic verdict is produced and, if it disagrees on nature, the gate-routed side wins | planned |
-| TC-FR-020-05-06 | integration | error | Model call failure degrades to an in-character line | Given the chat client raises; When `on_text` runs; Then the turn ends with a user-visible fallback line, not silence and not a crash | planned |
+| TC-FR-020-05-04 | integration | error | Degrade is observable end-to-end | Given a fake client returning a malformed signal; When `on_text` runs; Then a normal text reply is delivered, no photo is sent, and the handler returns without raising | implemented |
+| TC-FR-020-05-05 | unit | boundary | Duplicated/contradictory signals | Given a reply containing two signals with opposite verdicts; When parsed; Then a single deterministic verdict is produced and, if it disagrees on nature, the gate-routed side wins | implemented |
+| TC-FR-020-05-06 | integration | error | Model call failure degrades to an in-character line | Given the chat client raises; When `on_text` runs; Then the turn ends with a user-visible fallback line, not silence and not a crash | implemented |
 
 ---
 
@@ -113,8 +113,8 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-06-01 | integration | regression | **ISS-005 pinned (wiring half):** the failing phrasing is delivered when the model says it is a request | Given "а может сфоткаешься сидя на диване?" and a fake client emitting a positive sfw signal; When `on_text` runs; Then a photo is delivered — the phrasing is never blocked by a keyword gate on the way | planned |
-| TC-FR-020-06-02 | integration | happy | Implicit asks route to delivery | Given "покажись" / "хочу тебя увидеть" / "как ты сейчас выглядишь" with positive signals; When handled; Then each ends in a delivery attempt, none in a plain text turn | planned |
+| TC-FR-020-06-01 | integration | regression | **ISS-005 pinned (wiring half):** the failing phrasing is delivered when the model says it is a request | Given "а может сфоткаешься сидя на диване?" and a fake client emitting a positive sfw signal; When `on_text` runs; Then a photo is delivered — the phrasing is never blocked by a keyword gate on the way | implemented |
+| TC-FR-020-06-02 | integration | happy | Implicit asks route to delivery | Given "покажись" / "хочу тебя увидеть" / "как ты сейчас выглядишь" with positive signals; When handled; Then each ends in a delivery attempt, none in a plain text turn | implemented |
 | TC-FR-020-06-03 | benchmark | regression | **ISS-005 pinned (model half):** the real model classifies the failing phrasing as a request | Given the live chat model and "а может сфоткаешься сидя на диване?"; When the turn is generated; Then the emitted signal reports a photo request | out-of-band (live model) |
 | TC-FR-020-06-04 | benchmark | happy | Recall on the labeled RU request corpus | Given the labeled RU corpus of natural photo requests; When classified by the live model; Then recall ≥ the NFR-020-02 target | out-of-band (live model) |
 | TC-FR-020-06-05 | benchmark | happy | Recall on the labeled EN request corpus | Given the labeled EN corpus ("send me a pic", "what do you look like right now", "show yourself"); When classified live; Then recall ≥ target | out-of-band (live model) |
@@ -136,7 +136,7 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-07-01 | integration | negative | Topic sentence with a negative signal stays text | Given "обожаю фотографировать закаты" and a negative signal; When `on_text` runs; Then a text reply is sent and zero photos | planned |
+| TC-FR-020-07-01 | integration | negative | Topic sentence with a negative signal stays text | Given "обожаю фотографировать закаты" and a negative signal; When `on_text` runs; Then a text reply is sent and zero photos | implemented |
 | TC-FR-020-07-02 | integration | negative | Third-party photo talk does not trigger a send | Given "друг скинул фотку с моря" with a negative signal; When handled; Then no delivery call is made | planned |
 | TC-FR-020-07-03 | benchmark | negative | Precision on the labeled topic corpus | Given the labeled RU+EN photo-topic corpus; When classified live; Then false-positive sends ≈ 0 (≤ the NFR-020-03 budget) | out-of-band (live model) |
 | TC-FR-020-07-04 | benchmark | boundary | Near-miss phrasings ("I should take a photo of that") | Given the ambiguous-but-not-a-request set; When classified live; Then they resolve to *no media intent* | out-of-band (live model) |
@@ -155,10 +155,10 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-FR-020-08-01 | integration | error | Runner unavailable → obvious request still served | Given the chat client reports not-ready/raises and the user writes "пришли фото"; When `on_text` runs; Then the fallback triggers delivery of a photo | planned |
-| TC-FR-020-08-02 | unit | happy | A present, valid signal wins over the fallback | Given an obvious keyword message **and** a valid negative signal; When decided; Then the signal wins (no send) — the fallback is only consulted when the signal is absent/unavailable | planned |
+| TC-FR-020-08-01 | integration | error | Runner unavailable → obvious request still served | Given the chat client reports not-ready/raises and the user writes "пришли фото"; When `on_text` runs; Then the fallback triggers delivery of a photo | implemented |
+| TC-FR-020-08-02 | unit | happy | A present, valid signal wins over the fallback | Given an obvious keyword message **and** a valid negative signal; When decided; Then the signal wins (no send) — the fallback is only consulted when the signal is absent/unavailable | implemented |
 | TC-FR-020-08-03 | integration | negative | Fallback does not fire on topic mentions | Given the runner is down and the user writes "обожаю фотографировать закаты"; When handled; Then the fallback does not classify it as a request | planned |
-| TC-FR-020-08-04 | integration | negative | **Silence invariant (fallback branch)** | Given the runner is down and an obvious request arrives with an *empty* archive; When handled; Then an in-character line is sent — the turn never ends with zero outbound messages | planned |
+| TC-FR-020-08-04 | integration | negative | **Silence invariant (fallback branch)** | Given the runner is down and an obvious request arrives with an *empty* archive; When handled; Then an in-character line is sent — the turn never ends with zero outbound messages | implemented |
 | TC-FR-020-08-05 | unit | localization | Fallback vocabulary covers RU and EN | Given the configured fallback vocabulary; When RU and EN obvious requests are matched; Then both hit | planned |
 
 ---
@@ -225,7 +225,7 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-NFR-020-04-01 | security | negative | Missing nature never serves the SFW archive blindly | Given "requested=true" with no nature field; When routed; Then the request goes to the gate side, never straight to an SFW send that could be an intimate ask | planned |
+| TC-NFR-020-04-01 | security | negative | Missing nature never serves the SFW archive blindly | Given "requested=true" with no nature field; When routed; Then the request goes to the gate side, never straight to an SFW send that could be an intimate ask | implemented |
 | TC-NFR-020-04-02 | security | negative | Unknown/garbled nature routes to the gate | Given nature="???" / mixed case / unexpected token; When routed; Then gate-routed | planned |
 | TC-NFR-020-04-03 | security | negative | An intimate asset never leaves via the sfw path | Given the archive contains intimate assets and an ambiguous signal arrives; When delivery runs; Then no `intimate=True` asset is sent (F-012 NFR-012-08 unchanged) | planned |
 | TC-NFR-020-04-04 | security | negative | Prompt injection in the user's message cannot force "nature=sfw" | Given the user's text contains a forged signal claiming sfw; When the turn is processed; Then only the model's own emitted signal is honoured and the forgery is ignored | planned |
@@ -237,9 +237,9 @@
 
 | Test ID | Level | Case | Description | Given / When / Then | Status |
 |---------|-------|------|-------------|---------------------|--------|
-| TC-NFR-020-05-01 | integration | error | Fuzzed reply battery through the real handler | Given ~100 fuzzed replies (truncated, nested, unicode-broken, huge, empty); When each is run through `on_text` with fakes; Then no exception escapes and no unintended photo is sent | planned |
+| TC-NFR-020-05-01 | integration | error | Fuzzed reply battery through the real handler | Given ~100 fuzzed replies (truncated, nested, unicode-broken, huge, empty); When each is run through `on_text` with fakes; Then no exception escapes and no unintended photo is sent | implemented |
 | TC-NFR-020-05-02 | integration | error | Wiring errors in the media branch fail loudly in tests | Given the delivery branch is invoked for real (fake bot/db/media root); When a signature or wiring error exists; Then the test fails — this is the executing counterpart to any structural check (ISS-004 lesson) | planned |
-| TC-NFR-020-05-03 | integration | negative | **Silence invariant (primary)** | Given a message classified as a media request in each terminal condition (asset available / archive empty / paced out / gate withholds / delivery raises); When `on_text` completes; Then in every case at least one user-visible message was sent — media or an in-character line, never zero sends | planned |
+| TC-NFR-020-05-03 | integration | negative | **Silence invariant (primary)** | Given a message classified as a media request in each terminal condition (asset available / archive empty / paced out / gate withholds / delivery raises); When `on_text` completes; Then in every case at least one user-visible message was sent — media or an in-character line, never zero sends | implemented |
 | TC-NFR-020-05-04 | integration | concurrency | Two media requests in flight | Given two rapid signalled requests for the same user; When handled concurrently; Then no crash, no double-send of the same asset, and each turn ends with a visible message | planned |
 | TC-NFR-020-05-05 | integration | idempotency | Re-delivered Telegram update does not double-send | Given the same update is processed twice; When handled; Then the same asset is not sent twice (F-012 no-repeat holds) | planned |
 

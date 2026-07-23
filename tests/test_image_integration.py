@@ -259,6 +259,10 @@ def test_wiring_photo_intent_negative(text):
 
 
 def test_wiring_conversation_handler_routes_photo_requests():
+    """F-020 changed the decision mechanism: the MODEL's signal decides, not a keyword pre-filter.
+    (Structural check only — the executing coverage lives in tests/test_f020_media_intent.py.)"""
     src = (BOT_DIR / "handlers" / "conversation.py").read_text()
-    assert "looks_like_photo_request" in src and "serve_photo_request" in src
+    assert "take_media_intent" in src and "serve_photo_request" in src
     assert "F014GateAdapter" in src  # the real gate, not a stub, is wired into the bot
+    # the pre-LLM keyword gate is gone from the handler (it survives only as F-020's fallback)
+    assert "looks_like_photo_request" not in src
