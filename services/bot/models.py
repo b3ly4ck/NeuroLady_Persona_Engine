@@ -11,6 +11,7 @@ from datetime import date, datetime, timezone
 
 from sqlalchemy import (
     BigInteger,
+    Index,
     Date,
     DateTime,
     Enum,
@@ -377,6 +378,28 @@ class MediaAsset(Base):
     meta_json: Mapped[str] = mapped_column(Text, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow)
 
+    # F-021 NFR-021-04: candidacy is now the whole retained library per persona, ordered by age —
+    # this index keeps that a bounded indexed lookup instead of a growing scan on the reply path.
+    __table_args__ = (Index("ix_media_assets_persona_created", "persona_id", "created_at"),)
+
+
+class MediaIdSequence(Base):
+    """Monotonic MED-id counter per persona (F-021 FR-021-13 / D1 — BLOCKER for eviction).
+
+    `allocate_med_id` used to derive the next number from `count(*)` of the persona's assets. That
+    is correct only while nothing is ever deleted: the moment F-021 evicts a row, the count drops
+    and the **next** generated frame is born with a retired asset's id. `MediaSend` history is keyed
+    by that id, so the new photo would be treated as "already seen" by the user who saw the old one
+    — or, worse, a user could be shown an image the system believes he already saw.
+
+    This counter only ever moves forward, so an id is never reissued (NFR-021-01).
+    """
+
+    __tablename__ = "media_id_sequences"
+
+    persona_id: Mapped[int] = mapped_column(ForeignKey("personas.id"), primary_key=True)
+    last_value: Mapped[int] = mapped_column(Integer, default=0)
+
 
 class MediaJob(Base):
     """One queued generation request for the F-008 runner (fixed job API, FR-008-01).
@@ -421,7 +444,13 @@ class MediaSend(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
-    asset_id: Mapped[str] = mapped_column(ForeignKey("media_assets.id"), index=True)
+    # F-021 FR-021-14 / D2: deliberately NOT a foreign key. The send history must **outlive** the
+    # asset — once F-021 evicts a frame, this row is the only thing that still knows the user saw
+    # it, and per-user no-repeat (NFR-012-02 / NFR-021-01) depends on the id surviving intact. An
+    # FK with ON DELETE SET NULL would erase exactly the value we need; a hard FK would block
+    # eviction outright. The id is an immutable string, and `MediaIdSequence` guarantees it is
+    # never reissued to a different frame.
+    asset_id: Mapped[str] = mapped_column(String(96), index=True)
     sent_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=_utcnow, index=True)
 
 

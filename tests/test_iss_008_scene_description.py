@@ -276,7 +276,12 @@ DESCRIBED_META = {
 }
 
 
-async def _asset(db, persona, asset_id: str, meta: dict) -> MediaAsset:
+async def _asset(db, persona, asset_id: str, meta: dict, media_root=None) -> MediaAsset:
+    if media_root is not None:  # delivery verifies the file before recording a send (NFR-021-01)
+        from PIL import Image
+        target = media_root / "alina" / "photos" / f"{asset_id}.png"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        Image.new("RGB", (16, 16), (30, 30, 40)).save(target)
     asset = MediaAsset(
         id=asset_id, persona_id=persona.id, kind=MediaKind.photo,
         intimate=False, intimacy_level=0,
@@ -288,15 +293,16 @@ async def _asset(db, persona, asset_id: str, meta: dict) -> MediaAsset:
     return asset
 
 
-async def test_fr_012_16_01_delivery_result_carries_the_description(db):
+async def test_fr_012_16_01_delivery_result_carries_the_description(db, tmp_path):
     """TC-FR-012-16-01 — the delivered photo's result meta includes the description."""
     user, _ = await get_or_create_user(db, telegram_id=8101, locale="ru")
     persona = await _persona(db)
-    await _asset(db, persona, "MED-alina-08001", DESCRIBED_META)
+    await _asset(db, persona, "MED-alina-08001", DESCRIBED_META, media_root=tmp_path)
 
     result = await deliver_photo(
         db, user_id=user.id, persona=persona, request_text="скинь фотку",
         context={}, caption_client=RecordingChatClient("вот"), gate=FakeGate(),
+        media_root=tmp_path,
     )
 
     assert result.meta["scene_description"] == DESCRIBED_META["scene_description"]

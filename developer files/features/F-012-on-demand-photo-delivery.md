@@ -193,6 +193,19 @@ Feature: F-012 On-Demand Photo Delivery
   recently sent" block (F-002 FR-002-25) tells her **what is visible in the photo**, not merely
   where she was. When it is absent (older assets), the existing slot fields remain the fallback.
 
+- **FR-012-17** — **The request classifier must cover the persona's language (ISS-009).** The
+  intimate/ambiguous keyword lists are the *fallback* safety net behind F-020's model signal, so
+  they must recognise intimate phrasing in **every language a deployed persona speaks** — including
+  the common inflected forms of that language, not one canonical spelling. An English-only list on a
+  Russian deployment is a classifier that never fires. Terms are data, extendable without a code
+  change.
+
+- **FR-012-18** — **A send is recorded only for a photo that can actually be delivered (ISS-010).**
+  Before `MediaSend` is written, delivery must verify the selected asset's **file exists**; a frame
+  whose file is gone is skipped in favour of the next-best candidate, and only a genuinely empty
+  pool degrades in voice. Recording a send for an undelivered photo burns the frame forever via
+  per-user no-repeat (ties F-021 NFR-021-01).
+
 ### Non-functional
 
 - **NFR-012-01** — **Instant delivery (CRITICAL):** photo delivery adds no generation latency — it is a

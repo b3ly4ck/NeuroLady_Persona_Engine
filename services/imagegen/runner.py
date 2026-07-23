@@ -29,6 +29,7 @@ from services.imagegen import queue_ops, store
 from services.imagegen.backends import GenerationFailed, ModelBackend, build_backend
 from services.imagegen.config import ImageRunnerSettings
 from services.imagegen.contract import GenerationJob, InvalidJob
+from services.imagegen.retention import RetentionConfig, run_retention_all
 
 log = logging.getLogger(__name__)
 
@@ -91,6 +92,9 @@ class RunnerMetrics:
     batch_started_at: datetime | None = None
     batch_finished_at: datetime | None = None
     torn_down: bool = True
+    # F-021 FR-021-12: the night's retention outcome travels with the batch metrics (§6.4).
+    retention_evicted: int = 0
+    retention_reports: list = field(default_factory=list)
 
     def snapshot(self) -> dict:
         avg = sum(self.gen_seconds) / len(self.gen_seconds) if self.gen_seconds else 0.0
@@ -102,6 +106,8 @@ class RunnerMetrics:
             "batch_started_at": self.batch_started_at,
             "batch_finished_at": self.batch_finished_at,
             "torn_down": self.torn_down,
+            "retention_evicted": self.retention_evicted,
+            "retention_reports": list(self.retention_reports),
         }
 
 
@@ -147,6 +153,10 @@ class ImageRunner:
                     await db.commit()
                     await self._process_one(db, row, now=now)
                     await db.commit()
+            # DFD-3: the night's rows have landed → retention runs against the archive as it will
+            # actually be served, BEFORE wake reloads the chat model (FR-021-08 / D8). Never on the
+            # reply hot path, and never allowed to break the media window.
+            await self._run_retention(sessionmaker, now=now)
         finally:
             # teardown even on a crash — never leak the GPU into the day window (FR-008-16)
             self.backend.close()
@@ -154,6 +164,28 @@ class ImageRunner:
             self.metrics.batch_finished_at = datetime.now(timezone.utc)
             await self.handoff.reload_chat()
         return self.metrics.snapshot()
+
+    async def _run_retention(
+        self, sessionmaker: async_sessionmaker[AsyncSession], now: datetime | None = None
+    ) -> list:
+        """F-021 retention across the roster, isolated from the batch's success (FR-021-08/10/12)."""
+        if not self.settings.retention_enabled:
+            return []
+        cfg = RetentionConfig(
+            cap=self.settings.retention_cap,
+            floor=self.settings.retention_floor,
+            grace_hours=self.settings.retention_grace_hours,
+        )
+        try:
+            async with sessionmaker() as db:
+                reports = await run_retention_all(db, self.settings.media_root, cfg, now)
+                await db.commit()
+        except Exception:  # a retention failure must never cost us the generated batch
+            log.exception("retention pass failed")
+            return []
+        self.metrics.retention_evicted = sum(r.evicted for r in reports)
+        self.metrics.retention_reports = [r.as_dict() for r in reports]
+        return reports
 
     async def _process_one(self, db: AsyncSession, row, now: datetime | None = None) -> None:
         """One job: parse → generate → atomic store → done; failure → backoff retry (FR-008-13).

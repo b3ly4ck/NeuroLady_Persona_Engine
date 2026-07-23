@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from PIL import Image
+
 import services.imagegen.backends as backends_mod
 from services.bot.domain import media_delivery as md
 from services.bot.domain.media_delivery import (
@@ -92,6 +94,14 @@ async def set_stage(db, user: User, persona: Persona, stage: str) -> Relationshi
     return rel
 
 
+@pytest.fixture(autouse=True)
+def _media_root(tmp_path, monkeypatch):
+    """Point delivery at a temp library. Delivery now verifies the file exists before recording a
+    send (F-021 NFR-021-01), so a planted asset must have one — as F-008 always leaves it."""
+    monkeypatch.setattr(md, "DEFAULT_MEDIA_ROOT", tmp_path)
+    return tmp_path
+
+
 async def plant_asset(
     db,
     persona: Persona,
@@ -115,6 +125,9 @@ async def plant_asset(
     )
     db.add(asset)
     await db.flush()
+    target = md.DEFAULT_MEDIA_ROOT / slug / "photos" / f"{med_id}.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (16, 16), (30, 30, 40)).save(target)
     return asset
 
 

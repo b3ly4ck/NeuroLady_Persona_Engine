@@ -1,6 +1,6 @@
 # F-021 — Media Archive Retention & Reuse
 
-- **Status:** Draft
+- **Status:** Implemented (2026-07-23)
 - **Summary:** Turn the photo archive from a **one-day window** into a **living library**. Today the
   nightly batch (F-011) generates a fresh day, delivery (F-012) can only see **one day** —
   `latest_available_assets` returns today's set, or, if today is empty, the most recent prior day —
@@ -219,6 +219,23 @@ eviction would *activate* — they must be fixed **before** any deletion ships.
   fresher candidate's by more than the freshness bonus it forfeits. One knob, no second scale.
 - **D8 — Retention runs AFTER the night batch** (F-011), so a run never competes with the frames being
   written, and the cap is applied to the archive as it will actually be served.
+- **D9 — Freshness decays PROPORTIONALLY, not linearly** (added during implementation). FR-021-02
+  promises that a large `freshness_bonus` degenerates to "today only in practice". With a linear
+  `max(0, bonus - age*decay)` that is impossible: the gap between two ages is `age*decay` no matter
+  how large the bonus is, so the knob would silently do nothing and the documented regime would be
+  unreachable. The bonus is therefore `bonus / (1 + age_days * decay)` — strictly non-increasing,
+  never negative, and both documented regimes are real (large bonus ⇒ today wins over any fit
+  advantage; near-zero ⇒ variety-first; `decay = 0` ⇒ age ignored entirely).
+- **D10 — Eviction stages the file, then drops the row, then unlinks** (added during implementation).
+  A filesystem is not transactional and the two failure modes pull opposite ways (an undeletable file
+  must keep its row; a failed row delete must keep its file). Deleting the row first and rolling back
+  on an `OSError` would have rolled back the **whole** run's transaction, undoing evictions that had
+  already succeeded. So: `os.replace` the file to `<name>.evicting` (atomic, reversible) → delete the
+  row in a SAVEPOINT → unlink. A crash in between leaves a `.evicting` leftover that `reconcile()`
+  ignores (it globs `*.png`) and the next run sweeps.
+- **D11 — Orphan-row repair is guarded** (added during implementation). Deleting rows whose file is
+  missing is right for an interrupted run and catastrophic for an unmounted media root. When *every*
+  row is missing its file, nothing is repaired and the anomaly is reported instead.
 
 ### Non-functional
 

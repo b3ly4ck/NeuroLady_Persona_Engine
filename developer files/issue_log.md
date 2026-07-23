@@ -43,6 +43,8 @@ architecture).
 | ISS-008 | Photo metadata describes the generation REQUEST, not the rendered image | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-007 | A slow turn locks SQLite → the next message dies and the user gets total silence | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-006 | She invents a background for a photo she just sent — the sent photo is not in her context | [x] | 2026-07-23 | 2026-07-23 |
+| ISS-009 | The intimate-request keyword classifier is English-only — a Russian intimate ask reads as SFW | [x] | 2026-07-23 | 2026-07-23 |
+| ISS-010 | A send is recorded for a photo that was never delivered (missing file) — the frame is burned forever | [x] | 2026-07-23 | 2026-07-23 |
 
 ---
 
@@ -328,3 +330,74 @@ architecture).
   Tests: `tests/test_iss_008_scene_description.py` (22, all executing the real path —
   `author_jobs` → `store_asset` → `deliver_photo` → `recent_sends` → `handle_turn`).
 
+
+
+---
+
+## ISS-009 — The intimate-request keyword classifier is English-only
+
+- **Status:** [x] fixed
+- **Reported:** 2026-07-23 (found while writing the F-021 suite, not by a user)
+- **Report (as stated):** `classify_photo_request("скинь голое фото")` returns `sfw`. Every term in
+  `_INTIMATE_TERMS` and `_AMBIGUOUS_TERMS` is English (`nude`, `naked`, `topless`, `lingerie`,
+  `sexy`…), while the deployed persona and every live test message are **Russian**. The safety
+  classifier that F-012 NFR-012-08 relies on is therefore blind in the language the bot actually
+  speaks.
+- **Observed vs expected:** a Russian intimate ask takes the SFW archive path (it gets deflected
+  only because no matching asset exists) vs being routed to the F-014 gate like its English
+  equivalent.
+- **Severity note:** in production the F-020 LLM intent signal usually catches these first and sets
+  `force_gate`, so this is a **defence-in-depth** failure rather than an open leak — but the keyword
+  classifier exists precisely as the fallback for when the model's signal is absent or malformed,
+  and a fallback that only works in English is not a fallback for this deployment.
+- **Why tests didn't catch it (the gap):** every F-012 classification test asserts on English
+  fixtures (`"send me a nude"`, `"show me something spicier"`). No requirement said the classifier
+  must cover the **persona's language**, so an English-only list satisfies the whole suite. Same
+  root shape as ISS-003 (English caption for a Russian persona): localization was specified for what
+  she *says* and never for what she *understands*.
+- **Resolution (2026-07-23):** **F-012 FR-012-17** now requires the fallback classifier to cover
+  every language a deployed persona speaks, including that language's inflected forms.
+  `_INTIMATE_TERMS` / `_AMBIGUOUS_TERMS` gained Russian entries stored as **stems** matched as
+  substrings, so голое / голую / голой / голышом all hit one entry.
+
+  **Stem choice is the delicate part** and is pinned by tests in both directions: `"соск"` would
+  have matched *соскучился* and `"попу"` would have matched *попугай* — an innocent "я соскучился,
+  скинь фотку" routed to the intimacy gate is its own defect — so those are spelled out
+  (`"соски"`, `"попка"`) instead. Likewise `"поинтересне"` was dropped from the ambiguous list.
+
+  Tests: `tests/test_iss_009_ru_intimate_classifier.py` (21) — RU intimate, RU ambiguous, RU
+  ordinary photo talk (the false-positive guards), unchanged English behaviour, and an end-to-end
+  `deliver_photo` regression proving the ask reaches the gate rather than the SFW archive.
+
+---
+
+## ISS-010 — A send is recorded for a photo that was never delivered
+
+- **Status:** [x] fixed
+- **Reported:** 2026-07-23 (found by TC-NFR-021-01-03, which was written to look for exactly this)
+- **Report (as stated):** `deliver_photo` selected an asset, captioned it and wrote the `MediaSend`
+  row; the handler then discovered the file was missing and sent a text line instead. The user
+  received no photo, yet per-user no-repeat now excludes that asset **forever** — a paid-for frame
+  destroyed without ever being seen.
+- **Observed vs expected:** `answer_photo` not called + a `MediaSend` row present, vs either a
+  delivered photo or no send record at all.
+- **Root cause:** the two halves of "send" lived in different layers. The domain
+  (`media_delivery.deliver_photo`) committed the send; the handler
+  (`handlers/media.serve_photo_request`) resolved the path and discovered the file. Nothing verified
+  the file **before** the commitment. Latent until now (F-008 writes the file before the row, so a
+  row without a file was unreachable) — **F-021 eviction makes it reachable**: a frame can be
+  selected and evicted before the send completes.
+- **Why tests didn't catch it (the gap):** every delivery test planted rows **without files** and
+  asserted on the returned `DeliveryResult`, so "the file exists" was never part of any assertion —
+  the whole suite was blind to the distinction. The handler's own `os.path.exists` fallback made the
+  behaviour look handled while silently burning the asset.
+- **Resolution (2026-07-23):** path resolution moved into the domain (`asset_abspath` /
+  `asset_file_exists` in `media_delivery.py`, re-exported by the handler so there is exactly one
+  resolution), and `deliver_photo` now selects through `select_deliverable_asset()`: it verifies the
+  winner's file, skips a frame whose file is gone, and tries the next-best (bounded) before
+  degrading in voice. A `MediaSend` row is written only for a photo that can actually be sent
+  (F-021 NFR-021-01). The F-012 and ISS-008 fixtures now write real PNGs, so "a row implies a file"
+  is asserted by the suite rather than assumed.
+  Tests: `TC-NFR-021-01-03` in `tests/test_f021_retention_and_reuse.py` (executes the real
+  `on_text` with the files deleted under it and asserts the turn is not silent **and** no
+  `MediaSend` row was written).

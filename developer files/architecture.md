@@ -789,6 +789,14 @@ checkpoint flakiness. Two engine rules follow (owned by **F-008**, FR-008-17/18)
   life/reflection). No prompt is hard-coded in service logic.
 - Models are pluggable behind service interfaces so any model can be researched/swapped without
   touching callers.
+- **Media archive retention (F-021)** is configuration, not code: `IMAGE_RETENTION_ENABLED`,
+  `IMAGE_RETENTION_CAP` (per-persona frame count), `IMAGE_RETENTION_FLOOR`,
+  `IMAGE_RETENTION_GRACE_HOURS`, plus per-persona cap overrides; selection's freshness knobs
+  (`freshness_bonus`, `freshness_decay_per_day`) live on `MediaDeliveryConfig`. **Storage is cheap
+  and generation is not**, so the archive expires by **count, never by age**, and every protection
+  (floor → grace → context-recency) outranks the cap: when they collide, the cap is left exceeded
+  and reported rather than destroying un-consumed GPU work. An invalid config degrades to the
+  documented defaults — a broken value must never mean "delete everything".
 
 ---
 
@@ -1136,6 +1144,12 @@ separation of text/image/video and per-module prompt storage.)
 - **CD:** on merge to `master` — build & publish images, run migrations, deploy to the server;
   media/GPU workers deployed with the day/night scheduler config.
 - **Environments:** local (compose, single GPU) → staging → production.
+- **Media retention metrics (F-021 FR-021-12):** every retention run reports, per persona,
+  `kept` / `evicted` / `evicted_sent` / `evicted_unsent` / `archive_size` / `cap_exceeded`, plus any
+  repairs and per-victim failures — and it reports them for **no-op runs too** ("nothing happened"
+  must be an explicit signal). `evicted_unsent > 0` is the operator's cue to raise the cap: it counts
+  frames that were paid for and never seen. Retention can never be the cause of the empty-archive
+  alert, since the floor guarantees at least one surviving frame under every configuration.
 - **Observability:** logs/metrics/traces per service; GPU/queue depth dashboards for the night
   batch; **chat-LLM readiness/warm-up metrics** (load time, warm-vs-cold reply latency);
   **memory-store consistency metrics** (SQL↔vector drift: orphan/missing embeddings, embedding

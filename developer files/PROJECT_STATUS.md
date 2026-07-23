@@ -2,6 +2,59 @@
 
 ## Recent changes
 
+- **F-021 implemented — the archive is a living library, not a one-day window.** Two halves of one
+  economics argument (a frame costs ~155 s of GPU and ~1.4 MB of disk): never hide a frame by age,
+  never destroy one nobody has seen.
+  - **Selection widened (FR-021-01/02/03).** `store.retained_assets()` replaces
+    `latest_available_assets` as what bounds candidacy in `select_asset`; freshness became a
+    **ranking** term (`rank_score = context fit + freshness_bonus`). Measured live, the old one-day
+    window made 6 of Alina's 12 frames permanently unreachable the moment a newer day existed — the
+    user got a deflection while paid-for frames sat on disk (pinned by `TC-FR-021-01-02`).
+    Freshness decays **proportionally** (`bonus / (1 + age*decay)`), not linearly: with the linear
+    form a large `freshness_bonus` could never produce the documented "today only in practice"
+    regime, because the gap between two ages is `age*decay` regardless of the bonus (D9).
+  - **Retention (`services/imagegen/retention.py`).** Count-based per-persona cap, eviction order
+    already-sent-oldest → un-sent-oldest, and three protections that **outrank the cap**: floor
+    (never empty), grace window (tonight's batch is untouchable), and context-recency (FR-021-15 —
+    evicting a photo she sent an hour ago would reopen ISS-006 from our own maintenance pass). When
+    a protection makes the cap unreachable the run reports `cap_exceeded` instead of deleting.
+    Eviction is staged (`os.replace` to `.evicting` → row delete in a SAVEPOINT → unlink) because a
+    filesystem is not transactional and the two failure modes pull opposite ways; deleting the row
+    first and rolling back on `OSError` would have undone the whole run's earlier evictions (D10).
+    Orphan-row repair is guarded: if *every* row is missing its file, that reads as an unmounted
+    media root, so nothing is repaired and the anomaly is reported (D11).
+  - **Blockers fixed first.** `MediaIdSequence` makes MED-id allocation monotonic (`count(*) + 1`
+    rewinds the moment eviction deletes a row, so a new photo would be born with a retired id that
+    `MediaSend` already marks as seen — FR-021-13/D1); `MediaSend.asset_id` is no longer a foreign
+    key so the send history outlives its asset (FR-021-14/D2); `media_assets` gained an index on
+    `(persona_id, created_at)` so the widened candidacy stays a cheap indexed lookup (NFR-021-04).
+  - **Wiring:** `ImageRunner.run_batch` runs retention after the drain and before wake (DFD-3/D8);
+    `IMAGE_RETENTION_*` settings; the run's counts travel in the batch metrics snapshot.
+  - **Tests:** `tests/test_f021_retention_and_reuse.py` (102) — all 84 automatable TCs of the spec,
+    each executing the real function or handler and asserting rows **and** files plus a clean
+    `store.reconcile`. Includes a 60-case randomized battery for "no un-sent frame is destroyed
+    while a consumed one survives" and a 30-night bounded-growth simulation.
+
+- **ISS-010 — a send was recorded for a photo that was never delivered.** Found by
+  `TC-NFR-021-01-03`. `deliver_photo` wrote the `MediaSend` row; the *handler* then discovered the
+  file was missing and sent a text line instead — the user saw no photo, yet per-user no-repeat
+  excluded that frame forever. Latent until F-021 (F-008 writes the file before the row), made
+  reachable by eviction. Fix: path resolution moved into the domain (`asset_abspath` /
+  `asset_file_exists` in `media_delivery.py`, re-exported by the handler so there is one resolution)
+  and `select_deliverable_asset()` verifies the winner's file, skipping to the next-best candidate
+  before degrading in voice (F-012 FR-012-18). The F-012/ISS-008 fixtures now write real PNGs, so
+  "a row implies a file" is asserted rather than assumed.
+
+- **ISS-009 — the intimate-request classifier was English-only.** `classify_photo_request("скинь
+  голое фото")` returned `sfw` while the deployed persona speaks Russian: the keyword safety net
+  behind F-020's model signal never fired in the bot's actual language (same root shape as ISS-003).
+  F-012 `FR-012-17` now requires the fallback to cover every language a deployed persona speaks,
+  including inflected forms. Russian entries are **stems**, chosen to avoid innocent collisions —
+  `"соск"` would match *соскучился* and `"попу"` would match *попугай*, so those are spelled out.
+  Tests: `tests/test_iss_009_ru_intimate_classifier.py` (21), guarding both directions.
+
+  Suite: **981 passed, 109 skipped**.
+
 - **ISS-008 — she can now say what is IN the photo (scene descriptions).** Follow-up to ISS-006:
   she had the asset's metadata, but the metadata is written in *generation* vocabulary — `background`
   was populated from `_location_phrase()` so it merely echoed `location`, and `pose` held framing

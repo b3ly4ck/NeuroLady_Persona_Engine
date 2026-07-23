@@ -20,6 +20,7 @@ from services.bot.domain.media_delivery import (
     IntimacyGate,
     MediaDeliveryConfig,
     DEFAULT_CONFIG,
+    asset_abspath as domain_abspath,
     deliver_photo,
 )
 from services.bot.models import MediaAsset, Persona
@@ -31,9 +32,11 @@ _DEFAULT_MEDIA_ROOT = Path(__file__).resolve().parents[3] / "media"
 
 
 def asset_abspath(asset: MediaAsset, media_root: str | Path | None = None) -> Path:
-    """Resolve a MEDIA_ASSET.storage_ref (media/<slug>/photos/<id>.png) to an on-disk path (§6.3)."""
-    root = Path(media_root) if media_root is not None else _DEFAULT_MEDIA_ROOT
-    return root / asset.storage_ref.removeprefix("media/")
+    """Resolve a MEDIA_ASSET.storage_ref (media/<slug>/photos/<id>.png) to an on-disk path (§6.3).
+
+    Delegates to the domain resolver — delivery has to resolve the same path to verify the file
+    exists before it records a send (F-021 NFR-021-01), so there must be exactly one resolution."""
+    return domain_abspath(asset, media_root if media_root is not None else _DEFAULT_MEDIA_ROOT)
 
 
 async def serve_photo_request(
@@ -65,6 +68,7 @@ async def serve_photo_request(
         gate=gate,
         cfg=cfg,
         force_gate=force_gate,
+        media_root=media_root if media_root is not None else _DEFAULT_MEDIA_ROOT,
     )
     if result.delivered and result.asset is not None:
         path = asset_abspath(result.asset, media_root)

@@ -24,7 +24,10 @@ relationship stage (F-005) only **paces** sharing (FR-012-06); it does not autho
 """
 from __future__ import annotations
 
+import logging
+
 from dataclasses import dataclass, field
+from pathlib import Path
 from datetime import datetime, timedelta, timezone
 from enum import Enum
 from typing import Any, Protocol
@@ -34,7 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.domain.relationship import STAGES, stage_index
 from services.bot.models import MediaAsset, MediaSend, Persona, Relationship
-from services.imagegen.store import latest_available_assets, parse_meta
+from services.imagegen.store import parse_meta, retained_assets
 
 
 def _utcnow() -> datetime:
@@ -77,6 +80,15 @@ class MediaDeliveryConfig:
     # Bounded on purpose: the block must never grow the prompt without limit.
     context_recent_sends: int = 3
     context_recency_hours: float = 48.0
+    # F-021 freshness: a RANKING signal, not a filter (FR-021-02). `freshness_bonus` is the value
+    # a frame from today carries; it decays **proportionally** with age (`bonus / (1 + age*decay)`).
+    # Proportional and not linear on purpose: FR-021-02 promises that a *large bonus* degenerates to
+    # "today only in practice", and with a linear `bonus - age*decay` it never can — the gap between
+    # two ages would be `age*decay` no matter how large the bonus is, so the knob would silently do
+    # nothing. Near-zero bonus ⇒ variety-first. Never negative: age never actively penalises.
+    # D7: the margin an older frame must beat IS the freshness it forfeits — one scale, no second knob.
+    freshness_bonus: float = 3.0
+    freshness_decay_per_day: float = 1.0
 
 
 DEFAULT_CONFIG = MediaDeliveryConfig()
@@ -94,14 +106,31 @@ class PhotoRequestClass(str, Enum):
 
 
 # Explicit intimate terms → always the gate.
+# FR-012-17 (ISS-009): these lists are the FALLBACK behind F-020's model signal, so they must cover
+# every language a deployed persona speaks. They were English-only while the live persona was
+# Russian — "скинь голое фото" classified as SFW, i.e. the safety net never fired in the language
+# the bot actually speaks. Russian entries are stored as **stems** (matched as substrings) so the
+# inflected forms — голое / голую / голой / голышом — all hit one entry.
 _INTIMATE_TERMS = (
+    # English
     "nude", "naked", "sexy", "sext", "topless", "lingerie", "underwear", "boobs", "tits",
     "ass", "pussy", "nsfw", "porn", "strip", "explicit", "horny", "turn me on", "for my eyes",
+    # Russian (stems)
+    # Stems are chosen to avoid innocent collisions: "соск" would match "соскучился" and "попу"
+    # would match "попугай", so both are spelled out instead.
+    "голое", "голую", "голая", "голой", "голым", "голыш", "обнаж", "интимн", "эротич",
+    "без одежды", "без трусов", "нижнем бель", "нижнее бель", "грудь", "сиськ", "соски",
+    "попка", "попки", "задниц", "порно", "секс", "трахн", "возбуд", "разденьс",
+    "откровенн", "ню фото", "нюдес", "нюдс",
 )
 # Intimacy-adjacent but unclear → the gate decides (never leak an intimate asset — NFR-012-08).
 _AMBIGUOUS_TERMS = (
+    # English
     "hotter", "spicy", "spicier", "tease", "teasing", "more skin", "show me more", "sultry",
     "naughty", "something more", "reveal", "flirty pic",
+    # Russian (stems)
+    "погорячее", "по-горячее", "пикантн", "дразн", "соблазн", "поменьше одежды", "посмелее",
+    "что-нибудь такое", "что нибудь такое", "чувственн", "манящ",
 )
 
 
@@ -313,6 +342,45 @@ def score_asset(asset: MediaAsset, context: Any, cfg: MediaDeliveryConfig = DEFA
     return score
 
 
+def asset_age_days(asset: MediaAsset, now: datetime | None = None) -> float:
+    """Whole days between the asset's creation and `now` (never negative)."""
+    now = now or datetime.now(timezone.utc)
+    created = asset.created_at
+    if created is None:
+        return 0.0
+    if created.tzinfo is None:  # SQLite hands back naive datetimes
+        created = created.replace(tzinfo=timezone.utc)
+    return max(0.0, (now - created).total_seconds() / 86400.0)
+
+
+def freshness_bonus(
+    asset: MediaAsset, cfg: MediaDeliveryConfig = DEFAULT_CONFIG, now: datetime | None = None
+) -> float:
+    """Today's frames rank highest; the bonus decays proportionally with age (FR-021-02).
+
+    `bonus / (1 + age_days * decay)` — strictly non-increasing in age and never negative, so it can
+    reorder equals but never inverts them. Proportional decay is what makes the two documented
+    regimes real: a large bonus keeps today ahead of *any* fit advantage ("today only in practice"),
+    a near-zero one yields variety-first. `decay = 0` means age is ignored entirely.
+    """
+    age = int(asset_age_days(asset, now))
+    bonus = max(0.0, cfg.freshness_bonus)
+    decay = max(0.0, cfg.freshness_decay_per_day)
+    return bonus / (1.0 + age * decay)
+
+
+def rank_score(
+    asset: MediaAsset, context: Any, cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
+    now: datetime | None = None,
+) -> float:
+    """Context fit + freshness — the value selection actually maximises (FR-021-02/03).
+
+    Because both live on one scale, "materially better fit beats freshness" needs no second knob:
+    an older frame wins exactly when its fit advantage exceeds the freshness bonus it gives up (D7).
+    """
+    return score_asset(asset, context, cfg) + freshness_bonus(asset, cfg, now)
+
+
 async def sent_asset_ids(db: AsyncSession, user_id: int) -> set[str]:
     """The set of asset ids this user has already received (per-user isolation — NFR-012-06)."""
     rows = (
@@ -329,20 +397,28 @@ async def select_asset(
     context: Any,
     cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
     now: datetime | None = None,
+    exclude: set[str] | None = None,
 ) -> MediaAsset | None:
-    """Pick the best-matching **SFW, unsent** asset from today's archive (FR-012-01/02/03).
+    """Pick the best-matching **SFW, unsent** asset from the whole retained library (FR-021-01).
 
-    Pure lookup + rank — no generation (FR-012-04). Degrades to the most recent prior day's archive
-    via `latest_available_assets` (F-008 NFR-008-03). Returns None when nothing fits/unsent remains,
-    so the caller can degrade in-voice (FR-012-08)."""
-    assets = await latest_available_assets(db, persona_id, now)
+    Pure lookup + rank — no generation (FR-012-04). The candidate set used to be *one day*
+    (`latest_available_assets`): today's frames, or, if today was empty, the most recent prior day's.
+    Measured live, that made 6 of Alina's 12 frames **permanently unreachable** the moment a newer
+    day existed — paid-for GPU work sitting on disk while the user got a deflection. F-021 turns
+    freshness into a ranking signal (`rank_score`) so every retained frame stays eligible and today's
+    still wins all else equal. Returns None when nothing fits/unsent remains, so the caller can
+    degrade in-voice (FR-012-08).
+    """
+    assets = await retained_assets(db, persona_id)
     seen = await sent_asset_ids(db, user_id)
-    # SFW path NEVER serves an intimate asset (NFR-012-08); never a repeat (NFR-012-02).
+    # SFW path NEVER serves an intimate asset (NFR-012-08); never a repeat (NFR-012-02). Widening
+    # changes AGE eligibility only — it must not smuggle in anything otherwise ineligible.
+    seen = seen | (exclude or set())
     candidates = [a for a in assets if not a.intimate and a.id not in seen]
     if not candidates:
         return None
-    # Deterministic: highest context-fit score, ties broken by id (NFR-005-13-style reproducibility).
-    return max(candidates, key=lambda a: (score_asset(a, context, cfg), a.id))
+    # Deterministic: highest fit+freshness, ties broken by id (NFR-005-13-style reproducibility).
+    return max(candidates, key=lambda a: (rank_score(a, context, cfg, now), a.id))
 
 
 # ── relationship pacing (FR-012-06 / NFR-012-04) ─────────────────────────────────────────────────
@@ -547,6 +623,58 @@ async def request_deflection(
 # ── entrypoints ──────────────────────────────────────────────────────────────────────────────────
 
 
+# §6.3: assets live at <media_root>/<slug>/photos/<MED-id>.png. Resolution lives HERE (domain)
+# because delivery must verify the file before committing to a send; the handler re-exports it.
+log = logging.getLogger(__name__)
+
+DEFAULT_MEDIA_ROOT = Path(__file__).resolve().parents[3] / "media"
+
+
+def asset_abspath(asset: MediaAsset, media_root: str | Path | None = None) -> Path:
+    """Resolve a MEDIA_ASSET.storage_ref (media/<slug>/photos/<id>.png) to an on-disk path."""
+    root = Path(media_root) if media_root is not None else DEFAULT_MEDIA_ROOT
+    return root / asset.storage_ref.removeprefix("media/")
+
+
+def asset_file_exists(asset: MediaAsset, media_root: str | Path | None = None) -> bool:
+    return asset_abspath(asset, media_root).exists()
+
+
+async def select_deliverable_asset(
+    db: AsyncSession,
+    *,
+    persona_id: int,
+    user_id: int,
+    context: Any,
+    cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
+    now: datetime | None = None,
+    media_root: str | Path | None = None,
+    max_attempts: int = 3,
+) -> MediaAsset | None:
+    """`select_asset`, but the winner's **file must actually exist** (F-021 NFR-021-01).
+
+    A row without its file is normally impossible (F-008 writes the file first), but it becomes
+    reachable the moment retention deletes: a frame can be selected and evicted before the send
+    completes. The send was recorded regardless, so the user "consumed" a photo he never saw and
+    per-user no-repeat then excluded it **forever** — a paid-for frame destroyed by our own
+    maintenance pass. Verifying before committing keeps that impossible: the missing frame is
+    skipped, the next-best is served, and only a genuinely empty pool degrades in voice.
+    """
+    excluded: set[str] = set()
+    for _ in range(max(1, max_attempts)):
+        asset = await select_asset(
+            db, persona_id=persona_id, user_id=user_id, context=context, cfg=cfg, now=now,
+            exclude=excluded,
+        )
+        if asset is None:
+            return None
+        if asset_file_exists(asset, media_root):
+            return asset
+        log.warning("asset %s has no file — skipping it for this delivery", asset.id)
+        excluded.add(asset.id)
+    return None
+
+
 async def deliver_photo(
     db: AsyncSession,
     *,
@@ -559,6 +687,7 @@ async def deliver_photo(
     cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
     now: datetime | None = None,
     force_gate: bool = False,
+    media_root: str | Path | None = None,
 ) -> DeliveryResult:
     """Serve an SFW photo on request (the on-request flow, feature §2).
 
@@ -588,8 +717,9 @@ async def deliver_photo(
         line = await request_deflection(caption_client, persona=persona, reason="paced", context=context)
         return DeliveryResult(outcome=DeliveryOutcome.paced, deflection=line)
 
-    asset = await select_asset(
-        db, persona_id=persona_id, user_id=user_id, context=context, cfg=cfg, now=now
+    asset = await select_deliverable_asset(
+        db, persona_id=persona_id, user_id=user_id, context=context, cfg=cfg, now=now,
+        media_root=media_root,
     )
     if asset is None:
         line = await request_deflection(
