@@ -318,7 +318,8 @@ Owns a single user turn end-to-end:
 1. Receive normalized user message.
 2. Load session + relationship state (Memory).
 3. **Assemble the LLM context** (this is critical, see §4.2): persona system prompt + relevant
-   biography layers + retrieved user facts + relationship summary + **the recent raw message
+   biography layers + retrieved user facts + relationship summary + **the descriptors of the media
+   she recently sent this user** (bounded — see §4.2) + **the recent raw message
    history (several last messages of the live conversation)**.
 4. Call the **chat LLM** (§4.1).
 5. Post-process (safety/consistency checks, media-intent detection) and apply the **human-likeness
@@ -461,7 +462,9 @@ flowchart LR
   gym time, office selfie during work, etc.).
 - Enforces **adult verification** for intimate content.
 - Returns the media **plus its metadata** (pose, background, location, intimacy level) so the
-  Orchestrator/LLM can **sext consistently** ("knows what she sent").
+  Orchestrator/LLM can **sext consistently** ("knows what she sent"). The Orchestrator **must consume
+  it**: recently-sent descriptors are a bounded block of the assembled context (§4.2, F-002
+  FR-002-25/26) — a returned-but-unread metadata payload is the ISS-006 defect.
 - Never generates on the hot path — only reads the day's archive from object storage.
 
 ### 3.7 Subscription/Billing Service (deferred — not in current scope)
@@ -567,6 +570,19 @@ For each reply the Orchestrator builds the prompt from:
   where she's heading, consistent with her goals and biography (F-006).
 - **User memory:** categorized structured facts + semantically retrieved past statements.
 - **Relationship state** summary.
+- **Recently-sent media descriptors (what she showed him):** for the last few photos/videos delivered
+  to *this* user (§3.6, F-012), their stored `MEDIA_ASSET.meta_json` slot fields — **background,
+  location, activity, pose, time-of-day** — plus roughly when each was sent. This closes the Media
+  Delivery contract of §2/§3.6 ("returns the media **plus its metadata** so the Orchestrator/LLM can
+  sext consistently — *knows what she sent*") on the **consuming** side: the metadata is only useful
+  if it re-enters the prompt. The block is **bounded and config-driven** (a max count within a recency
+  window, default 3 sends / 48 h) and built from one cheap `MEDIA_SEND ⋈ MEDIA_ASSET` query — no LLM
+  call, nothing generated on the hot path; generation provenance (`prompt`, `seed`) is never included.
+  > **ISS-006:** this block was specified in §2/§3.6/§5.1 and implemented only on the *write* side —
+  > sends were recorded and metadata stored, but the Orchestrator read none of it, so when the user
+  > asked what was behind her in a photo she had just sent, she invented a scene out of her biography
+  > (the only scene material the prompt carried). **Storing metadata without consuming it is the
+  > defect**; F-002 FR-002-25/26 + F-012 FR-012-14/15 now require both halves.
 - **Recent raw conversation history — several of the latest messages passed through as-is** (a
   hard requirement: the live dialogue must be in-context, not only summarized).
 - Assembled to fit the model's context budget with a clear priority order; the biography block is

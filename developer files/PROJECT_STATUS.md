@@ -2,6 +2,33 @@
 
 ## Recent changes
 
+- **ISS-006 — she now knows what she just sent (conversation ⋈ media).** Live defect: right after
+  sending a photo of her dim bedroom, she answered "а что у тебя на фоне" with bookshelves, a
+  saxophone and watercolours — a scene invented from her biography. Root cause: `MEDIA_ASSET.meta_json`
+  (pose/background/location/activity/time_of_day, F-008 FR-008-08) was **stored and never consumed** —
+  `deliver_photo()` returned only the asset + caption and `orchestrator.py` had no reference to media
+  at all, so the §2/§3.6/§4.2 "media **plus its metadata**" contract existed only on the write side.
+  Docs-first fix:
+  - **Requirements:** F-012 `FR-012-14` (delivered result carries the asset's scene descriptors),
+    `FR-012-15` (bounded per-user recent-sends lookup), `NFR-012-09`; F-002 `FR-002-25` (context must
+    include what she recently sent), `FR-002-26` (bounded + config-driven), `NFR-002-13` (media
+    self-consistency). `architecture.md` §3.2 step 3 / §3.6 / §4.2 now name the recently-sent block as
+    part of context assembly, with the ISS-006 note that storing metadata without consuming it is the
+    defect.
+  - **Code:** `services/bot/domain/media_delivery.py` — `SCENE_FIELDS`, `asset_scene()`,
+    `DeliveryResult.meta`, `RecentSend`, `recent_sends()` (one `MediaSend ⋈ MediaAsset` query, newest
+    first, capped by `MediaDeliveryConfig.context_recent_sends` = 3 within
+    `context_recency_hours` = 48 h, scoped to the (user, persona) pair). Generation provenance
+    (`prompt`, `seed`) is stripped — it must never reach a chat prompt.
+    `services/bot/orchestrator.py` — `_recent_media_block()` + `_when_phrase()` (RU/EN, "только что" /
+    "2 ч назад"), fused into the **single** system message next to the memory/relationship/life/
+    biography blocks; `handle_turn(..., media_cfg=…)` makes the bounds injectable.
+  - **Tests:** `tests/test_iss_006_media_context.py` (18) — all execute the real
+    `deliver_photo` / `recent_sends` / `handle_turn` / `on_text` paths (no source-text assertions,
+    per the ISS-004 lesson), including an e2e regression: request a photo through the handler, then
+    ask what's in the background, and assert the second turn's assembled context carries that photo's
+    background/location. Verified to fail with the block disabled. Suite: **784 passed, 109 skipped**.
+
 - **Image pipeline: anchor-framing fixes + black-frame robustness (v0.56.0 + pending) — identity is
   now the SAME person, and the batch can't store corrupt frames.** Continuation of the live-review
   loop; every fix here traced to *how the reference anchors are framed* or to *checkpoint numerical

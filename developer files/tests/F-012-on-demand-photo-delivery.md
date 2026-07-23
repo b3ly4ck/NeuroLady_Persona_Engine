@@ -92,6 +92,20 @@
 | TC-FR-012-13-02 | unit | boundary | Given the configured budget; When timed; Then the delay stays within min/max bounds | planned |
 | TC-FR-012-13-03 | unit | consistency | Given NFR-012-01; When measured; Then no GENERATION happens on the hot path (instant lookup) while the user-visible send is still paced | planned |
 
+### FR-012-14 — Delivery returns the delivered asset's metadata (ISS-006)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-012-14-01 | integration | happy | Given an asset tagged bedroom/evening/lying on the bed; When it is delivered; Then the result exposes its background/location/activity/pose/time-of-day | automated |
+| TC-FR-012-14-02 | integration | negative | Given an exhausted archive / a paced user / an intimate request; When delivery returns; Then the metadata is empty (no scene claimed for a photo that was never sent) | automated |
+| TC-FR-012-14-03 | unit | security | Given meta_json also holds the generation prompt and seed; When the result is built; Then only the five slot fields are exposed | automated |
+
+### FR-012-15 — Bounded, per-user recent-sends lookup (ISS-006)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-012-15-01 | integration | happy | Given three photos sent at different times; When the lookup runs; Then they come back newest-first with their slot fields and sent_at | automated |
+| TC-FR-012-15-02 | integration | boundary | Given ten sends, some older than the window; When the lookup runs; Then at most the configured count is returned and out-of-window sends are excluded | automated |
+| TC-FR-012-15-03 | integration | security | Given user A's and user B's sends of the same persona; When A's lookup runs; Then only A's sends appear (NFR-012-06) | automated |
+
 ---
 
 ## Non-functional requirements
@@ -137,6 +151,12 @@
 |---------|-------|------|---------------------|--------|
 | TC-NFR-012-08-01 | unit | negative | Given an ambiguous request; When classified; Then it defaults to SFW/gate-routed, never leaks intimate | automated |
 
+### NFR-012-09 — Metadata is served, not just stored (ISS-006)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-NFR-012-09-01 | integration | regression | **ISS-006:** given a photo delivered through the Telegram media hook; When the result comes back; Then it carries the asset's scene metadata (stored-and-never-read is the defect) | automated |
+| TC-NFR-012-09-02 | integration | boundary | Given a user with far more sends than the configured cap; When the lookup runs; Then the returned set stays bounded (the consumer can never grow the prompt without limit) | automated |
+
 ---
 
 ## User-story acceptance (manual/GPU)
@@ -147,5 +167,7 @@
 - **TC-US-012-05-01** — operator: instant + relationship-paced, no spam. skip (manual/GPU)
 
 ## Coverage summary
-FR-012-01..11 (11) + NFR-012-01..08 (8) + US-012-01..05 (5) — all covered; context-fit quality TC is
-human-judged (marked). Every TC id traces to its FR/NFR/US id.
+FR-012-01..15 (15) + NFR-012-01..09 (9) + US-012-01..05 (5) — all covered; context-fit quality TC is
+human-judged (marked). Every TC id traces to its FR/NFR/US id. The ISS-006 additions
+(FR-012-14/15, NFR-012-09) are runnable in `tests/test_iss_006_media_context.py` and execute the real
+delivery path — never source-text assertions (the ISS-004 lesson).

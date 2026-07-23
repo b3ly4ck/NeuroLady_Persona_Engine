@@ -21,7 +21,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient
 from services.bot.domain.gate_adapter import F014GateAdapter
-from services.bot.domain.humanize import chunk_reply, pacing_delays, parse_settings
+from services.bot.domain.humanize import (
+    chunk_reply,
+    media_pacing_delay,
+    pacing_delays,
+    parse_settings,
+)
 from services.bot.domain.media_delivery import looks_like_photo_request
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
@@ -70,7 +75,11 @@ async def on_text(
     # F-012/F-014 integration: a photo request short-circuits into media delivery (lookup+send,
     # no generation — F-008 NFR-008-04); everything else stays a normal conversation turn.
     if looks_like_photo_request(message.text):
+        # FR-003-42 / FR-012-13 (ISS-004): a photo must not land instantly — show the upload action
+        # for a bounded, length-independent beat first, the way a person takes a moment to send one.
+        settings = parse_settings(persona)
         await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
+        await _sleep(media_pacing_delay(settings))
         await serve_photo_request(
             message, db,
             user_id=user.id, persona=persona, request_text=message.text, context={},

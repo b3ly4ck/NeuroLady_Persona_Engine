@@ -1,16 +1,18 @@
 """Conversation Orchestrator — one user turn end-to-end (architecture.md §3.2, DFD-1, F-002).
 
 Message intake → load session → assemble context (persona system prompt + recalled user facts +
-**relationship stage/behaviour** + **her current activity** + recent raw history) → call the
-Chat-LLM runner → post-process → in-character reply → persist both MESSAGE rows; then, off the hot
-path, extract + store the user's facts (F-004) and run the relationship reflection (F-005). Memory
-(F-004, structured + semantic), the relationship model (F-005), and her Life Engine activity
-(F-006) are wired in here.
+**relationship stage/behaviour** + **her current activity** + **the photos she recently sent him** +
+recent raw history) → call the Chat-LLM runner → post-process → in-character reply → persist both
+MESSAGE rows; then, off the hot path, extract + store the user's facts (F-004) and run the
+relationship reflection (F-005). Memory (F-004, structured + semantic), the relationship model
+(F-005), her Life Engine activity (F-006), and the F-012 media she has already sent are wired in
+here.
 
 Requirements realized here: FR-002-03/04 (assemble context incl. recent raw history verbatim),
 FR-002-05 (call the LLM), FR-002-06 (post-process), FR-002-07 (in-character reply), FR-002-09
 (persist the exchange), FR-002-17 (empty-history first turn), FR-002-19 (timeout/fail → graceful
-in-character fallback, logged, user message still persisted, never silent).
+in-character fallback, logged, user message still persisted, never silent), FR-002-25/26 (bounded
+recently-sent-media descriptors in context — ISS-006).
 """
 from __future__ import annotations
 
@@ -22,10 +24,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from services.bot.chat_client import ChatClient, ChatRunnerUnavailable
 from services.bot.domain import biography as bio_domain
 from services.bot.domain import life_engine_store as life_store
+from services.bot.domain import media_delivery
 from services.bot.domain import memory as memory_domain
 from services.bot.domain import messages as msg_domain
 from services.bot.domain import relationship_store as rel_store
 from services.bot.domain.fact_extraction import extract_memory_ops
+from services.bot.domain.media_delivery import DEFAULT_CONFIG as MEDIA_DEFAULT_CONFIG
+from services.bot.domain.media_delivery import MediaDeliveryConfig
 from services.bot.domain import prompt_log
 from services.bot.domain.persona_prompt import build_system_prompt
 from services.bot.domain.persona_time import today_in_tz
@@ -125,6 +130,71 @@ def _local_time_block(persona: Persona, now_utc: datetime | None = None) -> str:
             f"Take your sense of the time of day from this.")
 
 
+def _when_phrase(sent_at: datetime, now: datetime, language: str) -> str:
+    """Roughly when a photo was sent, the way a person would say it (FR-002-25)."""
+    minutes = max(0, int((now - sent_at).total_seconds() // 60))
+    if language == "ru":
+        if minutes < 5:
+            return "только что"
+        if minutes < 60:
+            return f"{minutes} мин назад"
+        hours = minutes // 60
+        if hours < 24:
+            return f"{hours} ч назад"
+        return "вчера" if hours < 48 else f"{hours // 24} дн назад"
+    if minutes < 5:
+        return "just now"
+    if minutes < 60:
+        return f"{minutes} min ago"
+    hours = minutes // 60
+    if hours < 24:
+        return f"{hours} h ago"
+    return "yesterday" if hours < 48 else f"{hours // 24} days ago"
+
+
+# Order the scene descriptors are rendered in, with their user-facing labels (RU/EN). Only these
+# five fields exist in the block — generation provenance (prompt/seed) never enters the prompt
+# (FR-002-25, F-012 FR-012-14).
+_SCENE_LABELS = {
+    "ru": (("location", "место"), ("background", "на фоне"), ("activity", "что делаешь"),
+           ("pose", "поза"), ("time_of_day", "время суток")),
+    "en": (("location", "place"), ("background", "background"), ("activity", "doing"),
+           ("pose", "pose"), ("time_of_day", "time of day")),
+}
+
+
+def _recent_media_block(sends: list, language: str, now: datetime | None = None) -> str | None:
+    """Render the photos she recently sent him as a context block (F-002 FR-002-25/26, ISS-006).
+
+    Without this she has **no evidence a photo ever existed**, so a question about it ("what's in
+    the background?") gets answered from her biography — live-caught: she invented bookshelves, a
+    saxophone and watercolours for a photo of her dim bedroom. The block states plainly that this is
+    what he is looking at, and is bounded upstream by `recent_sends()` (FR-002-26)."""
+    if not sends:
+        return None  # nothing sent (or nothing recent) → no block at all, not an empty heading
+    now = now or _now()
+    labels = _SCENE_LABELS.get(language, _SCENE_LABELS["en"])
+    lines = []
+    for send in sends:
+        parts = [f"{label}: {send.scene[key]}" for key, label in labels if send.scene.get(key)]
+        if not parts:
+            continue
+        lines.append(f"- {_when_phrase(send.sent_at, now, language)} — " + "; ".join(parts))
+    if not lines:
+        return None
+    if language == "ru":
+        return (
+            "Фото, которые ты ему недавно отправила — это ровно то, что он видит у себя в чате. "
+            "Если он спрашивает про фото (что на фоне, где ты, что делаешь), отвечай именно по "
+            "этому описанию и не придумывай другую обстановку:\n" + "\n".join(lines)
+        )
+    return (
+        "Photos you recently sent him — this is exactly what he is looking at. If he asks about a "
+        "photo (what's in the background, where you are, what you're doing), answer from this and "
+        "never invent a different scene:\n" + "\n".join(lines)
+    )
+
+
 def _life_engine_block(activity: str | None, language: str) -> str | None:
     """Render her current activity (F-006 FR-006-03) as a system-context block so she can mention
     her day naturally — never a mechanical status line."""
@@ -142,6 +212,7 @@ async def handle_turn(
     user_text: str,
     chat_client: ChatClient,
     memory_index: MemoryIndex | None = None,
+    media_cfg: MediaDeliveryConfig = MEDIA_DEFAULT_CONFIG,
 ) -> str:
     """Process one turn and return the reply text to send. Persists the user message and the reply.
 
@@ -188,6 +259,16 @@ async def handle_turn(
     bio_ctx = await bio_domain.assemble_biography_context(db, persona, user_text, bio_index)
     if bio_ctx:
         system_content += "\n\n" + bio_ctx
+    # F-012 → F-002 (FR-002-25/26, ISS-006): what she recently SENT him. The photo metadata is
+    # stored anyway (MEDIA_ASSET.meta_json); until it re-enters the prompt she has no idea what she
+    # showed him and confabulates a scene out of her biography. Bounded lookup (count + window),
+    # no LLM call, nothing generated — one cheap MediaSend ⋈ MediaAsset query.
+    sends = await media_delivery.recent_sends(
+        db, user_id=session.user_id, persona_id=persona.id, cfg=media_cfg
+    )
+    media_block = _recent_media_block(sends, persona.language)
+    if media_block:
+        system_content += "\n\n" + media_block
     llm_messages: list[dict[str, str]] = [{"role": "system", "content": system_content}]
     llm_messages += msg_domain.to_openai_messages(history)
     prompt_log.maybe_dump(persona.name, user_text, llm_messages)  # dev observability (opt-in via env)

@@ -9,6 +9,12 @@ location / mood carried in a context dict, sourced from F-006 upstream), marks i
 chat client (F-002/F-003), and hands back a result for the caller to deliver through the §3.6 Media
 path. It **never generates on the reply hot path** — pure lookup + send (FR-012-04 / NFR-012-01).
 
+The result carries the delivered asset's **scene metadata** (background / location / activity / pose
+/ time-of-day) and `recent_sends()` serves the same descriptors for the last few photos this user
+received — the §2/§3.6/§4.2 "media **plus its metadata**" contract, so the Orchestrator can put
+**what she actually sent** into her context instead of letting her invent a scene
+(FR-012-14/15, NFR-012-09; ISS-006).
+
 Boundaries (feature scope note): intimate requests are **classified and routed to F-014's gate**
 (`IntimacyGate` protocol below), never served from the SFW archive (FR-012-07 / NFR-012-08);
 relationship stage (F-005) only **paces** sharing (FR-012-06); it does not author persona voice
@@ -67,6 +73,10 @@ class MediaDeliveryConfig:
     # only when the moment genuinely fits (score at/above the floor).
     proactive_stage_floor: str = "Friend"
     proactive_min_score: float = 4.0
+    # Recent-sends lookup feeding the conversation context (FR-012-15 / F-002 FR-002-25/26, ISS-006).
+    # Bounded on purpose: the block must never grow the prompt without limit.
+    context_recent_sends: int = 3
+    context_recency_hours: float = 48.0
 
 
 DEFAULT_CONFIG = MediaDeliveryConfig()
@@ -207,6 +217,28 @@ class DeliveryOutcome(str, Enum):
     routed_to_gate = "routed_to_gate"    # intimate/ambiguous → handed to F-014
 
 
+# The slot fields of MEDIA_ASSET.meta_json that describe **what is visible** in a photo (F-008
+# FR-008-08, authored by F-010's SlotMeta). Only these ever leave the delivery boundary: meta_json
+# also carries generation provenance (`prompt`, `seed`) which must never reach the chat prompt
+# (FR-012-14).
+SCENE_FIELDS = ("background", "location", "activity", "pose", "time_of_day")
+
+
+def asset_scene(asset: MediaAsset) -> dict:
+    """The delivered asset's scene descriptors — background/location/activity/pose/time_of_day.
+
+    FR-012-14 (ISS-006): the Media Delivery contract of architecture.md §2/§3.6/§4.2 is "return the
+    media **plus its metadata** so the Orchestrator/LLM knows what she sent". Provenance fields are
+    stripped; empty/blank values are dropped so callers never render an empty descriptor."""
+    meta = parse_meta(asset)
+    scene = {}
+    for key in SCENE_FIELDS:
+        value = str(meta.get(key) or "").strip()
+        if value:
+            scene[key] = value
+    return scene
+
+
 @dataclass
 class DeliveryResult:
     outcome: DeliveryOutcome
@@ -214,10 +246,23 @@ class DeliveryResult:
     caption: str | None = None
     deflection: str | None = None        # in-voice line the caller sends when not delivering
     gate_result: Any = None              # F-014's own result when routed_to_gate
+    # FR-012-14 (ISS-006): the delivered asset's scene descriptors, so the caller can feed **what she
+    # just showed him** back into the conversation context (F-002 FR-002-25). Empty on every
+    # non-delivered outcome — a photo that was never sent has no scene.
+    meta: dict = field(default_factory=dict)
 
     @property
     def delivered(self) -> bool:
         return self.outcome is DeliveryOutcome.delivered
+
+
+@dataclass(frozen=True)
+class RecentSend:
+    """One photo this user has already received, with what is visible in it (FR-012-15, ISS-006)."""
+
+    asset_id: str
+    sent_at: datetime
+    scene: dict = field(default_factory=dict)
 
 
 # ── context-fit scoring + selection (FR-012-01/03) ───────────────────────────────────────────────
@@ -345,6 +390,47 @@ async def pacing_allows(
 # ── send recording (FR-012-10, §3.6) ─────────────────────────────────────────────────────────────
 
 
+async def recent_sends(
+    db: AsyncSession,
+    *,
+    user_id: int,
+    persona_id: int,
+    cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
+    now: datetime | None = None,
+) -> list[RecentSend]:
+    """The photos this user has recently received from this persona, newest first (FR-012-15).
+
+    One bounded `MediaSend ⋈ MediaAsset` query — no generation, no LLM call (FR-012-04) — capped at
+    `cfg.context_recent_sends` rows inside `cfg.context_recency_hours` and strictly scoped to this
+    (user, persona) pair (NFR-012-06). Feeds the F-002 context block that lets her talk about her own
+    photos consistently instead of inventing a scene (ISS-006)."""
+    limit = max(0, int(cfg.context_recent_sends))
+    if limit == 0:
+        return []
+    now = now or _utcnow()
+    window_start = now - timedelta(hours=cfg.context_recency_hours)
+    rows = (
+        await db.execute(
+            select(MediaSend, MediaAsset)
+            .join(MediaAsset, MediaAsset.id == MediaSend.asset_id)
+            .where(
+                MediaSend.user_id == user_id,
+                MediaAsset.persona_id == persona_id,
+                MediaSend.sent_at >= window_start,
+            )
+            .order_by(MediaSend.sent_at.desc(), MediaSend.id.desc())
+            .limit(limit)
+        )
+    ).all()
+    out: list[RecentSend] = []
+    for send, asset in rows:
+        sent_at = send.sent_at
+        if sent_at is not None and sent_at.tzinfo is None:
+            sent_at = sent_at.replace(tzinfo=timezone.utc)  # SQLite returns naive datetimes
+        out.append(RecentSend(asset_id=asset.id, sent_at=sent_at or now, scene=asset_scene(asset)))
+    return out
+
+
 async def record_send(
     db: AsyncSession, *, user_id: int, asset: MediaAsset, now: datetime | None = None
 ) -> MediaSend:
@@ -358,11 +444,40 @@ async def record_send(
 # ── in-voice text via the chat client (FR-012-05, FR-012-08) ─────────────────────────────────────
 
 
-_FALLBACK_CAPTION = "thought of you 💭"
-_FALLBACK_DEFLECTION = {
-    "exhausted": "mm, I don't have a good one to send right now — later? 😊",
-    "paced": "you're eager 😄 let me actually go live a little first, then I'll send one",
+# FR-012-12 (ISS-003): every user-visible line must be in the persona's own language — an English
+# caption under a Russian-speaking persona breaks the single-voice illusion as hard as an
+# out-of-character line. Keyed by `PERSONA.language`, falling back to "en".
+_LANGUAGE_NAMES = {"ru": "Russian", "en": "English"}
+
+_FALLBACK_CAPTION = {
+    "ru": "подумала о тебе 💭",
+    "en": "thought of you 💭",
 }
+_FALLBACK_DEFLECTION = {
+    "ru": {
+        "exhausted": "мм, сейчас нет ничего подходящего… позже? 😊",
+        "paced": "какой нетерпеливый 😄 дай мне немного пожить, потом скину",
+    },
+    "en": {
+        "exhausted": "mm, I don't have a good one to send right now — later? 😊",
+        "paced": "you're eager 😄 let me actually go live a little first, then I'll send one",
+    },
+}
+
+
+def _persona_language(persona: Persona) -> str:
+    """Her language code, defaulting to English (FR-012-12)."""
+    lang = (getattr(persona, "language", "") or "").strip().lower()
+    return lang if lang in _LANGUAGE_NAMES else "en"
+
+
+def fallback_caption(persona: Persona) -> str:
+    return _FALLBACK_CAPTION[_persona_language(persona)]
+
+
+def fallback_deflection(persona: Persona, reason: str) -> str:
+    lines = _FALLBACK_DEFLECTION[_persona_language(persona)]
+    return lines.get(reason, lines["exhausted"])
 
 
 async def request_caption(
@@ -383,9 +498,12 @@ async def request_caption(
             meta.get("time_of_day") or ctx.time_of_day,
         ) if p
     )
+    language = _LANGUAGE_NAMES[_persona_language(persona)]
     system = (
         f"You are {persona.name}. Write ONE short, natural first-person caption for a photo you're "
-        f"sending him right now — at most ~12 words, in character, no quotes, no stage directions."
+        f"sending him right now — at most ~12 words, in character, no quotes, no stage directions. "
+        # FR-012-12 (ISS-003): she must caption in the language she actually speaks.
+        f"Write it in {language} — this is the language you speak with him."
     )
     user = f"Photo of you: {scene or 'a candid moment'}. Mood: {ctx.mood or 'natural'}."
     try:
@@ -393,8 +511,8 @@ async def request_caption(
             [{"role": "system", "content": system}, {"role": "user", "content": user}]
         )
     except Exception:  # noqa: BLE001 — chat client down must never crash the turn (degrade to a line)
-        return _FALLBACK_CAPTION
-    return (text or "").strip() or _FALLBACK_CAPTION
+        return fallback_caption(persona)
+    return (text or "").strip() or fallback_caption(persona)
 
 
 async def request_deflection(
@@ -407,9 +525,12 @@ async def request_deflection(
         "exhausted": "you don't have a good photo to send at this moment",
         "paced": "you just sent one and want to keep it feeling special, not spammy",
     }.get(reason, "you can't send a photo right now")
+    language = _LANGUAGE_NAMES[_persona_language(persona)]
     system = (
         f"You are {persona.name}. In ONE short, warm first-person line, gently say {why}. Stay fully "
-        f"in character — no apology-as-a-bot, no mention of systems, archives, or limits."
+        f"in character — no apology-as-a-bot, no mention of systems, archives, or limits. "
+        # FR-012-12 (ISS-003): the deflection is her voice too — same language rule as the caption.
+        f"Write it in {language} — this is the language you speak with him."
     )
     user = f"Current moment: {ctx.activity or 'chatting'}."
     try:
@@ -418,7 +539,7 @@ async def request_deflection(
         )
     except Exception:  # noqa: BLE001
         text = ""
-    return (text or "").strip() or _FALLBACK_DEFLECTION.get(reason, _FALLBACK_DEFLECTION["exhausted"])
+    return (text or "").strip() or fallback_deflection(persona, reason)
 
 
 # ── entrypoints ──────────────────────────────────────────────────────────────────────────────────
@@ -474,7 +595,10 @@ async def deliver_photo(
         caption_client, persona=persona, asset=asset, context=context, stage=stage
     )
     await record_send(db, user_id=user_id, asset=asset, now=now)
-    return DeliveryResult(outcome=DeliveryOutcome.delivered, asset=asset, caption=caption)
+    # FR-012-14 (ISS-006): hand the scene back so the turn pipeline can put it in her context.
+    return DeliveryResult(
+        outcome=DeliveryOutcome.delivered, asset=asset, caption=caption, meta=asset_scene(asset)
+    )
 
 
 async def maybe_proactive_share(
@@ -510,4 +634,6 @@ async def maybe_proactive_share(
         caption_client, persona=persona, asset=asset, context=context, stage=stage
     )
     await record_send(db, user_id=user_id, asset=asset, now=now)
-    return DeliveryResult(outcome=DeliveryOutcome.delivered, asset=asset, caption=caption)
+    return DeliveryResult(
+        outcome=DeliveryOutcome.delivered, asset=asset, caption=caption, meta=asset_scene(asset)
+    )

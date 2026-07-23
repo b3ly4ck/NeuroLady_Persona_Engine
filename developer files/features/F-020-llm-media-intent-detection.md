@@ -107,8 +107,9 @@ Feature: F-020 LLM Media-Intent Detection
   mechanism.
 - **FR-020-02** — **No extra round-trip.** Intent must ride the existing generation (one call per
   turn) — a second LLM request is not acceptable for a hot-path decision (NFR-002 latency budget).
-- **FR-020-03** — The signal must carry **(a) whether media is requested** and **(b) its nature**
-  (`sfw` | `intimate`), so F-012 delivers and F-014 gates without re-classifying.
+- **FR-020-03** — The signal must carry **(a) whether media is requested**, **(b) its nature**
+  (`sfw` | `intimate`) and **(c) its kind** (`photo` | `video`, D6), so F-012 delivers and F-014 gates
+  without re-classifying. A missing or unknown nature is **gate-routed, never `sfw`** (D3).
 - **FR-020-04** — **The signal must be stripped from the user-visible reply** — never rendered.
 - **FR-020-05** — **Safe degrade.** A missing, malformed, or unparsable signal must degrade to
   *no media intent* (plain text reply) — never a crash, never an accidental send.
@@ -118,13 +119,47 @@ Feature: F-020 LLM Media-Intent Detection
 - **FR-020-07** — **Precision on topic mentions.** Talking *about* photos/photography without asking
   for one must NOT trigger delivery.
 - **FR-020-08** — **Keyword fallback (defence in depth, optional).** If the runner is unavailable or
-  the signal is absent, an explicit keyword match may still trigger delivery, so an obvious request
-  ("пришли фото") never goes unanswered. This is a *fallback*, not the decision path.
+  the signal is absent/malformed, an explicit keyword match may still trigger delivery, so an obvious
+  request ("пришли фото") never goes unanswered. This is a *fallback*, not the decision path: a
+  **well-formed signal always wins, including a negative one** (D2).
 - **FR-020-09** — **Config-driven.** The instruction wording, signal format, and the fallback
   vocabulary are configurable without code changes; the prompt addition is **versioned** like other
   prompt assets (F-006 FR-006-21 convention).
 - **FR-020-10** — Detection must be **language-agnostic across the personas' languages** (RU/EN at
   minimum), since it rides the multilingual model rather than a per-language word list.
+
+### Resolved design decisions
+
+Raised while writing the mirror test spec; fixed here so the tests are falsifiable and the
+implementation has no open choices.
+
+- **D1 — Signal format (default).** The model appends **one sentinel line** as the last line of its
+  reply: `<<MEDIA:none>>` | `<<MEDIA:photo:sfw>>` | `<<MEDIA:photo:intimate>>` (and the `video:`
+  variants, see D6). Parsing is case-insensitive and tolerates surrounding whitespace. The token is
+  configurable (FR-020-09) but this is the documented default the tests are written against.
+- **D2 — Precedence (FR-020-08).** A **well-formed signal always wins**, including a well-formed
+  *negative* signal over an obvious keyword — otherwise the keyword list would silently remain the
+  real decision path, which is the defect this feature removes. The keyword fallback applies **only**
+  when the signal is absent, malformed, or the runner was unavailable.
+- **D3 — `requested=true` with a missing/unknown nature.** Treated as **gate-routed** (never `sfw`),
+  same as any other ambiguity (NFR-020-04). Absence is not permission.
+- **D4 — Contradictory duplicate signals in one reply.** Parsing is deterministic: the **last**
+  well-formed signal is taken; if two well-formed signals disagree on nature, the **gate-routed side
+  wins**. (A reply carrying duplicates is itself logged as a malformed-output event.)
+- **D5 — Quality targets** for NFR-020-02/03, measured on the corpora of D7:
+  **recall ≥ 0.95** on the request corpus, **false-positive rate ≤ 2%** on the topic corpus,
+  each corpus **≥ 50 sentences, RU and EN in roughly equal share**.
+- **D6 — Media kind is modelled now, but v1 acts on photos only.** The signal carries
+  `photo` | `video` so the contract does not have to change when F-016/F-017/F-018 land. In v1 a
+  **video request is recognized and answered in-voice** ("not yet / later") rather than silently
+  treated as a photo request or ignored — recognizing it is exactly what stops the silent-fallthrough
+  defect from reappearing in a new form.
+- **D7 — Corpora location.** The labeled request/topic corpora live with the runnable tests at
+  `tests/data/media_intent_corpus.jsonl` (fields: `text`, `lang`, `label`), curated by whoever
+  changes the intent prompt; the out-of-band benchmarks read them.
+- **D8 — Version stamp (FR-020-09 / NFR-020-06).** The intent-prompt asset carries a version in its
+  header **and** the version used is recorded per turn in the existing prompt log
+  (`PROMPT_LOG_FILE`), so a behaviour change is auditable against a prompt version.
 
 ### Non-functional
 
