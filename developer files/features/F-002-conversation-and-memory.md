@@ -21,7 +21,10 @@
 >   the first user-typed message into an already-ready chat.
 > - **Sending photos/videos on request** ("send me a pic") and any media generation/delivery — a
 >   later phase (roadmap Phase 2+). Media *intent* is detected only so it can be acknowledged
->   in-character; F-002 generates and delivers no media.
+>   in-character; F-002 generates and delivers no media. **It does, however, consume what was
+>   delivered:** the descriptors of photos F-012 already sent are part of the assembled context
+>   (FR-002-25/26, ISS-006), so she can talk about her own photos consistently. Selecting, captioning
+>   and sending them stays F-012's job.
 > - **Voice-message replies (ElevenLabs)** — a separate future feature; F-002 is **text** reply +
 >   memory only.
 > - **The Life Engine's autonomous planning / daily-plan / reflection / goals and proactive
@@ -210,6 +213,19 @@ Feature: F-002 Conversation & Memory
     And the real in-character reply is delivered once the model is warm, within the bounded
         cold-start worst case
     But no system-voice or "model is loading" text is ever shown to the user
+
+  Scenario: UC-002-13 She answers questions about a photo she just sent, from that photo
+    Given the persona has just sent the user a photo taken in her bedroom in the evening
+    When the user asks a couple of messages later "what's in the background?"
+    Then her answer describes the background stored with that photo (the room she is actually in)
+    And she does not invent a different scene from her biography
+    And the photo's descriptors were part of the assembled context for that turn
+
+  Scenario: UC-002-14 The recently-sent-media block stays bounded
+    Given the user has been sent many photos over the past weeks
+    When the context is assembled
+    Then only the configured number of most recent sends inside the recency window are included
+    And when there are no sends inside the window the block is omitted entirely
 ```
 
 ---
@@ -224,8 +240,8 @@ Feature: F-002 Conversation & Memory
   the **relationship state/summary** for that `(user, persona)` before generating a reply.
 - **FR-002-03** — The Orchestrator must **assemble the LLM context** for the reply from: the persona
   system prompt (identity, current-era characteristics, communication style), relevant **biography
-  layers**, retrieved **user facts**, the **relationship summary**, and the **recent raw message
-  history** (architecture.md §4.2).
+  layers**, retrieved **user facts**, the **relationship summary**, the **recently-sent media
+  descriptors** (FR-002-25), and the **recent raw message history** (architecture.md §4.2).
 - **FR-002-04** — The assembled context must **always include the recent raw conversation history —
   several of the latest messages passed through verbatim, not only summarized** (hard requirement,
   architecture.md §4.2). This raw history must be present on every turn where prior messages exist.
@@ -282,6 +298,35 @@ Feature: F-002 Conversation & Memory
   Telegram "typing…" indicator and/or a short **in-character** holding line (never a system/"model is
   loading" message, per NFR-002-10) — instead of leaving the chat frozen, and must deliver the real
   reply once the model is warm.
+- **FR-002-25** — **The assembled context must include what she recently sent (ISS-006).** When the
+  persona has sent this user photos, the context must carry a **recently-sent-media block**: for each
+  recent send, **what is visible in it** — `background`, `location`, `activity`, `pose`,
+  `time_of_day` (the `MEDIA_ASSET.meta_json` slot metadata, F-008 FR-008-08, handed over by F-012
+  FR-012-14/15) — plus **roughly when** it was sent ("a few minutes ago", "yesterday"). The block
+  must state that this is exactly what he is looking at, so that when he asks about a photo ("what's
+  in the background?", "where are you?") she answers **from the photo she actually sent** and never
+  invents a different scene from her biography. Only those five fields are used — generation
+  provenance (`prompt`, `seed`) must never enter the prompt.
+- **FR-002-26** — **The recently-sent-media block must be bounded and config-driven (ISS-006).** It
+  carries at most **N most recent sends** (default 3) that are no older than a **recency window**
+  (default 48 h); both are configuration, changeable without a code change. Outside the window, or
+  with no sends at all, the block is **omitted entirely** (no empty heading, no placeholder). It is
+  built from a **single bounded query** (`MediaSend` joined to `MEDIA_ASSET`) — no LLM call, no
+  generation, nothing on the hot path beyond that lookup — and, like every other context block, it is
+  concatenated into the **single leading system message** (the chat template allows only one).
+
+- **FR-002-27** — **Never hold a write transaction across an LLM call (ISS-007).** Every model call
+  (the reply generation *and* the post-turn work — F-004 fact extraction, F-005 reflection) must run
+  with **no open write transaction**: commit before the call, reopen only to persist the result. A
+  30-60 s generation holding a SQLite write lock starves the *next* message, which then fails with
+  `database is locked`.
+- **FR-002-28** — **Every inbound message ends in a visible reply (CRITICAL, ISS-007).** No code path
+  — including an unhandled exception anywhere in the turn — may leave the user with **zero outbound
+  messages**. A last-resort handler must catch what the turn did not and send an in-character line.
+  Silence is never an acceptable outcome; it is indistinguishable from the bot being dead.
+- **FR-002-29** — **Post-turn work must not be able to break the turn.** Fact extraction and the
+  relationship reflection run after delivery; a failure in either must be logged and swallowed —
+  the user has already been answered and must never be affected retroactively.
 
 ### Non-functional
 
@@ -324,3 +369,9 @@ Feature: F-002 Conversation & Memory
   reply** (a message that unavoidably arrives while the model is still loading — e.g. during the
   night→day reload) must be bounded to a **defined worst-case load+reply time** and must never hang
   the chat indefinitely.
+- **NFR-002-13** — **Media self-consistency (ISS-006):** when the user asks about a photo she sent,
+  her answer must agree with that photo's stored descriptors — she must never describe a background,
+  location, or activity that contradicts what she actually sent. The context assembly is what makes
+  this possible: a photo whose metadata never reaches the prompt *will* be confabulated about, because
+  the biography block is the only scene material she has. Storing `meta_json` without consuming it is
+  therefore a defect of this requirement, not of the media pipeline.

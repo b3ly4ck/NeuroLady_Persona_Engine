@@ -468,6 +468,13 @@ Feature: F-003 Human-Likeness of Communication
   > truncation guards stay active. Re-enable and re-verify when a think-disciplined build ships;
   > the natural response gap is meanwhile provided by FR-003-40 pacing.
 
+- **FR-003-42** — **Human pacing applies to MEDIA sends too, not only text (ISS-004).** The
+  human-likeness layer was specified for text replies; a photo that lands instantly reads as machine
+  output and breaks the same illusion the text pacing protects. A media send must therefore show the
+  appropriate chat action (`upload_photo`) for a **bounded, length-independent delay** drawn from the
+  same pacing budget (NFR-003-01), before the media message is delivered. The delay is config-driven
+  and must never be so long that the user thinks she ignored him.
+
 ### Non-functional
 
 - **NFR-003-01** — The deliberate pacing delay must be **bounded by defined upper caps** and never

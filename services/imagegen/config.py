@@ -32,6 +32,12 @@ class ImageRunnerSettings(BaseSettings):
     default_height: int = 1024
     # Media library root (§6.3): assets land in <media_root>/<slug>/photos/<MED-id>.png.
     media_root: str = str(REPO_ROOT / "media")
+    # F-021 retention (runs after the batch, FR-021-08 / D8). A count-based per-persona cap:
+    # storage is cheap, GPU is not, so frames expire by archive size, never by age.
+    retention_enabled: bool = True
+    retention_cap: int = 60
+    retention_floor: int = 6
+    retention_grace_hours: float = 24.0
     # Night/media window in the persona's local time (§6.1): [start, end) hours.
     window_start_hour: int = 1
     window_end_hour: int = 8

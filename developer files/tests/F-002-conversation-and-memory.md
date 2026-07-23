@@ -206,6 +206,44 @@
 | TC-FR-002-24-02 | integration | negative | Never a system "model loading" text | Given the model is loading; When acknowledging; Then no system-voice or "model is loading" message is shown (per NFR-002-10) | planned |
 | TC-FR-002-24-03 | integration | happy | Real reply delivered once warm | Given a message received while cold; When the model finishes warming; Then the real in-character reply is delivered on the same turn | planned |
 
+### FR-002-25 — Context includes what she recently sent (ISS-006)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-25-01 | integration | happy | Sent photo's scene is in the prompt | Given a photo tagged bedroom / evening / lying on the bed was just delivered to this user; When the next turn assembles context; Then the system message carries that background, location, activity, pose and time-of-day | automated |
+| TC-FR-002-25-02 | data-flow | regression | **ISS-006** e2e: photo request → next turn knows the scene | Given the user asks for a photo through the real handler and one is delivered; When he then asks "а что у тебя на фоне"; Then the assembled context for that turn contains the delivered photo's background descriptors | automated |
+| TC-FR-002-25-03 | integration | empty | No sends → block omitted | Given a user who has never been sent a photo; When context is assembled; Then no recently-sent block appears (no empty heading, no placeholder) | automated |
+| TC-FR-002-25-04 | unit | security | Provenance never enters the prompt | Given meta_json also carries the generation prompt and seed; When the block is rendered; Then neither appears in the context | automated |
+
+### FR-002-26 — The recently-sent block is bounded and config-driven (ISS-006)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-26-01 | integration | boundary | Only N most recent sends | Given ten photos sent to this user; When context is assembled; Then only the configured number of newest sends appears | automated |
+| TC-FR-002-26-02 | integration | boundary | Recency window respected | Given the only send is older than the window; When context is assembled; Then the block is omitted | automated |
+| TC-FR-002-26-03 | unit | mapping | Single system message preserved | Given the block is added; When the LLM messages are built; Then there is still exactly one leading system message and ≥1 user message | automated |
+
+### FR-002-27 — No write transaction across an LLM call (ISS-007)
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-27-01 | integration | happy | Turn commits before generating | Given a turn; When the chat client is called; Then no uncommitted write is pending at that moment | implemented |
+| TC-FR-002-27-02 | integration | happy | Post-turn work commits around its calls | Given fact extraction and reflection; When each LLM call runs; Then the session holds no open write transaction | implemented |
+| TC-FR-002-27-03 | concurrency | error | A slow turn does not starve the next message | Given a deliberately slow fake client and a second message arriving mid-turn; When both are processed; Then both persist and neither raises `database is locked` | implemented |
+
+### FR-002-28 — Every inbound message ends in a visible reply (CRITICAL, ISS-007)
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-28-01 | integration | error | Handler exception still answers | Given the turn raises an arbitrary exception; When the message is handled; Then the user receives an in-character line, not silence | implemented |
+| TC-FR-002-28-02 | integration | error | DB failure still answers | Given the DB raises OperationalError mid-turn; When handled; Then a visible reply is still sent | implemented |
+| TC-FR-002-28-03 | integration | regression | **ISS-007 pinned** | Given the exact live scenario (a photo request arriving during a slow previous turn); When processed; Then the user gets a photo or an in-character line — never zero sends | implemented |
+| TC-FR-002-28-04 | unit | negative | The safety net is registered | Given the dispatcher; When built; Then a last-resort error handler exists (additive to the executing tests above) | implemented |
+
+### FR-002-29 — Post-turn work cannot break the turn
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-29-01 | integration | error | Fact extraction failure is swallowed | Given extraction raises; When the turn runs; Then the reply was still delivered and no exception escapes | implemented |
+| TC-FR-002-29-02 | integration | error | Reflection failure is swallowed | Given the reflection raises; When the turn runs; Then the reply stands and the error is logged | implemented |
+
 ---
 
 ## Non-functional requirements
@@ -315,7 +353,21 @@
 | TC-NFR-002-12-02 | integration | state | Model kept resident during awake hours | Given awake hours; When steady-state turns run; Then they hit a warm model and meet NFR-002-01 | planned |
 | TC-NFR-002-12-03 | performance | boundary | Cold reply bounded, never hangs | Given a message that unavoidably arrives while the model is still loading; When it is served; Then the reply lands within the defined worst-case load+reply time and never hangs indefinitely | planned |
 
+### NFR-002-13 — Media self-consistency: never contradict a photo she sent (ISS-006)
+
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-NFR-002-13-01 | integration | consistency | The scene she can describe is the one she sent | Given a delivered photo whose stored scene differs from her biography's typical setting; When the next turn's context is assembled; Then the photo's own scene is present and marked as what he is looking at | automated |
+| TC-NFR-002-13-02 | integration | data-flow | Block survives the full turn assembly | Given memory, relationship, life-engine and biography blocks are all present; When the turn runs; Then the recently-sent block is still part of the single system message | automated |
+| TC-NFR-002-13-03 | manual | consistency | Live check: she describes the real photo | Given a live chat where she just sent a photo; When the user asks what is behind her; Then her answer matches the photo (not her biography) | skip (live model) |
+
 ---
+
+### NFR-002-14 — Concurrency: overlapping messages
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-NFR-002-14-01 | concurrency | boundary | Two messages overlap | Given two messages from one user processed concurrently; When both complete; Then both are persisted and both produce a reply | implemented |
+| TC-NFR-002-14-02 | concurrency | error | Lock contention degrades, never silences | Given contention on the write lock; When it occurs; Then the turn still answers (retry or fallback line) | planned |
 
 ## User-story acceptance (manual real-device E2E)
 
@@ -375,14 +427,19 @@ feel human, does she truly remember, does she hold up under probing, does it fee
 
 ## Coverage summary
 
-- **Functional:** FR-002-01..24 — **73 automated tests** (3 per requirement, 4 for FR-002-04) across
+- **ISS-006 addition:** FR-002-25/26 + NFR-002-13 cover the recently-sent-media block — the
+  cross-subsystem consistency case `test_driven_development.md` §4b names ("the LLM *knows* what it
+  sent"). Their runnable form lives in `tests/test_iss_006_media_context.py` and **executes the real
+  orchestrator/handler** with fakes; asserting on source text would prove nothing (the ISS-004
+  lesson).
+- **Functional:** FR-002-01..26 — **73 automated tests** (3 per requirement, 4 for FR-002-04) across
   unit / integration / inter-service / data-flow / component / e2e / security, spanning happy /
   negative / boundary / empty / error / concurrency / idempotency / localization / persistence /
   consistency / mapping cases. Includes the cold-start acknowledgement path (FR-002-24), the
   recent-raw-history hard requirement (FR-002-04, DFD-1), fact extraction/categorization/embedding
   (FR-002-10..12), semantic recall & unprompted old-fact recall (FR-002-13..14), per-user isolation
   (FR-002-20), never-break-character (FR-002-08), and LLM/timeout fallback (FR-002-19). ✓
-- **Non-functional:** NFR-002-01..12 — **36 tests** (3 per requirement; performance / load / error /
+- **Non-functional:** NFR-002-01..13 — **39 tests** (3 per requirement; performance / load / error /
   security / consistency / persistence / concurrency), including 1 manual localization check
   (TC-NFR-002-06-03). Covers warm-model latency (NFR-002-01), memory-recall correctness (NFR-002-02),
   throughput (NFR-002-03), Chat-LLM and Qdrant failover / degrade-don't-fail (NFR-002-04/05),
@@ -390,6 +447,6 @@ feel human, does she truly remember, does she hold up under probing, does it fee
   persistence (NFR-002-09), 100% in-character (NFR-002-10), idempotency (NFR-002-11), and the
   pre-warm + bounded cold-reply cold-start guarantees (NFR-002-12). ✓
 - **User stories:** US-002-01..06 — **6 manual real-device acceptance tests**. ✓
-- **Total: 115 enumerated tests** — in the 100-150 target band for a finely-scoped feature, favoring
+- **Total: 125 enumerated tests** — in the 100-150 target band for a finely-scoped feature, favoring
   meaningful case variety over padding.
 - Every test ID embeds the `FR-`/`NFR-`/`US-` id it verifies, matching the feature file's IDs.

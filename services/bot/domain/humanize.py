@@ -32,6 +32,11 @@ WORDS_PER_MINUTE = 40.0
 CHUNK_THRESHOLD = 180
 # FR-003-14 — chunk count is capped so the user is never flooded.
 MAX_CHUNKS = 4
+# FR-003-42 (ISS-004) — a media send is paced too: a photo that lands instantly reads as machine
+# output. Unlike text the delay is **length-independent** (picking/taking a photo doesn't scale with
+# caption length) — a bounded, jittered "she's grabbing a photo" beat.
+MEDIA_DELAY_MIN_S = 2.0
+MEDIA_DELAY_MAX_S = 6.0
 
 
 @dataclass(frozen=True)
@@ -116,6 +121,23 @@ def pacing_delay(text: str, settings: CommSettings, rng: random.Random | None = 
     base = 0.8 + words / wps               # more words → longer "typing" (FR-003-02/40)
     jitter = r.uniform(0.85, 1.15)         # not a fixed constant (FR-003-08)
     return max(0.3, min(MAX_DELAY_S, base * jitter))
+
+
+def media_pacing_delay(
+    settings: CommSettings, rng: random.Random | None = None
+) -> float:
+    """The deliberate beat before a media send (FR-003-42 / F-012 FR-012-13, ISS-004).
+
+    A photo used to land instantly, which reads as machine output and breaks the same illusion the
+    text pacing protects. Unlike `pacing_delay` this is **length-independent** — picking or taking a
+    photo doesn't scale with caption length — a bounded, jittered pause scaled by the persona's
+    `typing_speed` (a "fast" persona is quicker here too). Always within [MIN, MAX].
+    """
+    r = rng or random
+    span = MEDIA_DELAY_MAX_S - MEDIA_DELAY_MIN_S
+    base = MEDIA_DELAY_MIN_S + r.uniform(0.0, span)
+    scaled = base / max(settings.typing_speed, 0.1)
+    return max(MEDIA_DELAY_MIN_S, min(MEDIA_DELAY_MAX_S, scaled))
 
 
 def pacing_delays(

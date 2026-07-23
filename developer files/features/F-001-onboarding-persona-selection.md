@@ -276,6 +276,16 @@ Feature: F-001 Onboarding & Persona Selection
   FR-001-18). Photos are stored under `media/<persona_slug>/…` (architecture.md §5.1/§6.3) and
   referenced by `PERSONA.gallery_photo_ref`.
 
+- **FR-001-25** — **Every published persona MUST have a resolvable gallery photo (ISS-002).** The
+  gallery card is the product's first impression and its conversion point; a text-only card is a
+  **degrade path, not an acceptable steady state**. `PERSONA.gallery_photo_ref` must point at a file
+  that exists — provisioning is responsible for producing it (see F-013 FR-013-12 for sourcing it
+  from the persona's generated archive). A persona whose gallery photo is missing must be
+  **flagged by an operator-visible check** rather than silently shown as a text card.
+- **FR-001-26** — The text-only card remains the **runtime fallback** (never an error, never a broken
+  image) for the case where the file disappears at runtime — but it must not be reachable for a
+  correctly provisioned persona (FR-001-25).
+
 ### Non-functional
 
 - **NFR-001-01** — The Choose Lady screen (S2) must be delivered in **under 3 seconds** after

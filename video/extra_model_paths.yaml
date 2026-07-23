@@ -1,0 +1,28 @@
+# ComfyUI model-path config for the F-016 Wan video runner.
+#
+# Weights are wired in by ABSOLUTE PATH through this config — deliberately NOT by symlinks inside
+# the repo (CLAUDE.md hard rule: an in-repo symlink pointing at repo data destroyed a 28 GB
+# checkpoint once; share heavy assets via config/env absolute paths only).
+#
+# Used as:  python main.py --extra-model-paths-config /abs/path/video/extra_model_paths.yaml
+
+neurolady_video:
+  base_path: /home/human/NeuroLady_Final/video/models/
+  # GGUF diffusion weights are loaded by the City96 ComfyUI-GGUF "UnetLoaderGGUF" node, which reads
+  # from the unet/diffusion_models folder.
+  unet: |
+    5b/diffusion
+    a14b/diffusion
+  diffusion_models: |
+    5b/diffusion
+    a14b/diffusion
+  # GGUF text encoder (umt5) -> CLIPLoaderGGUF
+  clip: |
+    5b/text_encoder
+  text_encoders: |
+    5b/text_encoder
+  # Wan VAEs: wan2.2_vae.safetensors (for TI2V-5B) and wan_2.1_vae.safetensors (for A14B)
+  vae: |
+    5b/vae/split_files/vae
+  loras: |
+    5b/lightning_lora

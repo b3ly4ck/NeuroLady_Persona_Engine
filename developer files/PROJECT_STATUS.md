@@ -2,6 +2,267 @@
 
 ## Recent changes
 
+- **F-020 coverage closed + three defects it uncovered.** The feature's *code* was live since
+  v0.59, but its test spec was only **31 of 86 TCs** backed by runnable tests — `FR-020-10`,
+  `NFR-020-01/02/03/06` and all four user stories had **zero**, and the feature file still said
+  Draft. Closing that gap turned up real holes rather than just bookkeeping:
+  - **The signal grammar was not actually configurable.** `MediaIntentConfig.open_token` /
+    `close_token` existed and were documented as tunable (FR-020-09), but the parser used hardcoded
+    module-level regexes, so changing them did nothing. `_matchers()` now derives both the parse and
+    strip patterns from the configured tokens (cached), with the defaults short-circuited and an
+    empty token treated as a broken config that falls back rather than crashing a turn.
+  - **The fallback vocabulary was not configurable** (`RequestVocabulary`), and it fired on photo
+    *topic* talk: `"take"` matched "my phone takes bad photos" and "i should take a photo of that".
+    `take` / `got a` were dropped — a fallback that sends an unwanted photo derails the conversation,
+    and anything subtler than a request verb is the model's job (FR-020-07).
+  - **`active_prompt_version()`** added so the in-force prompt version is readable at runtime
+    (NFR-020-06), instead of only existing as a constant.
+  - **`services/bot/domain/media_intent_corpus.py`** (new, FR-020-11): the RU/EN corpus labeled
+    `request` / `topic` — including the ISS-005 phrasing and adversarial near-misses — plus
+    `measure()`, which scores any client through the **real** `parse_intent`. The harness is itself
+    exercised with perfect / silent / always-firing scripted models, because a benchmark that
+    reports 100% may be measuring a broken harness.
+  - Tests: `tests/test_f020_media_intent.py` grew 31 → 96. All 86 spec TCs are now `implemented`
+    (14 of them are out-of-band live-model benchmarks by design).
+
+- **ISS-011 — two concurrent turns could deliver the same photo twice.** F-012's no-repeat
+  guarantee was a *read-then-write* check, with the caption LLM call sitting in the middle of the
+  window. Fixed at the schema: `uq_media_send_user_asset` on `MEDIA_SEND (user_id, asset_id)`;
+  `record_send()` inserts in a SAVEPOINT and returns `None` on conflict, so the loser is refused
+  without poisoning the turn's transaction (ISS-007 lesson). A requested photo degrades in voice; an
+  unprompted share just does not happen. `init_models` creates the index idempotently since
+  `create_all` never adds a constraint to an existing table.
+  **Scope stated honestly:** on SQLite the race is unreachable through the handler (a turn holds its
+  write transaction end to end), and this was *verified* — with the constraint removed the
+  handler-level concurrency test stayed green while a direct double `record_send` produced two rows.
+  So the invariant is pinned by a direct test that genuinely fails without the fix, and the
+  handler-level test documents what it does not prove.
+
+- **F-021 implemented — the archive is a living library, not a one-day window.** Two halves of one
+  economics argument (a frame costs ~155 s of GPU and ~1.4 MB of disk): never hide a frame by age,
+  never destroy one nobody has seen.
+  - **Selection widened (FR-021-01/02/03).** `store.retained_assets()` replaces
+    `latest_available_assets` as what bounds candidacy in `select_asset`; freshness became a
+    **ranking** term (`rank_score = context fit + freshness_bonus`). Measured live, the old one-day
+    window made 6 of Alina's 12 frames permanently unreachable the moment a newer day existed — the
+    user got a deflection while paid-for frames sat on disk (pinned by `TC-FR-021-01-02`).
+    Freshness decays **proportionally** (`bonus / (1 + age*decay)`), not linearly: with the linear
+    form a large `freshness_bonus` could never produce the documented "today only in practice"
+    regime, because the gap between two ages is `age*decay` regardless of the bonus (D9).
+  - **Retention (`services/imagegen/retention.py`).** Count-based per-persona cap, eviction order
+    already-sent-oldest → un-sent-oldest, and three protections that **outrank the cap**: floor
+    (never empty), grace window (tonight's batch is untouchable), and context-recency (FR-021-15 —
+    evicting a photo she sent an hour ago would reopen ISS-006 from our own maintenance pass). When
+    a protection makes the cap unreachable the run reports `cap_exceeded` instead of deleting.
+    Eviction is staged (`os.replace` to `.evicting` → row delete in a SAVEPOINT → unlink) because a
+    filesystem is not transactional and the two failure modes pull opposite ways; deleting the row
+    first and rolling back on `OSError` would have undone the whole run's earlier evictions (D10).
+    Orphan-row repair is guarded: if *every* row is missing its file, that reads as an unmounted
+    media root, so nothing is repaired and the anomaly is reported (D11).
+  - **Blockers fixed first.** `MediaIdSequence` makes MED-id allocation monotonic (`count(*) + 1`
+    rewinds the moment eviction deletes a row, so a new photo would be born with a retired id that
+    `MediaSend` already marks as seen — FR-021-13/D1); `MediaSend.asset_id` is no longer a foreign
+    key so the send history outlives its asset (FR-021-14/D2); `media_assets` gained an index on
+    `(persona_id, created_at)` so the widened candidacy stays a cheap indexed lookup (NFR-021-04).
+  - **Wiring:** `ImageRunner.run_batch` runs retention after the drain and before wake (DFD-3/D8);
+    `IMAGE_RETENTION_*` settings; the run's counts travel in the batch metrics snapshot.
+  - **Tests:** `tests/test_f021_retention_and_reuse.py` (102) — all 84 automatable TCs of the spec,
+    each executing the real function or handler and asserting rows **and** files plus a clean
+    `store.reconcile`. Includes a 60-case randomized battery for "no un-sent frame is destroyed
+    while a consumed one survives" and a 30-night bounded-growth simulation.
+
+- **ISS-010 — a send was recorded for a photo that was never delivered.** Found by
+  `TC-NFR-021-01-03`. `deliver_photo` wrote the `MediaSend` row; the *handler* then discovered the
+  file was missing and sent a text line instead — the user saw no photo, yet per-user no-repeat
+  excluded that frame forever. Latent until F-021 (F-008 writes the file before the row), made
+  reachable by eviction. Fix: path resolution moved into the domain (`asset_abspath` /
+  `asset_file_exists` in `media_delivery.py`, re-exported by the handler so there is one resolution)
+  and `select_deliverable_asset()` verifies the winner's file, skipping to the next-best candidate
+  before degrading in voice (F-012 FR-012-18). The F-012/ISS-008 fixtures now write real PNGs, so
+  "a row implies a file" is asserted rather than assumed.
+
+- **ISS-009 — the intimate-request classifier was English-only.** `classify_photo_request("скинь
+  голое фото")` returned `sfw` while the deployed persona speaks Russian: the keyword safety net
+  behind F-020's model signal never fired in the bot's actual language (same root shape as ISS-003).
+  F-012 `FR-012-17` now requires the fallback to cover every language a deployed persona speaks,
+  including inflected forms. Russian entries are **stems**, chosen to avoid innocent collisions —
+  `"соск"` would match *соскучился* and `"попу"` would match *попугай*, so those are spelled out.
+  Tests: `tests/test_iss_009_ru_intimate_classifier.py` (21), guarding both directions.
+
+  Suite: **981 passed, 109 skipped**.
+
+- **ISS-008 — she can now say what is IN the photo (scene descriptions).** Follow-up to ISS-006:
+  she had the asset's metadata, but the metadata is written in *generation* vocabulary — `background`
+  was populated from `_location_phrase()` so it merely echoed `location`, and `pose` held framing
+  jargon ("candid high-angle selfie"). Asked "а что у тебя на фоне?" she was handed `на фоне: home`
+  and nothing visible to name. The rich text existed only inside `meta_json["prompt"]`, which is the
+  English technical prompt and is deliberately stripped at the delivery boundary.
+  - **Requirements (docs-first):** F-010 `FR-010-19` (author a human-readable scene description per
+    shot), `FR-010-20` (in `PERSONA.language`), `FR-010-21` (no generation jargon, no appearance);
+    F-008 `FR-008-19` (persist it, must not echo another field); F-012 `FR-012-16` (serve it in the
+    delivery meta and `recent_sends`).
+  - **Code:**
+    - `services/imagegen/prompt_author.py` — `SCENE_OBJECTS` (the full canonical location vocabulary
+      `batch_planner._guess_location` emits: `home / cafe / office / restaurant / gym / outdoors`,
+      plus a `""` default), `SCENE_LIGHT` per time-of-day, `_SCENE_TEMPLATE` (ru/en),
+      `scene_objects(location, language)` and `author_scene_description(slot, language)`.
+      **`scene_objects()` is read by both sides:** `author_prompt()`'s `Scene:` section now requests
+      the objects (`…with the sofa, a floor lamp, the TV on and a blanket visible around her`) and the
+      description names the same ones in her language. Without that, a description mentioning a sofa
+      would just be *our code* inventing furniture the frame never contained.
+      `language` on `author_jobs()` is **keyword-only** — as a positional it shifted `style` and
+      silently disabled persona palette/outfit (caught by two existing F-010 tests going red).
+    - `services/imagegen/contract.py` — `SlotMeta.scene_description`, so it flows into
+      `slot_meta_json()` → `MEDIA_ASSET.meta_json` with no store-side change.
+    - `services/imagegen/wiring.py` — `F010PromptAuthor` passes `PERSONA.language` through (it did
+      not, which would have shipped English descriptions for a Russian persona).
+    - `services/bot/domain/media_delivery.py` — `scene_description` leads `SCENE_FIELDS`.
+    - `services/bot/orchestrator.py` — `_recent_media_block()` renders the description *as the line*
+      when present; the labelled request-fields remain only as the fallback for pre-fix assets, so
+      "поза: candid high-angle selfie" never reaches her voice again.
+  - **Tests:** `tests/test_iss_008_scene_description.py` (22), all executing the real path
+    (`author_jobs` → `store_asset` → `deliver_photo` → `recent_sends` → `handle_turn`), including
+    `TC-FR-010-19-05` pinning prompt/description agreement and `TC-FR-012-16-03` as the ISS-008
+    regression. Suite: **858 passed, 109 skipped**.
+
+- **ISS-006 — she now knows what she just sent (conversation ⋈ media).** Live defect: right after
+  sending a photo of her dim bedroom, she answered "а что у тебя на фоне" with bookshelves, a
+  saxophone and watercolours — a scene invented from her biography. Root cause: `MEDIA_ASSET.meta_json`
+  (pose/background/location/activity/time_of_day, F-008 FR-008-08) was **stored and never consumed** —
+  `deliver_photo()` returned only the asset + caption and `orchestrator.py` had no reference to media
+  at all, so the §2/§3.6/§4.2 "media **plus its metadata**" contract existed only on the write side.
+  Docs-first fix:
+  - **Requirements:** F-012 `FR-012-14` (delivered result carries the asset's scene descriptors),
+    `FR-012-15` (bounded per-user recent-sends lookup), `NFR-012-09`; F-002 `FR-002-25` (context must
+    include what she recently sent), `FR-002-26` (bounded + config-driven), `NFR-002-13` (media
+    self-consistency). `architecture.md` §3.2 step 3 / §3.6 / §4.2 now name the recently-sent block as
+    part of context assembly, with the ISS-006 note that storing metadata without consuming it is the
+    defect.
+  - **Code:** `services/bot/domain/media_delivery.py` — `SCENE_FIELDS`, `asset_scene()`,
+    `DeliveryResult.meta`, `RecentSend`, `recent_sends()` (one `MediaSend ⋈ MediaAsset` query, newest
+    first, capped by `MediaDeliveryConfig.context_recent_sends` = 3 within
+    `context_recency_hours` = 48 h, scoped to the (user, persona) pair). Generation provenance
+    (`prompt`, `seed`) is stripped — it must never reach a chat prompt.
+    `services/bot/orchestrator.py` — `_recent_media_block()` + `_when_phrase()` (RU/EN, "только что" /
+    "2 ч назад"), fused into the **single** system message next to the memory/relationship/life/
+    biography blocks; `handle_turn(..., media_cfg=…)` makes the bounds injectable.
+  - **Tests:** `tests/test_iss_006_media_context.py` (18) — all execute the real
+    `deliver_photo` / `recent_sends` / `handle_turn` / `on_text` paths (no source-text assertions,
+    per the ISS-004 lesson), including an e2e regression: request a photo through the handler, then
+    ask what's in the background, and assert the second turn's assembled context carries that photo's
+    background/location. Verified to fail with the block disabled. Suite: **784 passed, 109 skipped**.
+
+- **Image pipeline: anchor-framing fixes + black-frame robustness (v0.56.0 + pending) — identity is
+  now the SAME person, and the batch can't store corrupt frames.** Continuation of the live-review
+  loop; every fix here traced to *how the reference anchors are framed* or to *checkpoint numerical
+  flakiness*, never the prompt.
+  - **Anchor framing (v0.56.0, F-009 FR-009-15..19 / F-010 FR-010-17/18, architecture §4.3b "Anchor
+    framing constraints"):**
+    * `select()` now puts the **face anchor ALWAYS as Picture 1** (it used to lead with the body
+      anchor for full-body shots, contradicting the directive) and attaches the **body anchor only
+      for full-body/mirror framings** (config-tunable `secondary_only_for_full_body`). Face-focused
+      selfies — most content — now bind the **face anchor alone**, which removed the two worst
+      defects at the source: the body anchor's **wardrobe leaking** into every scene and a **second
+      person** appearing in frame.
+    * **Directive hardened:** forbids duplicating the subject ("only one person… exactly once… never
+      duplicated") and scopes Picture 2 to **anatomy only, clothing/pose/background NOT copied.**
+    * **Negatives:** added `two people / duplicate person / multiple women / same person twice`.
+      **Prompt Outfit section:** wardrobe authored here, "not the clothing from the reference
+      pictures".
+    * **`services/imagegen/anchor_prep.py`** (Pillow-only, bot-env safe): `head_crop_body` (drop the
+      top fraction → torso/anatomy anchor with **no competing face**), `tighten_face` (center crop →
+      the face fills the frame, not ~35 %), `validate_body_anchor` (advisory orientation check).
+      Rationale is measured: the serving node rescales every anchor to **~384×384** for the vision
+      encoder, so a loose face crop leaves ≈230×230 px of identity signal → "same type, not her".
+  - **Alina's anchors reprovisioned** from the real photos: `face.jpg` tightened to the head
+    (499×499, face now ~65 % of frame), `body.jpg` head-cropped to a torso (640×495). Originals kept
+    in `media/alina/reference/_orig/`.
+  - **Live result (single tightened face anchor):** identity is now **clearly the same person**
+    (the reference woman, her wavy bob, her features), realism holds (freckles/pores/candid cafe
+    selfie), **no duplicate**, **no wardrobe leak**. This is the best round yet — the anchor fixes
+    landed. ~197 s/photo at 8 steps.
+  - **Black-frame robustness (pending commit, F-008 FR-008-17/18, architecture §4.3b "Output
+    validity"):** the batch had stored three **all-black frames**. Diagnosed with a 4-case A/B
+    (seed 7/42, 6/8 steps, 1/2 refs) — **all four re-ran fine**, proving the black frames are a
+    transient **NaN latent** in the distilled AIO checkpoint that ComfyUI still reports as success,
+    NOT the prompt/anchor/seed/refcount. Fixes: `is_black_frame()` in the backend rejects an
+    all-black output as a **retryable** failure (never stored — "model success" ≠ "usable image"),
+    and the runner **jitters the seed on each retry** so a NaN-seed self-heals. Tests:
+    `tests/test_black_frame_retry.py` (5) + F-008 test spec TC-FR-008-17/18.
+  - **Test discipline:** behaviour changes rippled into the F-009 selection tests (face-only on
+    selfies is now correct) — updated to the new contract. Full suite green at each step
+    (743 passed before the black-frame code; black-frame + F-008 subset 57 passed).
+
+- **Image pipeline: first LIVE generations + hyperrealism pass (v0.54.0–0.55.0).** The whole
+  F-008…F-015 stack ran end-to-end on the GPU for the first time. Three review rounds, each fixing a
+  defect the previous one exposed:
+  1. **Identity was not bound to the reference at all.** The authored prompt opened with
+     `candid photo of a woman, …` — a generic subject. Root cause: F-010's banned-appearance guard
+     (correctly forbidding *descriptions*) left nothing tying the output to the input picture.
+     Fix (v0.54.0, docs-first: architecture **§4.3b**, F-009 FR-009-11..14, F-010 FR-010-12/13,
+     F-008 FR-008-05): F-009 now owns a **preservation directive** that OPENS every prompt
+     ("Preserve the exact face … of the person in Picture 1 … body proportions … in Picture 2 …"),
+     and the engine feeds **all** anchors (the node binds `image1..image3` → `Picture 1..3`; it
+     previously staged only `references[0]`, silently discarding the anatomy anchor).
+  2. **The directive never reached production prompts** (v0.54.1). The F-011→F-010 adapter called
+     `author_jobs()` without `references`, so `preservation_directive(0)` returned empty — unit
+     tests passed because they called the author directly. The adapter now shares one
+     `IdentityReferenceProvider` with the planner. +2 regression tests on that seam.
+  3. **Output read as rendered, not photographed** (v0.55.0, F-010 FR-010-14..16). Rewrote the
+     realism vocabulary from vague niceties ("true-to-life skin texture") to **concrete physical
+     defects** (pores, blemishes, T-zone sheen, stray hairs, sensor noise, blown highlights, WB
+     drift), added **labeled prompt sections** (Photo type/Scene/Composition/Outfit/Lighting/Skin/
+     Camera/Processing), restricted every framing to **selfie-POV or companion-POV**, made the
+     lighting map *imperfect-real* per time of day (no golden-hour/cinematic), inverted the
+     negatives to target the **studio look**, and raised default steps 4→8.
+  - **Live results (Alina, 3 slots from her day plan).** Round 1: identity held but glossy/CGI-like.
+     Round 2 after the hyperrealism pass: **realism solved** — frames read as genuine iPhone
+     snapshots (visible pores, oily T-zone, harsh/uneven light, handheld tilt). **184 s/photo** at
+     8 steps/1024². Assets `MED-alina-00001..00006` + rows, atomic 1:1. The six reference-less jobs
+     (Vika/Olivia) failed fast on F-009's **no-reference safe path** — proven live, no wrong-identity
+     image was ever produced.
+  - **Three defects remain open, all traced to ANCHOR FRAMING** (documented as binding constraints
+    in architecture §4.3b "Anchor framing constraints" + requirements F-009 FR-009-15..19 /
+    F-010 FR-010-17/18, with 15 planned TCs — implementation is the next session's work):
+    * **Weak identity ("same type, not the same person").** The node rescales every anchor to
+      **~384×384** for the vision encoder; our face anchor is a loose selfie where the face fills
+      ~35 % of frame → ≈230×230 px of actual face. **Fix: tight head crop** (≈3× the face area).
+    * **Wardrobe leak + duplicated subject.** The body anchor is a complete styled photo (pose,
+      outfit, visible head), so the model copies its clothing into every scene and once rendered the
+      subject **twice** in one frame. **Fix: head-cropped anatomy-only body crop**, directive scoping
+      Picture 2 to proportions with clothing explicitly excluded, anti-duplication negatives.
+    * **Muddied face from two competing faces.** The body anchor also shows the face, at a different
+      scale/angle → the model blends two facial signals. **Fix: the face must appear in exactly one
+      anchor**; plus attach the body anchor **only for full-body framings** (F-009's `classify_shot`
+      already provides the signal).
+  - Also this session: recovered the image stack after the symlink incident (28G v23 checkpoint
+    re-downloaded, ComfyUI + venv rebuilt), Alina's anchors provisioned from real photos, live DB
+    migrated for the media tables, and the anti-pattern recorded in CLAUDE.md.
+
+- **Identity-preservation directive + multi-anchor conditioning (v0.54.0) — fixes two defects found
+  in live review of the actual generated prompt.** Docs-first (architecture.md **§4.3b** new binding
+  "Reference-conditioning contract", F-009 FR-009-11..14, F-010 FR-010-12/13, F-008 FR-008-05
+  extended; +17 TCs across the three mirror test specs), then code:
+  - **Defect 1 — prompts had NO identity binding.** Authored prompts opened with
+    `candid photo of a woman, …` — a generic subject that invites an edit model to drift off the
+    reference. Root cause: F-010's banned-identity-vocabulary guard (correctly forbidding
+    *descriptions*) left nothing binding the output to the input picture. Fix:
+    `identity.preservation_directive(n)` (F-009 owns the wording) now OPENS every prompt —
+    *"Preserve the exact face, facial features, head shape, skin tone and body proportions of the
+    person in Picture 1 … Place this same person in the following scene: …"* (two-anchor variant
+    splits face=Picture 1 / anatomy=Picture 2). It **preserves, never describes**, so it is exempt
+    from the guard.
+  - **Defect 2 — only the FIRST reference reached the model.** `TextEncodeQwenImageEditPlus` binds
+    **image1/image2/image3** → `Picture 1/2/3`, but the workflow wired only `image1` and the backend
+    staged only `references[0]` — silently discarding the full-body anchor F-009 selects, so anatomy
+    came from the model prior instead of from her. Fix: `_stage_references` stages all anchors in
+    order (capped at 3) and `_bind_extra_references` injects extra `LoadImage` nodes into the
+    positive encoder's `image2`/`image3`. F-009 gained `max_references` (default 3).
+  - Tests: `tests/test_identity_directive.py` — 18 runnable (anchor ordering/cap, directive wording
+    per anchor count, preserve-not-describe scan, guard exemption, contract round-trip, prompt opens
+    with the directive, wording owned by F-009, both anchors bound in workflow order, 3-image cap).
+    Full suite: **724 passed, 109 skipped**.
+
 - **Image pipeline INTEGRATION WIRING (branch `feature/image-integration`, v0.52.0) — the seven
   parallel-built features now run as ONE pipeline.** The per-feature protocol stubs are replaced
   with the real implementations at a single seam each:

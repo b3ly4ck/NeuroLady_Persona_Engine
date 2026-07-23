@@ -140,7 +140,52 @@ Feature: F-010 Generation Prompt Authoring
 - **FR-010-04** — For a single slot, authoring must produce a **set of several distinct
   framings/angles** (configurable N, default ≈5–6) — genuinely different shots, not near-duplicates.
 - **FR-010-05** — Prompt authoring must **not restate or override identity** — it describes scene/pose/
-  camera only; identity is supplied by F-009's reference conditioning.
+  camera only; identity is supplied by F-009's reference conditioning. The banned-identity-vocabulary
+  guard targets **descriptions** of her appearance and must **exempt** the preservation directive of
+  FR-010-12 (F-009 FR-009-13).
+- **FR-010-12** — **Every authored prompt must OPEN with F-009's identity-preservation directive
+  (CRITICAL)**, before any scene content: an explicit instruction to preserve the **exact face,
+  facial features and body proportions of the person in Picture 1/Picture 2**, then "place this same
+  person in …" + the scene (architecture.md §4.3b). Emitting a prompt whose subject is a generic
+  "a woman", unbound to the input pictures, is a defect — the model drifts off the reference.
+- **FR-010-13** — The directive's **wording is owned by F-009** and consumed here; F-010 places it,
+  does not author its identity semantics (boundary with FR-010-05).
+- **FR-010-14** — **iPhone hyperrealism block (CRITICAL).** After the directive, the prompt must be
+  a **large, fully-structured composition with labeled sections** (not a short comma list of vague
+  cues), asserting a photo **indistinguishable from a real iPhone shot** — "a continuation of the
+  actress's own camera roll". Mandatory sections, each with **concrete physical detail**:
+  - **Photo type** — amateur unedited iPhone photo straight off the camera roll;
+  - **Scene** — the F-006 slot (activity/location/time), as before;
+  - **Composition** — ONLY candid POVs: **she shot it herself** (front-camera arm's-length selfie,
+    mirror selfie with the phone visible) **or someone is photographing her** (a companion's candid
+    from across the table / a few steps away, caught mid-moment). Studio/editorial compositions are
+    forbidden;
+  - **Lighting** — realistic *imperfect* light per time of day (flat morning light, blown-out sky,
+    harsh midday shadows, mixed indoor lamps, underexposed evening, shadow noise at night) — never
+    "golden hour"/"cinematic" beauty-light vocabulary;
+  - **Skin & detail** — concrete imperfections: visible pores, minor blemishes, oily sheen on the
+    T-zone, stray hairs, slightly flushed cheeks (never appearance *descriptors* — FR-010-05 still
+    applies);
+  - **Camera signature** — handheld, slight motion softness, mild sensor noise in shadows,
+    smartphone dynamic range with slightly blown highlights, mostly-in-focus (no DSLR bokeh);
+  - **Processing** — no retouching, no beauty filter, natural color response, JPEG straight from
+    the phone.
+- **FR-010-15** — The **negative list must target the studio look**, not ask for cleanliness:
+  studio lighting/softbox, professional photoshoot, retouched/airbrushed skin, beauty filter,
+  glossy/flawless skin, cinematic color grading, editorial/magazine, posed fashion model, DSLR
+  bokeh portrait — plus the structural safety negatives (watermark/text, deformed hands,
+  cartoon/3d/cgi). Negatives that suppress *natural* phone artifacts (e.g. "blurry") are forbidden.
+- **FR-010-16** — Default generation params target the **quality budget of ≤ ~2 minutes/photo** on
+  the production GPU: 8 distilled steps at 1024² (config-tunable, NFR-010-04). *Measured
+  2026-07-20: 8 steps @1024² ≈ 184 s/photo including per-generation weight reload; resident weights
+  should bring this under the budget.*
+- **FR-010-17** — **Wardrobe is authored here, never inherited from an anchor.** The `Outfit:`
+  section is authoritative; the prompt must reinforce that the reference pictures' clothing is not
+  to be copied (pairs with F-009 FR-009-18). Observed defect: the body anchor's outfit appeared in
+  every scene, overriding the authored one.
+- **FR-010-18** — **Anti-duplication negatives.** The negative list must include duplication terms
+  (`two people`, `duplicate person`, `multiple women`, `same person twice`, `cloned figure`), since
+  multi-anchor conditioning demonstrably produced frames containing the subject twice.
 - **FR-010-06** — Authoring must honor **persona visual-style attributes** (aesthetic, palette, typical
   outfits, favorite locations), configurable per persona without code changes.
 - **FR-010-07** — **Time-of-day and location coherence:** lighting and setting in the prompt must match
@@ -154,6 +199,20 @@ Feature: F-010 Generation Prompt Authoring
 - **FR-010-11** — Shot metadata (pose/background/location/activity/time_of_day) authored here must be
   **carried into the MEDIA_ASSET `meta_json`** (via F-008) so On-Demand delivery (F-012) can pick by
   context.
+
+- **FR-010-19** — **Author a human-readable scene description (ISS-008).** Alongside the technical
+  prompt, F-010 must emit a short **`scene_description`** — one plain sentence naming **what is
+  visible in the frame** (setting + the few concrete things around her + light), written the way a
+  person would describe their own photo: *"уютная гостиная вечером, диван, торшер, телевизор с
+  сериалом"*. It is authored from the same slot/framing/lighting the prompt is built from, so it
+  costs nothing extra to produce.
+- **FR-010-20** — **In the persona's language.** The description is spoken by her later
+  (F-002 context, F-012 captions), so it must be written in `PERSONA.language`, not in the
+  English generation vocabulary (pairs with F-012 FR-012-12).
+- **FR-010-21** — **Human words, never generation jargon.** It must contain no framing/technical
+  terms (`high-angle selfie`, `Camera signature`, step counts, negatives) and must never be the raw
+  prompt — leaking the technical prompt into her voice is worse than saying nothing. It must also
+  respect the identity rule (FR-010-05): describe the *scene*, not her appearance.
 
 ### Non-functional
 

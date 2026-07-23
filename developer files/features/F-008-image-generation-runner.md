@@ -196,7 +196,10 @@ Feature: F-008 Image Generation Runner
   (architecture.md §4.3), accelerated per the chosen model (LightX2V / distilled checkpoint).
 - **FR-008-05** — The runner must **pass the persona's reference image(s) to the model as
   conditioning** for identity consistency (the *which/how* is F-009; F-008 must accept and forward
-  them).
+  them). **All supplied references must be fed, not just the first**: the serving node accepts up to
+  **3** images (`image1/image2/image3` → `Picture 1/2/3`, architecture.md §4.3b), so a job carrying
+  a face anchor **and** a full-body anchor must reach the model with **both** bound in order.
+  Silently dropping references past the first is a defect (it discards F-009's anatomy anchor).
 - **FR-008-06** — Generation **parameters** (steps, guidance/CFG, resolution, seed, negative prompt)
   must be **part of the job / config**, not hard-coded, so quality/speed can be tuned per model.
 
@@ -233,6 +236,22 @@ Feature: F-008 Image Generation Runner
   reloaded + warmed (F-002 pre-warm, §4.1).
 - **FR-008-16** — The runner must be **brought up and torn down cleanly** each night (start model,
   process batch, release GPU), leaving no leaked GPU memory that would starve the daytime chat model.
+- **FR-008-17** — **Output-validity gate (measured 2026-07-22).** A "successful" model run is NOT
+  proof of a usable image: distilled AIO checkpoints occasionally emit a **NaN latent → an
+  all-black frame** that the serving backend still reports as success. The runner must **validate
+  the produced image** and treat an invalid frame (all-black / NaN) as a **retryable generation
+  failure** (FR-008-13 path) — it must **never store a black frame as a MEDIA_ASSET**. A "done" job
+  always means a *valid, non-black* image on disk (ties NFR-008-01 realism, NFR-008-05 integrity).
+- **FR-008-18** — **Seed jitter on retry.** Because a black frame can be **seed-deterministic** (the
+  same seed re-rolls the same NaN), each retry of a failed generation must use a **different seed**
+  (offset by the attempt count), so a bad seed self-heals instead of looping to give-up. Same-seed
+  reproducibility (FR-008-06 / TC-FR-008-06-03) still holds for the *first* attempt.
+
+- **FR-008-19** — **Persist the scene description (ISS-008).** `MEDIA_ASSET.meta_json` must carry
+  F-010's `scene_description` alongside the five slot fields, so Media Delivery (F-012), the
+  conversation context (F-002 FR-002-25) and archive matching (F-021 FR-021-11) all read the same
+  human description of what the frame shows. Storing a field that merely echoes another (today's
+  `background` duplicates `location`) does not satisfy this requirement.
 
 ### Non-functional
 

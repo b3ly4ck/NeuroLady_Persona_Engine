@@ -27,6 +27,8 @@ from dataclasses import dataclass, field, replace
 from datetime import datetime
 
 from services.imagegen.contract import GenerationJob, GenParams, SlotMeta
+# FR-010-13: the directive's wording is F-009's; F-010 only places it at the prompt opening.
+from services.imagegen.identity import preservation_directive
 
 # ── life-slot input (what F-006/F-011 hands us) ──────────────────────────────────────────────────
 
@@ -117,60 +119,102 @@ class Framing:
 
 # Genuinely different angles/framings — not near-duplicates (FR-010-04, NFR-010-02). Ordered; a
 # slot's set rotates through these deterministically by seed.
+# FR-010-14 Composition: ONLY two kinds of POV exist in a real camera roll — she took the photo
+# herself, or someone she is with took it. Nothing tripod-ish, nothing editorial.
 DEFAULT_FRAMINGS: tuple[Framing, ...] = (
     Framing("selfie_closeup",
-            "close-up selfie held at arm's length, front-facing phone camera, looking into the lens",
+            "she is taking a selfie herself, phone in her outstretched hand, front camera at "
+            "arm's length, her arm visible at the edge of the frame, slightly awkward close angle",
             "close selfie"),
-    Framing("wide_establishing",
-            "wide establishing shot of the whole scene, subject small within the environment",
-            "wide shot"),
-    Framing("candid_side",
-            "candid medium shot from the side, three-quarter angle, subject unaware of the camera",
-            "candid side"),
+    Framing("companion_across",
+            "photo taken by a companion sitting across from her, casual eye-level snapshot, "
+            "she is aware of the camera and relaxed, framing slightly off-center",
+            "companion shot"),
+    Framing("candid_moment",
+            "candid photo a friend took of her mid-moment, she is not posing, caught naturally "
+            "in the middle of what she is doing, imperfect timing",
+            "candid moment"),
     Framing("mirror_fulllength",
-            "mirror selfie, phone visible in the reflection, full-length framing",
+            "mirror selfie, she is holding the phone which is visible in the reflection, "
+            "full-length framing, casual stance",
             "mirror selfie"),
-    Framing("low_angle",
-            "low-angle shot looking slightly upward, waist-up framing",
-            "low angle"),
-    Framing("high_angle",
-            "high-angle shot looking down, casual overhead snapshot",
-            "high angle"),
-    Framing("over_shoulder",
-            "over-the-shoulder shot from behind, subject facing the scene",
-            "over the shoulder"),
-    Framing("medium_portrait",
-            "medium waist-up framing, relaxed candid stance",
-            "medium waist-up"),
+    Framing("selfie_high_angle",
+            "selfie taken by herself from slightly above, front camera angled down, her arm "
+            "raised holding the phone, casual tilt to the frame",
+            "high-angle selfie"),
+    Framing("companion_steps_away",
+            "photo taken by a friend from a few steps away, ordinary standing snapshot, whole "
+            "scene visible around her, phone-camera perspective",
+            "friend snapshot"),
+    Framing("selfie_walking",
+            "walking selfie, she holds the phone in front of her while moving, slight motion in "
+            "the frame, spontaneous",
+            "walking selfie"),
+    Framing("companion_table",
+            "snapshot taken by the person she is with, from just across the table, casual and "
+            "close, everyday framing with the table edge in the shot",
+            "table snapshot"),
 )
 
 
 # ── vocabularies (config-driven — NFR-010-04) ────────────────────────────────────────────────────
 
-DEFAULT_REALISM_CUES: tuple[str, ...] = (
-    "candid smartphone photo",
-    "shot on a phone camera",
-    "natural lighting",
-    "authentic amateur snapshot",
-    "true-to-life skin texture",
-    "slight imperfect framing",
+# The iPhone hyperrealism block (FR-010-14): labeled sections with CONCRETE physical detail —
+# the difference between "rendered" and "shot". Wording avoids every banned identity substring
+# (no "face"/"eyes"/"nose"/"skin tone" — the guard is substring-based).
+REALISM_SKIN_DETAIL: str = (
+    "Skin and detail: visible skin pores, natural skin texture, a few minor skin blemishes, "
+    "slight oily sheen on the T-zone, a couple of stray hairs out of place, slightly flushed "
+    "cheeks, natural asymmetry, no makeup airbrushing"
+)
+REALISM_CAMERA_SIGNATURE: str = (
+    "Camera signature: shot on an iPhone, handheld, slight motion softness, mild sensor noise in "
+    "the shadows, smartphone dynamic range with slightly blown-out highlights, everything mostly "
+    "in focus with minimal depth-of-field falloff, tiny lens smudge glare"
+)
+REALISM_PROCESSING: str = (
+    "Processing: completely unedited, straight off the camera roll, no retouching, no beauty "
+    "filter, no smoothing, natural color response, tiny white-balance drift, ordinary JPEG "
+    "compression from the phone"
+)
+REALISM_PHOTO_TYPE: str = (
+    "Photo type: amateur unedited iPhone photo from a real person's camera roll, casual and "
+    "unposed, ordinary everyday snapshot"
 )
 
+# Kept as a tuple for config compatibility (from_dict overrides) — joined into the Realism
+# sections in author_prompt.
+DEFAULT_REALISM_CUES: tuple[str, ...] = (
+    REALISM_SKIN_DETAIL,
+    REALISM_CAMERA_SIGNATURE,
+    REALISM_PROCESSING,
+)
+
+# FR-010-15: negatives target the STUDIO look — never natural phone artifacts (no bare "blurry",
+# no "lowres": those would fight sensor noise / motion softness we explicitly ask for).
 DEFAULT_NEGATIVES: tuple[str, ...] = (
+    "studio lighting", "softbox lighting", "professional photoshoot", "editorial photo",
+    "magazine cover", "posed fashion model", "retouched skin", "airbrushed skin",
+    "beauty filter", "flawless glossy skin", "porcelain skin", "cinematic color grading",
+    "dramatic rim lighting", "DSLR bokeh portrait", "shallow depth of field",
+    "oversharpened", "HDR look",
     "watermark", "text", "logo", "signature",
     "extra limbs", "extra fingers", "deformed hands", "disfigured",
-    "lowres", "blurry artifacts", "jpeg artifacts", "oversaturated",
-    "cartoon", "anime", "3d render", "cgi", "plastic skin",
-    "duplicate", "cropped face", "out of frame",
+    "cartoon", "anime", "3d render", "cgi", "doll-like",
+    # FR-010-18: multi-anchor conditioning produced frames with the subject rendered twice.
+    "two people", "duplicate person", "multiple women", "same person twice", "cloned figure",
+    "second person in background",
 )
 
-# Time-of-day → lighting/setting phrase (FR-010-07). Unknown/empty tod → neutral daylight.
+# Time-of-day → REALISTIC imperfect light (FR-010-07 + FR-010-14): how phones actually see the
+# world, not how ad campaigns light it. No "golden hour", no "cinematic".
 DEFAULT_TIME_LIGHTING: dict[str, str] = {
-    "morning": "soft warm morning light, gentle early sunlight",
-    "afternoon": "bright natural daytime light",
-    "evening": "warm golden-hour evening light",
-    "night": "low ambient night lighting, artificial indoor and street lights, dark sky outside",
-    "": "natural daylight",
+    "morning": "flat soft morning light, slightly overexposed sky, pale colors",
+    "afternoon": "harsh direct midday light with real hard shadows, slightly squinting brightness",
+    "evening": "mixed warm indoor lamp light, slightly underexposed, uneven light across the frame",
+    "night": "night time, dim indoor lighting, visible noise in the dark areas, warm artificial"
+             " light, dark window reflections",
+    "": "plain unremarkable daylight, neutral and a little flat",
 }
 
 # Identity descriptors F-010 must NEVER emit — they would fight F-009's reference conditioning
@@ -209,7 +253,9 @@ class PromptAuthorConfig:
     """All prompt-authoring tunables — edit/replace to retune without code changes (NFR-010-04)."""
 
     shot_count: int = 6                       # default set size per slot (FR-010-04, ≈5-6)
-    subject_token: str = "candid photo of a woman"   # generic subject; identity is F-009's job
+    # Empty → the FR-010-14 "Photo type" opening (amateur unedited iPhone photo). A subject like
+    # the old "candid photo of a woman" is a DEFECT: it unbinds the output from the reference.
+    subject_token: str = ""
     realism_cues: tuple[str, ...] = DEFAULT_REALISM_CUES
     negatives: tuple[str, ...] = DEFAULT_NEGATIVES
     framings: tuple[Framing, ...] = DEFAULT_FRAMINGS
@@ -217,7 +263,8 @@ class PromptAuthorConfig:
     default_scene: LifeSlot = DEFAULT_SCENE
     default_style: PersonaStyle = field(default_factory=PersonaStyle)
     styles: dict[str, PersonaStyle] = field(default_factory=dict)   # per persona_slug
-    params: GenParams = field(default_factory=GenParams)            # template gen knobs
+    # FR-010-16: quality budget ≤ ~2 min/photo → 8 distilled steps at 1024² by default.
+    params: GenParams = field(default_factory=lambda: GenParams(steps=8))
 
     def style_for(self, persona_slug: str) -> PersonaStyle:
         return self.styles.get(persona_slug, self.default_style)
@@ -307,31 +354,121 @@ def author_prompt(
     seed: int = 0,
     shot_index: int = 0,
 ) -> str:
-    """Compose one structured, model-ready positive prompt (FR-010-02).
+    """Compose one large, fully-structured, model-ready positive prompt (FR-010-02 / FR-010-14).
 
-    Order: subject + scene/activity + location + outfit + framing/pose + time-of-day lighting + mood
-    + phone-photo realism cues + aesthetic/palette. Identity is deliberately absent (F-009). The
-    negative list is emitted separately onto `GenParams.negative` (see `author_jobs`)."""
+    Labeled sections (Photo type → Scene → Composition → Outfit → Lighting → Skin/Camera/Processing
+    realism blocks) — the "shot, not rendered" contract of §FR-010-14. Identity is deliberately
+    absent (F-009 owns it; the preservation directive is prepended in `author_jobs`). The negative
+    list is emitted separately onto `GenParams.negative`."""
     if slot.is_empty():
         slot = config.default_scene
     lighting = config.time_lighting.get(slot.time_of_day, config.time_lighting.get("", ""))
-    parts = [
-        config.subject_token,
-        _scene_activity(slot),
-        _location_phrase(slot, style, seed),
-        _pick_outfit(style, seed, shot_index),
-        framing.phrase,
-        lighting,
-        (f"{slot.mood.strip()} mood" if slot.mood.strip() else ""),
+    mood = f", {slot.mood.strip()} mood" if slot.mood.strip() else ""
+    style_tail = ", ".join(p for p in (style.aesthetic, style.palette) if p and p.strip())
+    sections = [
+        config.subject_token or REALISM_PHOTO_TYPE,
+        # FR-010-19 (ISS-008): the surrounding objects are named IN THE PROMPT, so the frame really
+        # contains them — the same list is what she is given to describe afterwards. Describing
+        # objects that were never requested would just move the confabulation into our own code.
+        f"Scene: {_scene_activity(slot)}, {_location_phrase(slot, style, seed)}"
+        f", with {scene_objects(slot.location, 'en')} visible around her"
+        f"{mood}".rstrip(", "),
+        f"Composition: {framing.phrase}",
+        # FR-010-17: wardrobe is authored HERE and is authoritative — the reference pictures'
+        # clothing must not carry over (the body anchor's outfit leaked into every scene).
+        f"Outfit: she is wearing {_pick_outfit(style, seed, shot_index)}, "
+        f"not the clothing from the reference pictures",
+        f"Lighting: {lighting}",
         *config.realism_cues,
-        style.aesthetic,
-        style.palette,
     ]
-    prompt = ", ".join(p.strip() for p in parts if p and p.strip())
+    if style_tail:
+        sections.append(f"Style: {style_tail}")
+    prompt = ". ".join(s.strip().rstrip(".") for s in sections if s and s.strip()) + "."
     # Belt-and-braces: authored text must never restate identity nor drift NSFW.
     assert_no_identity_terms(prompt)
     assert_sfw(prompt)
     return prompt
+
+
+# ── scene description (FR-010-19/20/21, ISS-008) ────────────────────────────────────────────────
+#
+# The five slot fields describe the generation REQUEST ("background: home", "pose: high-angle
+# selfie"). When she is later asked "а что у тебя на фоне?" that is useless — measured live, she
+# could say where she was but not what was behind her. This authors, from the same slot the prompt
+# is built from, ONE plain sentence naming what is visible, IN HER LANGUAGE, in words a person would
+# use. It never contains framing jargon and is never the technical prompt.
+
+# Concrete things that plausibly surround her, per location. Keyed by the location token F-010
+# already derives; "" is the safe default.
+SCENE_OBJECTS: dict[str, dict[str, str]] = {
+    "home": {
+        "ru": "диван, торшер, включённый телевизор и плед",
+        "en": "the sofa, a floor lamp, the TV on and a blanket",
+    },
+    "cafe": {
+        "ru": "деревянный столик, чашка кофе, окно и другие посетители",
+        "en": "a wooden table, a coffee cup, the window and other customers",
+    },
+    "outdoors": {
+        "ru": "деревья, дорожка парка и трава",
+        "en": "trees, the park path and grass",
+    },
+    "gym": {
+        "ru": "тренажёры, зеркальная стена и коврик",
+        "en": "the machines, the mirrored wall and a mat",
+    },
+    "office": {
+        "ru": "рабочий стол, ноутбук, кружка и жалюзи на окне",
+        "en": "a desk, a laptop, a mug and window blinds",
+    },
+    "restaurant": {
+        "ru": "накрытый стол, бокалы, свеча и приглушённый зал",
+        "en": "a laid table, glasses, a candle and the dim dining room",
+    },
+    "": {"ru": "обычная домашняя обстановка", "en": "an ordinary everyday setting"},
+}
+
+SCENE_LIGHT: dict[str, dict[str, str]] = {
+    "morning": {"ru": "утренний свет из окна", "en": "morning light from the window"},
+    "afternoon": {"ru": "яркий дневной свет", "en": "bright daylight"},
+    "evening": {"ru": "тёплый вечерний свет ламп", "en": "warm evening lamplight"},
+    "night": {"ru": "приглушённый ночной свет", "en": "dim night lighting"},
+    "": {"ru": "обычный дневной свет", "en": "ordinary daylight"},
+}
+
+_SCENE_TEMPLATE = {
+    "ru": "{activity}; вокруг {objects}; {light}",
+    "en": "{activity}; around her {objects}; {light}",
+}
+
+
+def scene_objects(location: str, language: str) -> str:
+    """The concrete things surrounding her at `location`, in `language` (FR-010-19).
+
+    Shared by the prompt (so they are rendered) and the description (so she can name them) — the
+    single source that keeps what she says and what he sees the same thing."""
+    lang = language if language in ("ru", "en") else "en"
+    key = (location or "").strip().lower()
+    return SCENE_OBJECTS.get(key, SCENE_OBJECTS[""])[lang]
+
+
+def author_scene_description(slot: LifeSlot, language: str = "en",
+                             config: PromptAuthorConfig = DEFAULT_CONFIG) -> str:
+    """One human sentence describing what is visible in the frame (FR-010-19/20/21).
+
+    Authored from the same slot as the prompt, so it costs nothing extra. Written in the persona's
+    language because SHE speaks it later (F-002 context, F-012 captions). Contains no framing or
+    technical vocabulary, and never describes her appearance (FR-010-05 still applies).
+    """
+    lang = language if language in ("ru", "en") else "en"
+    if slot is None or slot.is_empty():
+        slot = config.default_scene
+    activity = (slot.activity or "").strip() or (
+        "обычный момент дня" if lang == "ru" else "an ordinary moment")
+    loc_key = (slot.location or "").strip().lower()
+    objects = scene_objects(loc_key, lang)
+    light = SCENE_LIGHT.get((slot.time_of_day or "").strip().lower(), SCENE_LIGHT[""])[lang]
+    return _SCENE_TEMPLATE[lang].format(activity=activity, objects=objects, light=light)
 
 
 def _select_framings(config: PromptAuthorConfig, count: int, seed: int) -> list[Framing]:
@@ -368,6 +505,9 @@ def author_jobs(
     style: PersonaStyle | None = None,
     config: PromptAuthorConfig = DEFAULT_CONFIG,
     *,
+    # keyword-only: the positional slots are a published API (F-011 and the tests call them
+    # positionally), so a new parameter must never shift `style` out from under a caller.
+    language: str = "en",
     count: int | None = None,
     base_seed: int = 0,
     job_key_prefix: str | None = None,
@@ -386,12 +526,21 @@ def author_jobs(
     prefix = job_key_prefix or f"{persona_slug}:{slot_signature(persona_slug, slot, base_seed)}"
     negative = ", ".join(config.negatives)
 
+    # FR-010-12: every prompt OPENS with F-009's identity-preservation directive, bound to the
+    # anchors actually supplied (Picture 1 = face, Picture 2 = body). Without it the model reads a
+    # generic subject and drifts off the reference (architecture.md §4.3b).
+    directive = preservation_directive(len(references or []))
+
     jobs: list[GenerationJob] = []
     for i, framing in enumerate(_select_framings(config, n, base_seed)):
         seed_i = base_seed + i
-        prompt = author_prompt(slot, style, framing, config, seed=base_seed, shot_index=i)
+        scene = author_prompt(slot, style, framing, config, seed=base_seed, shot_index=i)
+        prompt = f"{directive}{scene}" if directive else scene
         params = replace(config.params, seed=seed_i, negative=negative)
         meta = SlotMeta(
+            # FR-010-19 (ISS-008): what is VISIBLE in the frame, in her language — the answer to
+            # "а что у тебя на фоне?". The other fields describe the generation request.
+            scene_description=author_scene_description(slot, language, config),
             pose=framing.pose,
             background=_location_phrase(slot, style, base_seed) or slot.activity,
             location=slot.location or _location_phrase(slot, style, base_seed),

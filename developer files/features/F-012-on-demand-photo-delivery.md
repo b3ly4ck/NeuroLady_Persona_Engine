@@ -122,6 +122,18 @@ Feature: F-012 On-Demand Photo Delivery
     Given the conversation matches her current activity and pacing allows
     When she shares proactively
     Then a fitting unsent asset is sent with an in-voice caption
+
+  Scenario: UC-012-09 A delivered photo hands its metadata back to the caller
+    Given a photo is selected and delivered
+    When the delivery result is returned
+    Then it carries the asset's background/location/activity/pose/time-of-day metadata
+    And the caller can feed that scene into the conversation context (F-002 FR-002-25)
+
+  Scenario: UC-012-10 Recent sends are retrievable, bounded and per-user
+    Given a user has received several photos over the last days
+    When the recent-sends lookup runs for that (user, persona)
+    Then it returns the newest first, capped by the configured count and recency window
+    And another user's sends never appear
 ```
 
 ---
@@ -150,8 +162,55 @@ Feature: F-012 On-Demand Photo Delivery
   activity and pacing allows, she may send a fitting unsent asset unprompted.
 - **FR-012-10** — Delivery must go through the **Media Delivery path** (architecture.md §3.6) and record
   the send (which user, which asset, when) for history and audit.
+- **FR-012-12** — **The caption must be written in the persona's own language (ISS-003).** The
+  caption request must pass `PERSONA.language` (and honour her comm settings) so the caption matches
+  the language she speaks in the conversation. An English caption under a Russian-speaking persona's
+  photo is a defect — it breaks the single-voice illusion as hard as an out-of-character line.
+- **FR-012-13** — **A delivered photo must be paced like a human send (ISS-004).** "Instant" in
+  NFR-012-01 means **no generation on the hot path**, NOT instant to the user. Before the photo
+  lands the user must see the `upload_photo` action for a **believable, bounded delay** (a real
+  person takes a moment to pick/take and send a photo), reusing the F-003 pacing budget
+  (F-003 FR-003-42). Caption and photo arrive as one message, after that delay.
+- **FR-012-14** — **Delivery must return the delivered asset's metadata to the caller (ISS-006).**
+  A delivered result must carry the asset's stored **slot metadata** — `background`, `location`,
+  `activity`, `pose`, `time_of_day` (from `MEDIA_ASSET.meta_json`, F-008 FR-008-08) — alongside the
+  asset id and the caption, so the turn pipeline can feed **what she just showed him** back into the
+  conversation context (F-002 FR-002-25). This is the architecture's Media Delivery contract
+  (architecture.md §2 `POST /media/request`, §3.6, §4.2: "returns the media **plus its metadata** …
+  so the Orchestrator/LLM can sext consistently — 'knows what she sent'"). Non-delivered outcomes
+  (deflected / paced / routed-to-gate) carry **no** metadata. Only the five slot fields are exposed —
+  generation provenance (`prompt`, `seed`) must never leave the delivery boundary.
+- **FR-012-15** — **F-012 must expose a bounded recent-sends lookup (ISS-006).** Given a
+  `(user, persona)` pair, it must return the **most recent sends first**, each with its asset id,
+  `sent_at`, and the same five slot fields, limited to a configurable **count** and **recency
+  window**. It reads only `MediaSend` joined to `MEDIA_ASSET` — one cheap query, strictly per-user
+  (NFR-012-06), no generation and no LLM call (FR-012-04).
 - **FR-012-11** — Selection/pacing/caption behavior must be **config-driven** (match weighting,
-  per-stage frequency caps) without code changes.
+  per-stage frequency caps, **recent-sends count/window for context**) without code changes.
+
+- **FR-012-16** — **Serve the scene description (ISS-008).** The delivered asset's metadata and the
+  `recent_sends` descriptors must include `scene_description` when present, so the "what she
+  recently sent" block (F-002 FR-002-25) tells her **what is visible in the photo**, not merely
+  where she was. When it is absent (older assets), the existing slot fields remain the fallback.
+
+- **FR-012-17** — **The request classifier must cover the persona's language (ISS-009).** The
+  intimate/ambiguous keyword lists are the *fallback* safety net behind F-020's model signal, so
+  they must recognise intimate phrasing in **every language a deployed persona speaks** — including
+  the common inflected forms of that language, not one canonical spelling. An English-only list on a
+  Russian deployment is a classifier that never fires. Terms are data, extendable without a code
+  change.
+
+- **FR-012-18** — **A send is recorded only for a photo that can actually be delivered (ISS-010).**
+  Before `MediaSend` is written, delivery must verify the selected asset's **file exists**; a frame
+  whose file is gone is skipped in favour of the next-best candidate, and only a genuinely empty
+  pool degrades in voice. Recording a send for an undelivered photo burns the frame forever via
+  per-user no-repeat (ties F-021 NFR-021-01).
+
+- **FR-012-19** — **"Never the same asset twice" is a schema constraint, not a code check
+  (ISS-011).** `MEDIA_SEND` must carry a uniqueness constraint on `(user_id, asset_id)`. A
+  read-then-write check cannot express the invariant: two concurrent turns both read "unsent" before
+  either writes. The losing insert must be **refused and handled** — a requested photo degrades in
+  voice, an unprompted share simply does not happen — without poisoning the turn's transaction.
 
 ### Non-functional
 
@@ -168,6 +227,10 @@ Feature: F-012 On-Demand Photo Delivery
 - **NFR-012-07** — **Config-driven:** weighting and caps tunable without code change.
 - **NFR-012-08** — **Safety:** SFW path never serves intimate assets; the classifier defaults to the
   SFW/gate-routed side on ambiguity.
+- **NFR-012-09** — **Metadata is served, not just stored (ISS-006):** every code path that delivers a
+  photo must hand its slot metadata back to the caller, and the recent-sends lookup must stay
+  **bounded** (count + window) so consuming it can never grow the prompt without limit. A stored
+  `meta_json` that nothing reads is a defect, not a feature.
 
 ---
 
@@ -175,5 +238,6 @@ Feature: F-012 On-Demand Photo Delivery
 Tested in `developer files/tests/F-012-on-demand-photo-delivery.md`: context-matched selection,
 per-user no-repeat, slot-preference fallback, hot-path-free delivery, in-voice caption request,
 relationship pacing/gating, intimate routing, graceful exhaustion, proactive-share pacing, send
-recording, and config-driven weighting are all automatable with fakes; **real context-fit quality**
-is human-judged (marked). 5 US / 8 UC / 11 FR / 8 NFR.
+recording, returned asset metadata (ISS-006), the bounded recent-sends lookup, and config-driven
+weighting are all automatable with fakes; **real context-fit quality** is human-judged (marked).
+5 US / 8 UC / 15 FR / 9 NFR.

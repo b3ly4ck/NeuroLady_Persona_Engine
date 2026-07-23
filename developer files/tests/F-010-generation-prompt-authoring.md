@@ -79,6 +79,62 @@
 | TC-FR-010-11-01 | integration | happy | Given authored shot meta (pose/bg/location/activity/time); When stored via F-008; Then meta_json holds them | pass |
 | TC-FR-010-11-02 | unit | mapping | Given the meta fields; When On-Demand (F-012) queries; Then they are selectable | pass |
 
+### FR-010-12 — Prompt OPENS with the identity-preservation directive (CRITICAL)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-12-01 | unit | happy | Given an authored prompt; When inspected; Then it BEGINS with the preservation directive, before any scene text | implemented |
+| TC-FR-010-12-02 | unit | negative | Given any authored prompt; When inspected; Then it never opens with a generic unbound subject ("candid photo of a woman") | implemented |
+| TC-FR-010-12-03 | unit | happy | Given two anchors supplied; When authored; Then the directive references both pictures and the scene follows after it | implemented |
+
+### FR-010-13 — Directive wording owned by F-009, only placed here
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-13-01 | unit | mapping | Given F-010 source; When inspected; Then the directive text comes from F-009, not re-authored locally | implemented |
+| TC-FR-010-13-02 | unit | consistency | Given F-009's directive changes; When prompts are authored; Then the new wording flows through unchanged | implemented |
+
+### FR-010-14 — iPhone hyperrealism block (CRITICAL)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-14-01 | unit | happy | Given an authored prompt; When inspected; Then it carries the labeled sections (Photo type/Scene/Composition/Lighting/Skin/Camera/Processing) with concrete imperfections | implemented |
+| TC-FR-010-14-02 | unit | negative | Given every framing; When inspected; Then each is a selfie-POV or companion-POV, no studio/editorial composition | implemented |
+| TC-FR-010-14-03 | unit | negative | Given the lighting map; When inspected; Then no beauty-light vocabulary (golden hour / cinematic), imperfect-light terms present | implemented |
+| TC-FR-010-14-04 | manual | happy | Given regenerated frames; When reviewed; Then they read as real iPhone shots (user acceptance) | out-of-band (GPU/manual) |
+
+### FR-010-15 — Anti-studio negative list
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-15-01 | unit | happy | Given the negative list; When inspected; Then studio/retouch/beauty-filter/bokeh terms are present | implemented |
+| TC-FR-010-15-02 | unit | negative | Given the negative list; When inspected; Then nothing suppresses natural phone artifacts (no bare "blurry") | implemented |
+
+### FR-010-16 — Quality budget params (8 steps / 1024²)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-16-01 | unit | happy | Given default config; When jobs are authored; Then params are steps=8, 1024x1024 (config-tunable) | implemented |
+
+### FR-010-17 — Wardrobe authored here, not inherited from anchors
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-17-01 | unit | happy | Given an authored prompt; When inspected; Then it states the reference clothing must not be copied | implemented |
+| TC-FR-010-17-02 | benchmark | negative | Given regenerated frames; When reviewed; Then the outfit follows the prompt, not the body anchor | out-of-band (GPU/detector) |
+
+### FR-010-18 — Anti-duplication negatives
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-010-18-01 | unit | happy | Given the negative list; When inspected; Then duplication terms are present | implemented |
+
+### FR-010-19/20/21 — Human-readable scene description (ISS-008)
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-010-19-01 | unit | happy | A description is emitted per shot | Given a slot; When jobs are authored; Then each carries a non-empty `scene_description` | implemented |
+| TC-FR-010-19-02 | unit | happy | It names visible things, not just the place | Given an evening-at-home slot; When authored; Then the text mentions concrete objects/light, not only the location token | implemented |
+| TC-FR-010-19-03 | unit | boundary | Empty slot degrades safely | Given no life state; When authored; Then a default description is produced, never empty/None | implemented |
+| TC-FR-010-19-05 | unit | integration | Prompt and description agree | Given a slot; When authored; Then every object named in the description was also requested in the prompt's Scene section (one source — otherwise the description invents furniture) | implemented |
+| TC-FR-010-20-01 | unit | happy | Written in the persona's language (ru) | Given a ru persona; When authored; Then the description is Russian | implemented |
+| TC-FR-010-20-02 | unit | mapping | English persona gets English | Given an en persona; When authored; Then the description is English | implemented |
+| TC-FR-010-21-01 | unit | negative | No generation jargon | Given any description; When scanned; Then no framing/technical terms ("high-angle selfie", "Camera signature", "negative") appear | implemented |
+| TC-FR-010-21-02 | unit | negative | Never the raw prompt | Given the description; When compared; Then it is not the technical prompt nor a substring of it | implemented |
+| TC-FR-010-21-03 | unit | negative | No appearance descriptors | Given the description; When scanned by the identity guard; Then it describes the scene, never her looks (FR-010-05) | implemented |
+
 ---
 
 ## Non-functional requirements

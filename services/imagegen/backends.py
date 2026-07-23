@@ -31,6 +31,29 @@ class GenerationFailed(RuntimeError):
     """One generation attempt failed (model error / OOM / timeout) — retryable (FR-008-13)."""
 
 
+def is_black_frame(data: bytes, threshold: float = 2.0) -> bool:
+    """True if the PNG bytes decode to an (essentially) black image — the NaN-latent signature.
+
+    Pillow-based; if Pillow/decoding is unavailable, returns False (never block a real frame on a
+    missing dep). `threshold` is the mean-luminance cutoff (0–255).
+    """
+    try:
+        import io
+
+        from PIL import Image
+
+        img = Image.open(io.BytesIO(data)).convert("L")
+        extrema = img.getextrema()  # (min, max) — a NaN frame is a uniform 0
+        if extrema[1] == 0:
+            return True
+        # cheap mean over a downscaled copy
+        small = img.resize((32, 32))
+        px = list(small.getdata())
+        return (sum(px) / len(px)) < threshold
+    except Exception:  # pragma: no cover - never reject a frame because of a decode hiccup
+        return False
+
+
 class ModelBackend(Protocol):
     """The whole surface a model must implement — generate bytes, then release the GPU."""
 
@@ -95,6 +118,11 @@ class ComfyUIBackend:
         data = new[-1].read_bytes()
         for p in new:  # the archive copy is written by store.py; the staging dir stays clean
             p.unlink(missing_ok=True)
+        # Distilled AIO checkpoints occasionally emit a NaN latent → an all-black frame that ComfyUI
+        # still reports as "success". Treat it as a retryable failure so the batch never stores a
+        # black photo (measured 2026-07-22; the runner retries with a jittered seed).
+        if is_black_frame(data):
+            raise GenerationFailed("all-black output frame (NaN latent) — retrying")
         return data
 
     # -- internals --
@@ -104,14 +132,14 @@ class ComfyUIBackend:
 
     def _build_workflow(self, job: GenerationJob) -> dict:
         wf = copy.deepcopy(json.loads(Path(self._s.workflow_path).read_text()))
-        reference_name = self._stage_reference(job)
+        staged = self._stage_references(job)
         for node in wf.values():
             inp = node.get("inputs", {})
             for key in list(inp):
                 if inp[key] == "__PROMPT__":
                     inp[key] = job.prompt
                 elif inp[key] == "__REFERENCE__":
-                    inp[key] = reference_name
+                    inp[key] = staged[0]
                 elif inp[key] == "__STEPS__":
                     inp[key] = job.params.steps
                 elif inp[key] == "__SEED__":
@@ -122,23 +150,58 @@ class ComfyUIBackend:
                 inp["width"], inp["height"] = job.params.width, job.params.height
             if node.get("class_type") == "CheckpointLoaderSimple":
                 inp["ckpt_name"] = self._s.checkpoint_name
+        # extra anchors → image2/image3 ("Picture 2/3"), after the base graph is filled in
+        self._bind_extra_references(wf, staged)
         return wf
 
-    def _stage_reference(self, job: GenerationJob) -> str:
-        """Copy the job's reference into ComfyUI's input dir; return the staged name (F-009 refs
-        come as media-library paths). Missing reference → defined error (TC-FR-008-05-02)."""
+    # The serving node binds image1..image3 → "Picture 1..3" (architecture.md §4.3b).
+    MAX_REFERENCES = 3
+
+    def _stage_references(self, job: GenerationJob) -> list[str]:
+        """Copy ALL of the job's references into ComfyUI's input dir, in order; return staged names.
+
+        FR-008-05: every supplied anchor must reach the model, not just the first — dropping the
+        full-body anchor would throw away the anatomy signal F-009 selected. Capped at the node's
+        3-image limit. Missing/absent reference → defined error (TC-FR-008-05-02)."""
         if not job.references:
             raise GenerationFailed("job has no reference image (text-to-image path not enabled)")
-        src = Path(job.references[0])
-        if not src.is_absolute():
-            src = Path(self._s.media_root).parent / src
-        if not src.exists():
-            raise GenerationFailed(f"reference image not found: {src}")
         comfy_input = Path(self._s.comfy_dir) / "input"
         comfy_input.mkdir(exist_ok=True)
-        staged = f"job_{job.job_key}{src.suffix or '.png'}"
-        shutil.copy2(src, comfy_input / staged)
+        staged: list[str] = []
+        for idx, ref in enumerate(job.references[: self.MAX_REFERENCES]):
+            src = Path(ref)
+            if not src.is_absolute():
+                src = Path(self._s.media_root).parent / src
+            if not src.exists():
+                raise GenerationFailed(f"reference image not found: {src}")
+            name = f"job_{job.job_key}_{idx}{src.suffix or '.png'}"
+            shutil.copy2(src, comfy_input / name)
+            staged.append(name)
         return staged
+
+    def _bind_extra_references(self, wf: dict, staged: list[str]) -> None:
+        """Wire references 2..N into the encoder's image2/image3 slots (FR-008-05).
+
+        The workflow JSON ships one LoadImage (image1) as the base; extra anchors get their own
+        LoadImage nodes wired into the *positive* TextEncodeQwenImageEditPlus, which the node then
+        presents to the model as "Picture 2"/"Picture 3" — matching the directive F-010 emits.
+        """
+        if len(staged) < 2:
+            return
+        positive = next(
+            (nid for nid, n in wf.items()
+             if n.get("class_type") == "TextEncodeQwenImageEditPlus"
+             and n.get("inputs", {}).get("image1") is not None),
+            None,
+        )
+        if positive is None:
+            return
+        next_id = max((int(k) for k in wf if k.isdigit()), default=0)
+        for slot, name in enumerate(staged[1:self.MAX_REFERENCES], start=2):
+            next_id += 1
+            loader = str(next_id)
+            wf[loader] = {"class_type": "LoadImage", "inputs": {"image": name}}
+            wf[positive]["inputs"][f"image{slot}"] = [loader, 0]
 
     def _submit(self, wf: dict) -> str:
         req = urllib.request.Request(

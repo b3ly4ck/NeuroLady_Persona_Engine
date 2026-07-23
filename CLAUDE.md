@@ -33,6 +33,25 @@ directly and backfill the docs (or skip them). Concretely, for any such request:
 The documentation is the source of truth; code follows the docs, not the other way around. This
 applies even to small tweaks — write the intended behavior down first, then make the code match it.
 
+**Docs-first is the DEFAULT, never a question.** Do not ask "docs-first or straight to code?" and do
+not wait to be told — the user should never have to repeat it. On any reported defect or change
+request, start by writing: the `ISS-<NNN>` entry (for defects), the `FR-`/`NFR-` requirements in the
+owning feature file, the `TC-` cases in its mirror test spec, and any `architecture.md` change —
+**then** implement. If a request seems too small for docs, it still gets the requirement it was
+missing: every defect found so far in this project traced to a **missing requirement**, not a typo.
+
+**Tests must EXECUTE the path, never grep the source.** A test that asserts on implementation *text*
+(e.g. "does the handler mention `foo` before `bar`") stays green while that code path raises on its
+first line — this exact mistake shipped a bug where every photo request died with a `TypeError` and
+the user got **silence**, with 766 tests passing. Behavioural tests invoke the real function/handler
+with fakes and assert on **observable outcomes**. A structural check may only ever be *additive* to
+an executing test, never a substitute. Likewise, if a defect class cannot occur in the test
+environment (e.g. lock contention under an in-memory DB with no concurrency), build the environment
+that can reproduce it rather than assuming it is covered.
+
+**Silence is always a defect.** No path — including an unhandled exception — may leave the user with
+zero outbound messages. Any turn either answers or degrades in character.
+
 ## Git workflow: commit and push after every change
 
 After **any** change made to the project (new file, code edit, config change, etc.),
@@ -176,6 +195,37 @@ explicitly asks for it elsewhere.
 
 ## Preferences and feedback
 
+- [2026-07-23] **Stop asking whether to do docs-first — just do it.** The user had to repeat
+  "docs-first" on nearly every request despite the rule already existing. Docs-first is the default
+  for *every* defect and change: ISS entry → requirements → TC cases → architecture → then code.
+  Also reinforced from this session's real failures: (a) **tests must execute the path, not grep the
+  source** — a source-grepping regression test stayed green while every photo request died with a
+  `TypeError` and the user got silence; (b) **silence is always a defect** — every inbound message
+  must end in a visible reply; (c) when a defect class cannot occur in the test environment (no
+  concurrency under in-memory SQLite), build an environment that reproduces it instead of assuming
+  coverage.
+- [2026-07-17] **NEVER commit worktree/machine-local plumbing — it destroyed a 28G model and cost
+  the developer real time/money.** Root cause chain (all must be avoided): (1) to share heavy
+  gitignored assets (`image/models` = 28G v23 checkpoint, `image/comfyui`, `image/.venv`) across
+  isolated worktrees, symlinks were created **inside the repo pointing back at the same repo's real
+  asset paths** — a self-referencing landmine at the exact path of real data; (2) a subdirectory
+  `.gitignore` used **repo-root-relative patterns** (`image/.venv` inside `image/.gitignore`), which
+  are actually directory-relative → matched nothing → the symlinks were **not** ignored; (3) a broad
+  `git add`/`git add -A` staged those symlinks as tracked files (mode 120000) and they were committed
+  and pushed; (4) when that branch merged into another working tree, git **materialized the tracked
+  self-symlink over the real directory, deleting the 28G checkpoint + ComfyUI + venv**. Binding rules
+  going forward: **(a)** never create a symlink whose target is a path inside the same git repo,
+  above all at a path holding real or gitignored heavy data — share cross-worktree assets via
+  **absolute paths injected through config/env** (this project already has `IMAGE_COMFY_DIR`,
+  `IMAGE_COMFY_PYTHON`, `IMAGE_MEDIA_ROOT`, `CHAT_MODEL_PATH` for exactly this), not via in-repo
+  symlinks; **(b)** never `git add -A` or `git add <dir>` blindly — always `git status --short`
+  first and stage **explicit files**, especially in a worktree; **(c)** `.gitignore` patterns are
+  relative to the file's own directory — verify with `git check-ignore -v <path>` before trusting
+  them; **(d)** treat gitignored heavy assets (models/checkpoints/venvs) as sacred: confirm
+  `git ls-files -s | awk '$1==120000'` is empty before pushing, and after any merge/checkout that
+  touches the tree, verify the heavy assets still exist (a symlink where a real dir belongs = STOP);
+  **(e)** before any `rm -rf` "recovery", inspect what is actually there first — a wrong assumption
+  compounds the loss.
 - [2026-07-10] User wants CLAUDE.md and all future .md files in this project written in English, not Russian.
 - [2026-07-10] User wants PROJECT_STATUS.md and VERSION kept inside a `developer files/`
   subfolder, but CLAUDE.md must stay at the repo root (not moved into that subfolder), so

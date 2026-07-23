@@ -230,7 +230,7 @@ def test_fr_008_05_02_missing_reference_defined_behavior(tmp_path):
     # no crash, no silent text-to-image (config would have to enable that path explicitly).
     backend = ComfyUIBackend(make_settings(tmp_path, backend="comfyui-aio"))
     with pytest.raises(GenerationFailed, match="no reference"):
-        backend._stage_reference(make_job("no-ref", references=[]))
+        backend._stage_references(make_job("no-ref", references=[]))
 
 
 # ═══ FR-008-06 — params from job/config, not hard-coded ═════════════════════════════════════════

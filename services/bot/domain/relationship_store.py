@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.domain.relationship import (
@@ -45,8 +46,29 @@ async def get_or_create(
             closeness=cfg.baseline_closeness, trust=cfg.baseline_trust,
             attraction=cfg.baseline_attraction, stage="Stranger", summary="",
         )
-        db.add(rel)
-        await db.flush()
+        try:
+            # ISS-007: two overlapping messages from the same user both saw "no relationship" and
+            # both inserted → UNIQUE violation killed the turn (and, before the dispatcher safety
+            # net, the user got silence). A SAVEPOINT keeps the rest of the turn's writes intact —
+            # a full rollback here would also discard the inbound message we just persisted.
+            async with db.begin_nested():
+                db.add(rel)
+                await db.flush()
+        except IntegrityError:
+            existing = (
+                await db.execute(
+                    select(Relationship).where(
+                        Relationship.user_id == user_id,
+                        Relationship.persona_id == persona_id)
+                )
+            ).scalar_one_or_none()
+            # If the winner has not committed yet, fall back to a transient baseline: the turn must
+            # answer regardless, and the next turn will read the persisted row (FR-002-28).
+            rel = existing if existing is not None else Relationship(
+                user_id=user_id, persona_id=persona_id,
+                closeness=cfg.baseline_closeness, trust=cfg.baseline_trust,
+                attraction=cfg.baseline_attraction, stage="Stranger", summary="",
+            )
     return rel
 
 

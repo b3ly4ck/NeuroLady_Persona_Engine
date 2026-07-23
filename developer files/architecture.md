@@ -318,7 +318,8 @@ Owns a single user turn end-to-end:
 1. Receive normalized user message.
 2. Load session + relationship state (Memory).
 3. **Assemble the LLM context** (this is critical, see §4.2): persona system prompt + relevant
-   biography layers + retrieved user facts + relationship summary + **the recent raw message
+   biography layers + retrieved user facts + relationship summary + **the descriptors of the media
+   she recently sent this user** (bounded — see §4.2) + **the recent raw message
    history (several last messages of the live conversation)**.
 4. Call the **chat LLM** (§4.1).
 5. Post-process (safety/consistency checks, media-intent detection) and apply the **human-likeness
@@ -327,8 +328,32 @@ Owns a single user turn end-to-end:
    deliberate human **pacing** (a "typing…" indicator + a bounded, length-scaled delay *added on top
    of* the fast compute) and, when long, **split into several shorter messages**. Styling/pacing
    never change the reply's content or correctness (that stays owned by this loop / §4.2).
+   **The conversational intimacy gate (`F-019`) runs here, on the generated reply**, *before*
+   styling/pacing — see §3.2a.
 6. If the user asked for media, call **Media Delivery**; otherwise return text.
 7. Persist the exchange (Memory) and update relationship signals.
+
+#### 3.2a Intimacy gating is enforced on OUTPUT, not requested in the prompt
+
+**Prompt steering is not enforcement.** F-005 injects a per-stage behaviour line (`STAGE_BEHAVIOR`,
+e.g. *"you just met him — reserved, not intimate"*), but it is a *request* to a deliberately
+**uncensored** chat model (§4.1) and is routinely overridden — measured live: a brand-new `Stranger`
+user could steer the conversation explicit from the first message, while the very same content was
+correctly refused as a *photo*. A soft prompt line and a hard media gate cannot be the same policy.
+
+Therefore intimacy is gated **on the produced reply**:
+
+- the **policy core is F-014's** (hard safety scan, stage→level mapping, per-persona ceiling clamp,
+  `GATE_DECISION` audit) — **one policy, two channels**: media (`F-014`/`F-015`) and text (`F-019`);
+- the text gate is a **local deterministic check** (no extra LLM round-trip, so no latency cost);
+- a withheld reply is replaced by an **in-character deflection**, never a system/assistant message —
+  the illusion (§1) must survive a refusal;
+- ordinary warmth, flirting within the unlocked stage and emotional intimacy pass through
+  **unmodified** — over-blocking is treated as a defect, not as safety.
+
+`STAGE_BEHAVIOR` remains as *proactive steering* (it makes the model produce the right thing most of
+the time); F-019 is the *enforcement* that makes the guarantee real.
+
 - Handles media-intent detection ("send me a pic") and routes to Media Delivery with the intimate
   flag + entitlement check.
 
@@ -437,7 +462,9 @@ flowchart LR
   gym time, office selfie during work, etc.).
 - Enforces **adult verification** for intimate content.
 - Returns the media **plus its metadata** (pose, background, location, intimacy level) so the
-  Orchestrator/LLM can **sext consistently** ("knows what she sent").
+  Orchestrator/LLM can **sext consistently** ("knows what she sent"). The Orchestrator **must consume
+  it**: recently-sent descriptors are a bounded block of the assembled context (§4.2, F-002
+  FR-002-25/26) — a returned-but-unread metadata payload is the ISS-006 defect.
 - Never generates on the hot path — only reads the day's archive from object storage.
 
 ### 3.7 Subscription/Billing Service (deferred — not in current scope)
@@ -543,6 +570,19 @@ For each reply the Orchestrator builds the prompt from:
   where she's heading, consistent with her goals and biography (F-006).
 - **User memory:** categorized structured facts + semantically retrieved past statements.
 - **Relationship state** summary.
+- **Recently-sent media descriptors (what she showed him):** for the last few photos/videos delivered
+  to *this* user (§3.6, F-012), their stored `MEDIA_ASSET.meta_json` slot fields — **background,
+  location, activity, pose, time-of-day** — plus roughly when each was sent. This closes the Media
+  Delivery contract of §2/§3.6 ("returns the media **plus its metadata** so the Orchestrator/LLM can
+  sext consistently — *knows what she sent*") on the **consuming** side: the metadata is only useful
+  if it re-enters the prompt. The block is **bounded and config-driven** (a max count within a recency
+  window, default 3 sends / 48 h) and built from one cheap `MEDIA_SEND ⋈ MEDIA_ASSET` query — no LLM
+  call, nothing generated on the hot path; generation provenance (`prompt`, `seed`) is never included.
+  > **ISS-006:** this block was specified in §2/§3.6/§5.1 and implemented only on the *write* side —
+  > sends were recorded and metadata stored, but the Orchestrator read none of it, so when the user
+  > asked what was behind her in a photo she had just sent, she invented a scene out of her biography
+  > (the only scene material the prompt carried). **Storing metadata without consuming it is the
+  > defect**; F-002 FR-002-25/26 + F-012 FR-012-14/15 now require both halves.
 - **Recent raw conversation history — several of the latest messages passed through as-is** (a
   hard requirement: the live dialogue must be in-context, not only summarized).
 - Assembled to fit the model's context budget with a clear priority order; the biography block is
@@ -551,9 +591,18 @@ For each reply the Orchestrator builds the prompt from:
   biography/persona-time/future-self layers here are added by the F-006 biography extension.)*
 
 ### 4.3 Image & video generation (night batch)
-All media models are **self-hosted** and accelerated with **LightX2V** — an inference framework
-(not a model) that provides 4-step distilled checkpoints + FP8/INT8 quantization for the image and
-video models below, so the night batch fits the sleep window on our own GPU.
+All media models are **self-hosted**, run as **4-step distilled checkpoints on a low step count**,
+and are quantized to fit our GPU, so the night batch fits the sleep window.
+
+> **Acceleration stack — LightX2V dropped on our GPU (decision, 2026-07; see §4.3a).** The docs
+> originally named **LightX2V** as the accelerator. Its headline value is **FP8** distilled
+> checkpoints — and **FP8 is unavailable on our Turing (sm_75) Quadro RTX 8000** (FP8 needs Ada/
+> Hopper, sm_89+). This was proven twice: the **image A/B** disqualified the LightX2V-native
+> candidate (bf16 wouldn't fit; only sequential CPU-offload ran → 424 s/img, blank frames) and the
+> winner is the **Phr00t AIO served on headless ComfyUI** (4 steps, ~117 s/img). So the actual
+> acceleration pattern is **"community 4-step distilled + GGUF/INT8 quantization, served through
+> ComfyUI"** — GGUF has **no FP8 dependency**, so it runs on Turing. The **4-step distill LoRAs
+> themselves (e.g. Wan2.2-Lightning)** are still used — only the LightX2V *framework* is dropped.
 
 - **Images — `Qwen-Image-Edit-Rapid-AIO` v23 (NSFW variant):** an All-In-One, distilled +
   FP8-quantized build on top of **Qwen-Image-Edit-2511** (accelerator + VAE + CLIP merged into one
@@ -563,15 +612,100 @@ video models below, so the night batch fits the sleep window on our own GPU.
   edits). Guided by the day plan + current time (the external LLM writes the generation prompt for
   her current activity/setting, §3.5), it produces **SFW** shots (gym selfie, office photo, …) and
   **intimate** shots → the day's archive.
-- **Video — two separate models for two jobs:**
-  - **Intimate / no-speech video → `Wan 2.2` (distilled).** Best-in-class body anatomy and motion
-    realism; image+text → video, self-hosted night batch, accelerated by LightX2V's Wan 4-step
-    distillation. Ideally one per planned activity/location, at varying intimacy.
-  - **Talking-head video circles → `HunyuanVideo-Avatar`.** Drives the intro note and the
-    **proactive daily story circles** from a persona image + voice/script. Chosen for its
-    audio-driven emotion (Audio Emotion Module) and face-aware audio adapter, giving lifelike
-    expression on the "circle" — and it shares the Hunyuan family with our video stack. This
-    **replaces the earlier external Hedra candidate**, so all video is now self-hosted.
+
+#### 4.3b Reference-conditioning contract (identity preservation) — binding
+
+How the reference images and the text prompt must be combined. Both halves are mandatory: dropping
+either one is what makes a generated photo stop being *her*.
+
+- **Multi-reference input — up to 3 images.** The serving node
+  (`TextEncodeQwenImageEditPlus`, ComfyUI) accepts **`image1`, `image2`, `image3`** and injects them
+  ahead of the text as `Picture 1: <img> Picture 2: <img> …`. The runner must therefore feed **all
+  the anchors the identity policy selects (F-009), not just the first**:
+  - **Picture 1 = the face anchor** (`PERSONA.face_ref`) — carries facial identity;
+  - **Picture 2 = the full-body anchor** (`PERSONA.fullbody_ref`) — carries body proportions/
+    anatomy, which a face crop cannot convey;
+  - a third slot stays free for future use (e.g. an outfit/scene anchor).
+- **The prompt MUST open with an explicit identity-preservation directive** that binds the output to
+  those pictures **before** any scene content — e.g. *"Preserve the exact face, facial features and
+  body proportions of the person in Picture 1 and Picture 2. Place this same person in …"*. A prompt
+  that merely says "a woman" invites the model to drift off the reference and is a defect.
+- **Preserve ≠ describe.** The prompt still must not *describe* her appearance (hair colour, eye
+  colour, body type) — the pictures carry that. The directive asserts *preservation of the person in
+  the input pictures*; the scene text then varies setting/pose/outfit/lighting only. The
+  banned-identity-vocabulary guard (F-010) applies to descriptions and must explicitly **exempt** the
+  preservation directive.
+- Owner split: **F-009** owns *which* anchors and the directive's content (it is an identity
+  guarantee); **F-010** emits the directive as the prompt's opening; **F-008** feeds every supplied
+  reference into the model's image slots.
+
+##### Anchor framing constraints — measured on the serving node (2026-07-20)
+
+Three defects observed on the first live runs traced back to *how the anchors are framed*, not to
+the prompt. These are binding constraints on reference authoring:
+
+- **The vision encoder sees each anchor at only ~384×384 total pixels.**
+  `TextEncodeQwenImageEditPlus` rescales every input to `total = 384*384` before the VL encoder
+  (the VAE `reference_latents` path uses `1024*1024`). Therefore **whatever fraction of the anchor
+  the subject occupies is the fraction of identity signal the model receives.** A face filling ~35 %
+  of the frame (the rest being a raised arm, hair and wall) leaves ≈230×230 px of face — enough for
+  "same type of person", not for *the same person*. **Face anchors must be tightly cropped to the
+  head**, which roughly triples the effective face area.
+- **A body anchor that is a complete styled photo leaks its whole look.** When Picture 2 is a full
+  figure with pose, outfit and a visible head, the model copies the outfit into every scene
+  (overriding the prompt's outfit) and sometimes renders the person **twice** in one frame (once as
+  the subject, once as a second figure wearing the anchor's clothes). **Body anchors must be
+  head-cropped torso/figure crops** carrying anatomy only.
+- **Two visible faces at different scales muddy identity.** If the body anchor also shows the face,
+  the model receives two competing facial signals (different size, angle, lighting) and blends them.
+  The face must appear in **exactly one** anchor.
+
+##### Output validity — distilled checkpoints occasionally emit NaN (measured 2026-07-22)
+
+The **Rapid-AIO v23** distilled checkpoint intermittently produces a **NaN latent → an all-black
+frame**, and the serving backend still reports the run as **success** (the failure is numerical, not
+a workflow error). It is **not** caused by the prompt, the anchors, the seed range, the reference
+count, or the step count — the same inputs re-run fine (verified by a 4-case A/B). It is transient
+checkpoint flakiness. Two engine rules follow (owned by **F-008**, FR-008-17/18):
+
+- the runner must **validate the produced image** and treat an all-black/NaN frame as a *retryable*
+  failure — **never store a black frame** as a MEDIA_ASSET ("model success" ≠ "usable image");
+- because a black frame can be **seed-deterministic**, each **retry uses a jittered seed** so a bad
+  seed self-heals rather than looping to give-up. This is the general posture for any self-hosted
+  distilled media model, image or video.
+- **Video — three content streams, one shared engine philosophy (fast, low-res, Telegram-sized):**
+  - **(1) Intimate clips → `Wan 2.2` i2v (feature `F-016`), silent.** Best-in-class body anatomy
+    and motion realism; **image+text → video** (conditioned on the persona's reference/keyframe
+    still, F-009/F-015). Served on **headless ComfyUI + City96 ComfyUI-GGUF** (the same runtime as
+    images), with the **Wan2.2-Lightning 4-step distill LoRA** and **GGUF-quantized** weights so it
+    runs on our Turing GPU without FP8 (§4.3a). **Speed is the product requirement, not
+    resolution:** a short clip (~4 s at 16 fps ≈ 65 frames) at ≈480×480 / 512×384, generated in
+    **≈90 s on the RTX 8000**. Model tier (**TI2V-5B** dense vs **A14B** MoE) and GGUF quant are
+    **chosen by the `video/` bench** against that budget, same as the image A/B.
+    **Content tier v1 (product decision, 2026-07): solo, hand-focused intimate acts only** — the
+    clip catalog starts narrow and widens deliberately (F-016 FR-016-14); the F-014 hard gate
+    applies unconditionally.
+  - **(2) Daily-life ("civilian") SFW clips → the same `Wan 2.2` runner (feature `F-017`),
+    silent.** Short slice-of-life clips of her day (gym set, coffee pour, walk, cooking) generated
+    from the **Life Engine's day plan slots** (F-006) + an SFW archive photo/reference as the
+    conditioning still — the video sibling of the F-011 daily photo batch. Same engine, same job
+    API, same speed budget; only the prompt tier and gating differ (SFW — no F-014 clearance
+    needed, but the same identity conditioning, F-009).
+  - **(3) Talking-head voice circles (feature `F-018`) — persona image + voice → Telegram video
+    note.** The intro note + **proactive daily story circles** ("говорящая голова" telling her
+    day's story, engaging the user back into chat). **Voice: ElevenLabs** (per-persona
+    `voice_profile_ref`, external API — no GPU). **Animation: audio-driven avatar model, chosen by
+    bench between two candidates:** **(A) `Wan2.2-S2V` (speech-to-video)** — audio-driven
+    talking-human generation in the SAME Wan family/runtime we already serve (GGUF workflows
+    exist), which would avoid installing a second model family and a fourth GPU slot; **(B)
+    `HunyuanVideo-Avatar`** — audio-driven emotion (Audio Emotion Module) + face-aware audio
+    adapter, the fallback if S2V lip-sync quality disappoints. (Replaces the earlier external
+    Hedra candidate — all video stays self-hosted.) **Circles are per-persona-per-day, shared
+    across all users** (not per-user personalization), so one nightly render serves everyone.
+  - **Night GPU rotation (§6.1):** the sleep window is now shared by **image batch → Wan clip
+    batch (intimate + daily-life) → circle batch** — the scheduler owns the rotation order and
+    ensures each runner loads once, drains its queue, and releases VRAM before the next
+    (chat reloads before the awake window).
 - Each generated asset is stored **with metadata** (slot, location, pose, background, intimacy
   level) so Media Delivery can serve context-appropriate media and support sexting continuity.
 - Prompts, model choices, and pipelines live **inside the respective module's directory**
@@ -655,6 +789,14 @@ video models below, so the night batch fits the sleep window on our own GPU.
   life/reflection). No prompt is hard-coded in service logic.
 - Models are pluggable behind service interfaces so any model can be researched/swapped without
   touching callers.
+- **Media archive retention (F-021)** is configuration, not code: `IMAGE_RETENTION_ENABLED`,
+  `IMAGE_RETENTION_CAP` (per-persona frame count), `IMAGE_RETENTION_FLOOR`,
+  `IMAGE_RETENTION_GRACE_HOURS`, plus per-persona cap overrides; selection's freshness knobs
+  (`freshness_bonus`, `freshness_decay_per_day`) live on `MediaDeliveryConfig`. **Storage is cheap
+  and generation is not**, so the archive expires by **count, never by age**, and every protection
+  (floor → grace → context-recency) outranks the cap: when they collide, the cap is left exceeded
+  and reported rather than destroying un-consumed GPU work. An invalid config degrades to the
+  documented defaults — a broken value must never mean "delete everything".
 
 ---
 
@@ -1002,6 +1144,12 @@ separation of text/image/video and per-module prompt storage.)
 - **CD:** on merge to `master` — build & publish images, run migrations, deploy to the server;
   media/GPU workers deployed with the day/night scheduler config.
 - **Environments:** local (compose, single GPU) → staging → production.
+- **Media retention metrics (F-021 FR-021-12):** every retention run reports, per persona,
+  `kept` / `evicted` / `evicted_sent` / `evicted_unsent` / `archive_size` / `cap_exceeded`, plus any
+  repairs and per-victim failures — and it reports them for **no-op runs too** ("nothing happened"
+  must be an explicit signal). `evicted_unsent > 0` is the operator's cue to raise the cap: it counts
+  frames that were paid for and never seen. Retention can never be the cause of the empty-archive
+  alert, since the floor guarantees at least one surviving frame under every configuration.
 - **Observability:** logs/metrics/traces per service; GPU/queue depth dashboards for the night
   batch; **chat-LLM readiness/warm-up metrics** (load time, warm-vs-cold reply latency);
   **memory-store consistency metrics** (SQL↔vector drift: orphan/missing embeddings, embedding

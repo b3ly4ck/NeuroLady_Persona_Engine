@@ -21,14 +21,23 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from services.bot.chat_client import ChatClient
 from services.bot.domain.gate_adapter import F014GateAdapter
-from services.bot.domain.humanize import chunk_reply, pacing_delays, parse_settings
-from services.bot.domain.media_delivery import looks_like_photo_request
+from services.bot.domain.humanize import (
+    chunk_reply,
+    media_pacing_delay,
+    pacing_delays,
+    parse_settings,
+)
 from services.bot.domain.sessions import get_active_session
 from services.bot.domain.users import get_or_create_user
 from services.bot.domain.vector_store import MemoryIndex
 from services.bot.handlers.media import serve_photo_request
 from services.bot.models import Persona
-from services.bot.orchestrator import handle_turn, update_relationship, update_user_memory
+from services.bot.orchestrator import (
+    handle_turn,
+    take_media_intent,
+    update_relationship,
+    update_user_memory,
+)
 
 log = logging.getLogger(__name__)
 router = Router(name="conversation")
@@ -38,6 +47,13 @@ _sleep = asyncio.sleep
 
 # Neutral, localized nudge when the user types before choosing a persona (brand voice, not persona
 # voice — no active session means there is no persona to speak in character yet).
+# F-020 D6 — video is recognized but not yet generated (F-016/F-017/F-018 are specced, not wired).
+# She answers in character rather than letting the ask fall through silently.
+_VIDEO_NOT_YET = {
+    "ru": "видео пока не умею снимать 🙈 но могу прислать фото, если хочешь",
+    "en": "I can't do videos yet 🙈 but I can send you a photo if you want",
+}
+
 _PICK_FIRST = {
     "ru": "выбери девушку через «💋 Choose Lady», и начнём 💬",
     "en": "pick a lady with “💋 Choose Lady” and we’ll get started 💬",
@@ -67,24 +83,37 @@ async def on_text(
         await message.answer(_PICK_FIRST.get(user.locale, _PICK_FIRST["en"]))
         return
 
-    # F-012/F-014 integration: a photo request short-circuits into media delivery (lookup+send,
-    # no generation — F-008 NFR-008-04); everything else stays a normal conversation turn.
-    if looks_like_photo_request(message.text):
-        await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
-        await serve_photo_request(
-            message, db,
-            user_id=user.id, persona=persona, request_text=message.text, context={},
-            chat_client=chat_client, gate=F014GateAdapter(db),
-        )
-        await db.commit()
-        return
-
     # Immediate acknowledgement — the chat never looks frozen while we generate (FR-002-24).
     await bot.send_chat_action(message.chat.id, ChatAction.TYPING)
 
     gen_started = time.monotonic()
     reply = await handle_turn(db, session, persona, message.text, chat_client, memory_index)
     gen_elapsed = time.monotonic() - gen_started
+
+    # F-020 (FR-020-01): the MODEL decided whether he asked for media — the verdict rides the turn
+    # we just made (no extra round-trip). A keyword pre-filter used to gate this and silently missed
+    # natural phrasing (ISS-005); it now only speaks when no signal came back at all (FR-020-08).
+    intent = take_media_intent(session.id)
+    if intent.requested:
+        settings = parse_settings(persona)
+        if intent.is_video:
+            # D6: recognized, not silently swallowed — video generation isn't wired yet (F-016+).
+            await _sleep(media_pacing_delay(settings))
+            await message.answer(_VIDEO_NOT_YET.get(persona.language, _VIDEO_NOT_YET["en"]))
+            await db.commit()
+            return
+        # FR-003-42 / FR-012-13 (ISS-004): a photo must not land instantly — show the upload action
+        # for a bounded, length-independent beat first, the way a person takes a moment to send one.
+        await bot.send_chat_action(message.chat.id, ChatAction.UPLOAD_PHOTO)
+        await _sleep(media_pacing_delay(settings))
+        await serve_photo_request(
+            message, db,
+            user_id=user.id, persona=persona, request_text=message.text, context={},
+            chat_client=chat_client, gate=F014GateAdapter(db),
+            force_gate=intent.routes_to_gate,
+        )
+        await db.commit()
+        return
 
     # F-003 human-likeness delivery: split a long reply into a few short messages and pace each
     # with a "typing…" indicator + a deliberate, capped pause, so it reads like a real person

@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
+from PIL import Image
+
 import services.imagegen.backends as backends_mod
 from services.bot.domain import media_delivery as md
 from services.bot.domain.media_delivery import (
@@ -92,6 +94,14 @@ async def set_stage(db, user: User, persona: Persona, stage: str) -> Relationshi
     return rel
 
 
+@pytest.fixture(autouse=True)
+def _media_root(tmp_path, monkeypatch):
+    """Point delivery at a temp library. Delivery now verifies the file exists before recording a
+    send (F-021 NFR-021-01), so a planted asset must have one — as F-008 always leaves it."""
+    monkeypatch.setattr(md, "DEFAULT_MEDIA_ROOT", tmp_path)
+    return tmp_path
+
+
 async def plant_asset(
     db,
     persona: Persona,
@@ -115,6 +125,9 @@ async def plant_asset(
     )
     db.add(asset)
     await db.flush()
+    target = md.DEFAULT_MEDIA_ROOT / slug / "photos" / f"{med_id}.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (16, 16), (30, 30, 40)).save(target)
     return asset
 
 
@@ -400,9 +413,10 @@ async def test_TC_FR_012_09_02_no_share_when_pacing_blocks(db):
     u = await make_user(db, 1018)
     await set_stage(db, u, p, "Friend")  # Friend cap = 4
     await plant_asset(db, p, 1, meta={"time_of_day": "evening", "activity": "at home", "location": "home"})
-    # Fill the window to the cap so pacing blocks.
+    # Fill the window to the cap so pacing blocks. Distinct assets: one asset can only ever be
+    # sent to a user once (NFR-012-02, now enforced by uq_media_send_user_asset).
     for i in range(4):
-        db.add(MediaSend(user_id=u.id, asset_id=f"MED-{persona_slug(p.name)}-00001", sent_at=NOW))
+        db.add(MediaSend(user_id=u.id, asset_id=f"MED-{persona_slug(p.name)}-9000{i}", sent_at=NOW))
     await db.flush()
     result = await maybe_proactive_share(
         db, user_id=u.id, persona=p, context=ctx(), caption_client=FakeCaptionClient(), now=NOW
