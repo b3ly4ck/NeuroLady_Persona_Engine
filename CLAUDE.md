@@ -224,6 +224,18 @@ explicitly asks for it elsewhere.
   them; **(d)** treat gitignored heavy assets (models/checkpoints/venvs) as sacred: confirm
   `git ls-files -s | awk '$1==120000'` is empty before pushing, and after any merge/checkout that
   touches the tree, verify the heavy assets still exist (a symlink where a real dir belongs = STOP);
+  **(d2) [2026-07-23 — this rule was not enough, and the 30G checkpoint was destroyed a SECOND
+  time]** `git ls-files` describes the ref you are **currently on**, which is worthless as a
+  pre-checkout safety check — the danger lives in the ref you are about to switch **to**. Before any
+  `git checkout <ref>` / `git merge <ref>` / `git pull`, inspect the **target** tree:
+  `git ls-tree -r <ref> | awk '$1==120000'` **and** `git ls-tree -r origin/<ref> | awk '$1==120000'`.
+  Root cause the second time: a **stale local `master`** that predated the v0.53.1 symlink-removal
+  commit. `origin/master` was clean, the feature branch was clean, and checking out the local
+  `master` still materialized three self-referencing symlinks over `image/{models,comfyui,.venv}` —
+  git deletes **gitignored** directories without complaint to make room for a tracked symlink.
+  Always `git fetch` and confirm the local ref is not behind before checking it out; a local branch
+  that is behind is not "old", it is a **restored snapshot of a deleted landmine**. And never trust
+  a green check performed on the wrong ref — state explicitly which ref was inspected;
   **(e)** before any `rm -rf` "recovery", inspect what is actually there first — a wrong assumption
   compounds the loss.
 - [2026-07-10] User wants CLAUDE.md and all future .md files in this project written in English, not Russian.
