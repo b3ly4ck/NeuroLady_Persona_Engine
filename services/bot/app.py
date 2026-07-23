@@ -9,6 +9,7 @@ import asyncio
 import logging
 
 from aiogram import Bot, Dispatcher
+from aiogram.types import ErrorEvent
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.exceptions import TelegramNetworkError
@@ -55,6 +56,29 @@ async def _run_polling_with_reconnect(dp: Dispatcher, bot: Bot) -> None:
             await asyncio.sleep(delay)
 
 
+# FR-002-28 (ISS-007) — the last-resort safety net. `DbSessionMiddleware` rolls back and RE-RAISES,
+# and `on_text` has no except: before this, ANY exception in a turn produced **zero** outbound
+# messages, which is indistinguishable from the bot being dead. Silence is never acceptable.
+_SORRY = {
+    "ru": "ой, что-то я подвисла… напиши ещё раз?",
+    "en": "ugh, I glitched for a second… say that again?",
+}
+
+
+async def _on_error(event: ErrorEvent) -> bool:
+    """Answer in character whatever the turn failed to answer (FR-002-28)."""
+    log.exception("unhandled error in a turn: %s", event.exception)
+    message = getattr(event.update, "message", None)
+    if message is None:
+        return True
+    lang = getattr(getattr(message, "from_user", None), "language_code", "") or "en"
+    try:
+        await message.answer(_SORRY.get(lang[:2], _SORRY["en"]))
+    except Exception:  # pragma: no cover - Telegram itself is down; nothing more we can do
+        log.exception("could not deliver the fallback line")
+    return True
+
+
 def build_dispatcher(
     sessionmaker: async_sessionmaker[AsyncSession],
     chat_client: ChatClient | None = None,
@@ -67,6 +91,7 @@ def build_dispatcher(
     dp.message.middleware(db_mw)
     dp.callback_query.middleware(db_mw)
     dp.include_router(router)
+    dp.errors.register(_on_error)  # FR-002-28: never leave a message unanswered
     return dp
 
 

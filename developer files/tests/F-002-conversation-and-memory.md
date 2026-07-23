@@ -223,6 +223,27 @@
 | TC-FR-002-26-02 | integration | boundary | Recency window respected | Given the only send is older than the window; When context is assembled; Then the block is omitted | automated |
 | TC-FR-002-26-03 | unit | mapping | Single system message preserved | Given the block is added; When the LLM messages are built; Then there is still exactly one leading system message and ≥1 user message | automated |
 
+### FR-002-27 — No write transaction across an LLM call (ISS-007)
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-27-01 | integration | happy | Turn commits before generating | Given a turn; When the chat client is called; Then no uncommitted write is pending at that moment | implemented |
+| TC-FR-002-27-02 | integration | happy | Post-turn work commits around its calls | Given fact extraction and reflection; When each LLM call runs; Then the session holds no open write transaction | implemented |
+| TC-FR-002-27-03 | concurrency | error | A slow turn does not starve the next message | Given a deliberately slow fake client and a second message arriving mid-turn; When both are processed; Then both persist and neither raises `database is locked` | implemented |
+
+### FR-002-28 — Every inbound message ends in a visible reply (CRITICAL, ISS-007)
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-28-01 | integration | error | Handler exception still answers | Given the turn raises an arbitrary exception; When the message is handled; Then the user receives an in-character line, not silence | implemented |
+| TC-FR-002-28-02 | integration | error | DB failure still answers | Given the DB raises OperationalError mid-turn; When handled; Then a visible reply is still sent | implemented |
+| TC-FR-002-28-03 | integration | regression | **ISS-007 pinned** | Given the exact live scenario (a photo request arriving during a slow previous turn); When processed; Then the user gets a photo or an in-character line — never zero sends | implemented |
+| TC-FR-002-28-04 | unit | negative | The safety net is registered | Given the dispatcher; When built; Then a last-resort error handler exists (additive to the executing tests above) | implemented |
+
+### FR-002-29 — Post-turn work cannot break the turn
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-FR-002-29-01 | integration | error | Fact extraction failure is swallowed | Given extraction raises; When the turn runs; Then the reply was still delivered and no exception escapes | implemented |
+| TC-FR-002-29-02 | integration | error | Reflection failure is swallowed | Given the reflection raises; When the turn runs; Then the reply stands and the error is logged | implemented |
+
 ---
 
 ## Non-functional requirements
@@ -341,6 +362,12 @@
 | TC-NFR-002-13-03 | manual | consistency | Live check: she describes the real photo | Given a live chat where she just sent a photo; When the user asks what is behind her; Then her answer matches the photo (not her biography) | skip (live model) |
 
 ---
+
+### NFR-002-14 — Concurrency: overlapping messages
+| Test ID | Level | Case | Description | Given / When / Then | Status |
+|---------|-------|------|-------------|---------------------|--------|
+| TC-NFR-002-14-01 | concurrency | boundary | Two messages overlap | Given two messages from one user processed concurrently; When both complete; Then both are persisted and both produce a reply | implemented |
+| TC-NFR-002-14-02 | concurrency | error | Lock contention degrades, never silences | Given contention on the write lock; When it occurs; Then the turn still answers (retry or fallback line) | planned |
 
 ## User-story acceptance (manual real-device E2E)
 

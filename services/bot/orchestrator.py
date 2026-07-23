@@ -304,6 +304,11 @@ async def handle_turn(
     except ChatRunnerUnavailable as exc:
         log.warning("chat runner unavailable, using in-character fallback: %s", exc)
         raw = _fallback_text(persona)
+    except Exception:  # noqa: BLE001 — FR-002-28: ANY model failure degrades in character.
+        # Previously only ChatRunnerUnavailable was caught, so e.g. a client bug propagated out of
+        # the turn and (before the dispatcher safety net) left the user with silence.
+        log.exception("chat generation failed, using in-character fallback")
+        raw = _fallback_text(persona)
 
     # F-020: pull the media-intent verdict out of the reply and STRIP the signal before anything
     # user-visible or persisted (FR-020-04) — the token must never reach the chat or the history.
@@ -337,6 +342,10 @@ async def update_user_memory(
     """
     try:
         existing = [(f.id, f.category, f.content) for f in await memory_domain.active_facts(db, user_id)]
+        # FR-002-27 (ISS-007): release the write lock BEFORE the ~20-30 s extraction call. Holding a
+        # SQLite write transaction across it starved the user's next message into
+        # `database is locked` — and, with no safety net, into total silence.
+        await db.commit()
         ops = await extract_memory_ops(chat_client, user_text, existing)
         if not ops.add and not ops.supersede:
             return []
@@ -363,6 +372,8 @@ async def update_relationship(
     try:
         rel = await rel_store.get_or_create(db, session.user_id, session.persona_id, cfg)
         history = await msg_domain.load_recent(db, session.id)
+        # FR-002-27 (ISS-007): same rule — no open write transaction across the reflection call.
+        await db.commit()
         conversation = "\n".join(
             f"{'he' if m.sender == MessageSender.user else 'you'}: {m.text}" for m in history)
         now = _now()

@@ -40,6 +40,7 @@ architecture).
 | ISS-003 | Photo caption arrives in English for a Russian-speaking persona | [ ] | 2026-07-23 | — |
 | ISS-004 | Photo is delivered instantly — no human pacing, unlike text | [ ] | 2026-07-23 | — |
 | ISS-005 | Keyword photo-intent detection misses natural phrasing | [ ] | 2026-07-23 | — |
+| ISS-007 | A slow turn locks SQLite → the next message dies and the user gets total silence | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-006 | She invents a background for a photo she just sent — the sent photo is not in her context | [x] | 2026-07-23 | 2026-07-23 |
 
 ---
@@ -227,5 +228,46 @@ architecture).
   - **Code:** `DeliveryResult.meta` + `recent_sends()` + `RecentSend` in
     `services/bot/domain/media_delivery.py`; `_recent_media_block()` fused into the single system
     message in `services/bot/orchestrator.py`.
+- **Resolved:** 2026-07-23
+
+---
+
+## ISS-007 — A slow turn locks SQLite → the next message dies and the user gets total silence
+
+- **Status:** [ ] fixed
+- **Reported:** 2026-07-23
+- **Report (as stated):** The user asked "что ты сейчас делаешь и где находишься?", she answered,
+  then he sent **"скинь фото"** — and **nothing came back at all**. Not a photo, not a deflection,
+  not an error: silence.
+- **Observed vs expected:** zero outbound messages vs *every* inbound message ends with something
+  the user can see (the same invariant F-020's spec makes non-negotiable for media requests).
+- **Root cause (two independent defects, both required to produce the silence):**
+  1. **Write lock held across slow LLM calls.** After the reply is delivered the turn still runs
+     `update_user_memory` (F-004 fact extraction) and `update_relationship` (F-005 reflection) —
+     **two more LLM calls, ~20-30 s each** — inside the *same* request-scoped session. The previous
+     turn measured **78 s** end-to-end. SQLite's `busy_timeout` is 30 s (`db.py`), so the next
+     message's `INSERT INTO messages` waited, exceeded it, and raised
+     `OperationalError: database is locked`. The orchestrator already commits before the *main*
+     generation for exactly this reason — the post-turn work was never given the same treatment,
+     and the code itself notes "production would move both to a background queue".
+  2. **No safety net turns that exception into silence.** `DbSessionMiddleware` rolls back and
+     **re-raises**; `on_text` has no `except`, and no aiogram error handler is registered. Any
+     exception anywhere in a turn therefore produces **no user-visible message at all**.
+- **Why tests didn't catch it (the gap):** the suite runs each test on its own in-memory SQLite with
+  **no concurrency**, so a lock contention path simply cannot occur; and **no requirement ever stated
+  that a turn must always answer** — the silence invariant existed only inside F-020's media tests,
+  not as a global rule for `on_text`. A crash-equals-silence design looks identical to a working one
+  until two messages overlap in production.
+- **Resolution:** F-002 **FR-002-27** (no write transaction across an LLM call — both post-turn
+  calls now commit first), **FR-002-28** (a dispatcher-level last-resort handler answers in
+  character whatever the turn failed to answer; the turn also degrades on ANY model exception, not
+  just `ChatRunnerUnavailable`), **FR-002-29** (post-turn failures swallowed), **NFR-002-14**
+  (concurrency). Writing the concurrency test surfaced a **third** defect it then fixed: two
+  overlapping messages both created the relationship row → `UNIQUE constraint failed` killed the
+  turn; `relationship_store.get_or_create` now inserts inside a SAVEPOINT and re-reads the winner's
+  row (a full rollback would have discarded the inbound message too).
+  Tests: `tests/test_iss_007_lock_and_silence.py` (11), incl. a **file-backed SQLite concurrency
+  test** — the in-memory fixture cannot reproduce lock contention, which is exactly why the suite
+  never caught this.
 - **Resolved:** 2026-07-23
 

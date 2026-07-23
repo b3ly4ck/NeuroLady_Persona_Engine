@@ -315,6 +315,19 @@ Feature: F-002 Conversation & Memory
   generation, nothing on the hot path beyond that lookup — and, like every other context block, it is
   concatenated into the **single leading system message** (the chat template allows only one).
 
+- **FR-002-27** — **Never hold a write transaction across an LLM call (ISS-007).** Every model call
+  (the reply generation *and* the post-turn work — F-004 fact extraction, F-005 reflection) must run
+  with **no open write transaction**: commit before the call, reopen only to persist the result. A
+  30-60 s generation holding a SQLite write lock starves the *next* message, which then fails with
+  `database is locked`.
+- **FR-002-28** — **Every inbound message ends in a visible reply (CRITICAL, ISS-007).** No code path
+  — including an unhandled exception anywhere in the turn — may leave the user with **zero outbound
+  messages**. A last-resort handler must catch what the turn did not and send an in-character line.
+  Silence is never an acceptable outcome; it is indistinguishable from the bot being dead.
+- **FR-002-29** — **Post-turn work must not be able to break the turn.** Fact extraction and the
+  relationship reflection run after delivery; a failure in either must be logged and swallowed —
+  the user has already been answered and must never be affected retroactively.
+
 ### Non-functional
 
 - **NFR-002-01** — Under normal conditions **with a warm (already-loaded) model**, the typing
