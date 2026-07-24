@@ -52,6 +52,39 @@ that can reproduce it rather than assuming it is covered.
 **Silence is always a defect.** No path — including an unhandled exception — may leave the user with
 zero outbound messages. Any turn either answers or degrades in character.
 
+## ⛔ NEVER destroy the heavy assets (READ THIS BEFORE ANY git checkout/merge/pull)
+
+The image checkpoint (`image/models`, ~30G), its venv (`image/.venv`, ~6G) and `image/comfyui` have
+been **destroyed twice** by the same mechanism, costing the developer real money and hours each time.
+This is the single most expensive class of mistake in this project. The mechanism, exactly:
+
+> A **tracked symlink** (git mode `120000`) that points back inside the repo gets committed. Later a
+> `git checkout` / `git merge` / `git pull` **materializes that symlink over the real directory**, and
+> git **silently deletes the gitignored contents** underneath to make room. The second time, the
+> trigger was a **stale local `master`** that predated the symlink-removal commit — `origin/master`
+> was clean, but checking out the behind-by-N local ref restored the landmine.
+
+**Enforced guards are installed (run `sh scripts/install-git-hooks.sh` once per clone/worktree):**
+- **`pre-commit`** refuses to commit *any* symlink → the landmine can never enter a ref again. This is
+  the root-cause fix. Escape hatch only for a genuinely intended link: `ALLOW_SYMLINK_COMMIT=1`.
+- **`post-checkout` / `post-merge`** abort loudly if a guarded heavy path became a symlink or vanished.
+- **`scripts/safe-checkout.sh <ref>`** inspects the **TARGET** tree for symlinks *before* switching —
+  use it (or `git ls-tree -r <ref> | awk '$1==120000'`) instead of a bare `git checkout`.
+
+**Non-negotiable rules (the guards enforce these, but you follow them regardless):**
+1. **Never commit a symlink.** Never create a symlink whose target is inside this repo. Share heavy
+   assets via absolute paths in config/env (`IMAGE_COMFY_DIR`, `IMAGE_COMFY_PYTHON`,
+   `IMAGE_MEDIA_ROOT`, `CHAT_MODEL_PATH`) — never via in-repo links.
+2. **Before any `checkout`/`merge`/`pull`: `git fetch` first, then inspect the ref you are moving TO**
+   (`git ls-tree -r <target> | awk '$1==120000'`), not the ref you are on. A `git ls-files` check on
+   HEAD is worthless — it describes where you are, not where you are going. A local branch that is
+   **behind** its remote is not "old", it is a **restored snapshot of a deleted landmine**.
+3. **After any tree-touching git op, verify the heavy dirs are still real directories** (the guards do
+   this automatically). A symlink where a real dir belongs = STOP, do not run another git command.
+4. **Never `git add -A` / `git add <dir>` blindly** — `git status --short` first, stage explicit files.
+5. **Before any `rm -rf`/`reset --hard`/`clean -fdx` recovery, look at what is actually on disk first.**
+6. When you report a safety check as green, **state which ref you inspected.**
+
 ## Git workflow: commit and push after every change
 
 After **any** change made to the project (new file, code edit, config change, etc.),

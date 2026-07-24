@@ -1,0 +1,41 @@
+#!/usr/bin/env sh
+# ── ROOT-CAUSE GUARD for the heavy-asset clobber (see CLAUDE.md "NEVER destroy heavy assets") ──
+#
+# The 30G image checkpoint, the 6G venv and ComfyUI were destroyed TWICE by the same mechanism: a
+# tracked symlink (git mode 120000) pointing back inside the repo got committed, and a later
+# checkout/merge materialized that symlink over the real directory — git deletes the gitignored
+# contents to make room. The landmine is ALWAYS a *committed symlink*. If one can never be
+# committed, no ref can ever carry it, and no checkout can ever detonate it.
+#
+# This hook refuses to commit any staged symlink. This project has NO legitimate tracked symlinks;
+# heavy assets are shared via absolute paths in config/env (IMAGE_COMFY_DIR, IMAGE_COMFY_PYTHON,
+# IMAGE_MEDIA_ROOT, CHAT_MODEL_PATH), never via in-repo links. Escape hatch, only if you are truly
+# adding a legitimate symlink and have re-read the rule:  ALLOW_SYMLINK_COMMIT=1 git commit ...
+set -eu
+
+# mode 120000 == symlink. Look only at what is being added/changed in THIS commit.
+# `--raw` line: ":<oldmode> <newmode> <oldsha> <newsha> <status>\t<path>". Field-split on TAB so
+# $2 is the path; split $1 on spaces so a[2] is the NEW mode. POSIX awk only — the hook runs under
+# /bin/sh (dash), where `read -d ''` is not available (that bug let a symlink through once).
+staged_symlinks=$(git diff --cached --raw --diff-filter=ACM \
+  | awk -F'\t' '{ split($1, a, " "); if (a[2] == "120000") print $2 }')
+
+if [ -n "${staged_symlinks:-}" ]; then
+  if [ "${ALLOW_SYMLINK_COMMIT:-0}" = "1" ]; then
+    echo "pre-commit: ALLOW_SYMLINK_COMMIT=1 — permitting staged symlink(s) THIS ONCE:" >&2
+    printf '  %s\n' $staged_symlinks >&2
+  else
+    echo "============================================================================" >&2
+    echo " BLOCKED: refusing to commit a SYMLINK. This is the exact landmine that" >&2
+    echo " destroyed the 30G image checkpoint + venv + ComfyUI, twice." >&2
+    echo "" >&2
+    echo " Staged symlink(s):" >&2
+    printf '   %s\n' $staged_symlinks >&2
+    echo "" >&2
+    echo " Heavy assets are shared via absolute paths in config/env, never in-repo links." >&2
+    echo " If this symlink is genuinely intended: ALLOW_SYMLINK_COMMIT=1 git commit ..." >&2
+    echo "============================================================================" >&2
+    exit 1
+  fi
+fi
+exit 0

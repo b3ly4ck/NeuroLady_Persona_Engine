@@ -1,0 +1,3 @@
+#!/usr/bin/env sh
+# Runs after `git merge`/`git pull` — catches a symlink materialized by a merge.
+exec "$(git rev-parse --show-toplevel)/scripts/git-hooks/heavy-asset-check.sh"
