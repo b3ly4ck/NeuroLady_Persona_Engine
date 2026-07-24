@@ -235,11 +235,48 @@ async def on_noop(cb: CallbackQuery) -> None:
     await cb.answer()  # the counter button
 
 
+async def _resume_opener(db: AsyncSession, persona: Persona, chat_client) -> str:
+    """The LLM-composed resume opener, grounded in the last exchange (FR-013-13, ISS-012).
+
+    Falls back to the static `views.resume_opener` on any failure — the resume moment is never
+    silent (FR-013-14 / ISS-001). `chat_client` is None only in unit tests that don't inject it;
+    then the static line is used, exactly as before.
+    """
+    fallback = views.resume_opener(persona)
+    if chat_client is None:
+        return fallback
+    recent = None
+    try:
+        recent = await _recent_for_persona(db, persona)
+    except Exception:  # a history read must never sink the greeting — fall back in-voice
+        recent = None
+    return await presentation.compose_opener(
+        persona, kind="resume", chat_client=chat_client, fallback=fallback, recent=recent,
+    )
+
+
+async def _recent_for_persona(db: AsyncSession, persona: Persona, limit: int = 8):
+    """The last few messages of the persona's active session — the 'where we left off' thread."""
+    from sqlalchemy import select as _select
+
+    from services.bot.domain.messages import load_recent
+    from services.bot.models import Session
+
+    sess = await db.scalar(
+        _select(Session)
+        .where(Session.persona_id == persona.id, Session.state == "active")
+        .order_by(Session.id.desc())
+    )
+    if sess is None:
+        return None
+    return await load_recent(db, sess.id, limit)
+
+
 # ── Start Chat -> S3 ───────────────────────────────────────────────────────────────────────────
 
 
 @router.callback_query(F.data.startswith("startchat:"))
-async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
+async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot, chat_client=None) -> None:
     """FR-001-10/11/12/14/17/21 — create/reuse/switch session, send the S3 opener, THEN clean up S2.
 
     Send-before-delete (architecture.md §1.3): the opener is sent and must succeed before the S2
@@ -267,16 +304,19 @@ async def on_start_chat(cb: CallbackQuery, db: AsyncSession, bot: Bot) -> None:
             # send it as the ONE S3 opener message. Content only — this handler still owns the
             # single send + the S2 cleanup + navigation (FR-013-03/10). Falls back to a text-only
             # greeting when the archive is empty (FR-013-08).
-            card = await presentation.compose_presentation(db, persona)
+            card = await presentation.compose_presentation(db, persona, chat_client=chat_client)
             await send_persona_intro(
                 bot, chat_id, persona, reply_markup=keyboards.reply_kb(user.locale),
                 opener=card.text, photo_ref=card.photo_ref,
             )
             _mark_opener_sent(chat_id, persona_id)
         elif not _opener_recently_sent(chat_id, persona_id):  # resume — never silent (ISS-001)
+            # FR-013-13 (ISS-012): the resume opener is LLM-composed in her voice, grounded in the
+            # last exchange, not the static "Снова ты… я скучала" line. That line is the fallback if
+            # the model is unavailable (FR-013-14 — resume is never silent).
+            opener = await _resume_opener(db, persona, chat_client)
             await bot.send_message(
-                chat_id, views.resume_opener(persona),
-                reply_markup=keyboards.reply_kb(user.locale),
+                chat_id, opener, reply_markup=keyboards.reply_kb(user.locale),
             )
             _mark_opener_sent(chat_id, persona_id)
         # else: rapid duplicate tap within the guard window — the opener just sent covers it.

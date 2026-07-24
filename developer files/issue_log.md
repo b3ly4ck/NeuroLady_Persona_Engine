@@ -46,6 +46,7 @@ architecture).
 | ISS-009 | The intimate-request keyword classifier is English-only — a Russian intimate ask reads as SFW | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-010 | A send is recorded for a photo that was never delivered (missing file) — the frame is burned forever | [x] | 2026-07-23 | 2026-07-23 |
 | ISS-011 | Two concurrent turns can send the same photo twice — no-repeat was a read-then-write check | [x] | 2026-07-23 | 2026-07-23 |
+| ISS-012 | Greeting / resume opener is a hardcoded template, not LLM-composed — reads as canned | [x] | 2026-07-24 | 2026-07-24 |
 
 ---
 
@@ -437,3 +438,40 @@ architecture).
   table and this one carries a correctness invariant.
   The constraint immediately caught an impossible state baked into an existing fixture: a test that
   filled the pacing window with four sends *of the same asset* to the same user.
+
+
+---
+
+## ISS-012 — Greeting / resume opener is hardcoded, not generated
+
+- **Status:** [x] fixed
+- **Reported:** 2026-07-24 (live Telegram test)
+- **Report (as stated):** Re-entering an active chat greets with the **same fixed line every time** —
+  "Снова ты 😏 А я скучала… на чём мы остановились?". The user: *"это сообщение типа я скучала …
+  должно генерироваться и каждый раз быть новым, а не просто захардкожено"*. It must be LLM-composed
+  and fresh, not a constant.
+- **Observed vs expected:** a constant string from `i18n.resume_opener` (and, for the selection
+  moment, a random pick from fixed template lists in `presentation.compose_greeting`) vs a greeting
+  the model writes in her voice each time, aware of the moment and of where the conversation left off.
+- **Root cause:** two separate static sources. **(a)** The **resume opener** (re-entering an active
+  session) is a single hardcoded catalog entry `resume_opener` in `services/bot/i18n.py`, sent
+  verbatim by the onboarding handler. **(b)** The **selection greeting** (`compose_greeting`) is
+  *template* variety — `random.choice` over fixed `_OPENERS`/`_QUESTIONS` lists — which varies
+  wording but is not generated and cannot reference the actual conversation. Neither path ever calls
+  the chat model, even though F-013's own docstring calls the greeting "in her voice".
+- **Why tests didn't catch it (the gap):** F-013 FR-013-01/09 only require a greeting "in her voice"
+  honoring tone; NFR-013-02 requires *variety*, which template `random.choice` technically satisfies.
+  **No requirement said the opener must be LLM-composed** or context-aware of the last exchange, so a
+  canned line passes every assertion. Same shape as the recurring gap: presence/variety was
+  specified, *authorship by the model* was not.
+- **Resolution (2026-07-24):** F-013 FR-013-13/14/15 + `presentation.compose_opener()` — an async
+  composer that builds a compact in-voice instruction (time-of-day, her current F-006 activity, bond
+  stage; on the **resume** path the session's last messages are prepended so "на чём остановились?"
+  is grounded in the real thread), calls the chat model, strips any stray F-020 signal, and returns
+  the fresh text. **Any** failure — model down/not-ready/exception/empty — returns the fallback (the
+  F-013 template for selection, the static `resume_opener` for resume), so the entry moment is never
+  silent and never leaks the sentinel. Wired into `compose_presentation(chat_client=...)` (selection)
+  and the `on_start_chat` resume branch via `_resume_opener()`. Live-verified: three consecutive
+  resume opens produced three distinct greetings, each referencing the actual last exchange.
+  Tests: `tests/test_iss_012_generated_opener.py` (12, executing `compose_opener` and the real
+  `on_start_chat` handler).

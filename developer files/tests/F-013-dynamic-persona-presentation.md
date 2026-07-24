@@ -128,6 +128,29 @@
 |---------|-------|------|---------------------|--------|
 | TC-NFR-013-08-01 | unit | negative | Given the entry moment; When a photo is chosen; Then never an intimate asset | passing |
 
+### FR-013-13 — Opener is LLM-composed (ISS-012)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-013-13-01 | unit | happy | Given a persona and a fake chat client returning a scripted opener; When the resume opener is composed; Then the delivered text IS the model's output, not `resume_opener` | implemented |
+| TC-FR-013-13-02 | unit | happy | Given a fake chat client; When the selection greeting is composed with it; Then the model's text is used, not `compose_greeting`'s template | implemented |
+| TC-FR-013-13-03 | unit | context | Given a session whose last messages mention a specific topic; When the resume opener is composed; Then those recent messages are present in the prompt sent to the model (it can reference where they left off) | implemented |
+| TC-FR-013-13-04 | unit | freshness | Given a real-entropy (temperature) client; When two openers are composed; Then the compose path requests a fresh generation each time (not a cached constant) | implemented |
+| TC-FR-013-13-05 | integration | e2e | Given the real resume handler path with a fake chat client; When the user re-enters an active chat; Then the message sent to Telegram is the composed opener, exactly one message, with the keyboard | implemented |
+
+### FR-013-14 — Degrade, never silence, never a leak (ISS-012)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-013-14-01 | unit | error | Given a chat client that raises; When the opener is composed; Then the static/template fallback is returned and nothing raises | implemented |
+| TC-FR-013-14-02 | unit | empty | Given a chat client that returns "" (or whitespace); When composed; Then the fallback is used, never an empty message | implemented |
+| TC-FR-013-14-03 | unit | negative | Given a model reply that appends `<<MEDIA:photo:sfw>>` or jargon; When composed; Then the signal/jargon is stripped before the opener is returned | implemented |
+| TC-FR-013-14-04 | integration | error | Given the resume handler with a failing chat client; When the user re-enters; Then he still gets a greeting (the static `resume_opener`), never silence | implemented |
+
+### FR-013-15 — Shape (ISS-012)
+| Test ID | Level | Case | Given / When / Then | Status |
+|---------|-------|------|---------------------|--------|
+| TC-FR-013-15-01 | unit | happy | Given a composed opener; When inspected; Then it is a single message (no forced multi-paragraph wall) in the persona's language | implemented |
+| TC-FR-013-15-02 | unit | mapping | Given an EN persona and a RU persona; When each opener is composed; Then the instruction pins the persona's language | implemented |
+
 ---
 
 ## User-story acceptance (manual/GPU)
@@ -138,5 +161,5 @@
 - **TC-US-013-05-01** — B1: each persona's welcome expresses her character. skip (human/GPU)
 
 ## Coverage summary
-FR-013-01..11 (11) + NFR-013-01..08 (8) + US-013-01..05 (5) — all covered; coherence/identity TCs are
-human/GPU-judged (marked). Every TC id traces to its FR/NFR/US id.
+FR-013-01..15 (incl. FR-013-13/14/15, ISS-012) + NFR-013-01..08 (8) + US-013-01..05 (5) — all covered;
+coherence/identity TCs are human/GPU-judged (marked). Every TC id traces to its FR/NFR/US id.

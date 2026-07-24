@@ -161,6 +161,24 @@ Feature: F-013 Dynamic Persona Presentation
 
 ### Non-functional
 
+- **FR-013-13** — **The opener is LLM-composed, not templated (ISS-012, CRITICAL).** Both the
+  selection-moment greeting and the **resume opener** (re-entering an active chat) must be written by
+  the chat model **in her voice, fresh on each open** — never a constant string and never a
+  `random.choice` over fixed lines. The compose step folds in the live moment: time-of-day, her
+  current F-006 activity, the bond stage, and — for **resume** — the **last exchange** so
+  "на чём мы остановились?" is grounded in what they were actually talking about, not a generic line.
+
+- **FR-013-14** — **Degrade, never silence, never a leak (ISS-012).** If the chat model is
+  unavailable, errors, times out or returns empty, the opener falls back to the existing content —
+  the F-013 template greeting (selection) or the static `resume_opener` line (resume). The composed
+  text is post-processed exactly like a normal turn: any stray F-020 media-intent signal or
+  generation jargon is stripped before it is ever sent (ties F-020 FR-020-04).
+
+- **FR-013-15** — **Shape (ISS-012).** The composed opener is **one short message** in the persona's
+  language (one–two sentences + her emoji register), not a wall of text and not a restart of the
+  first-time introduction on the resume path. It carries the reply keyboard as the single S3 send
+  (unchanged from FR-013-03/10).
+
 - **NFR-013-01** — **Instant (CRITICAL):** the greeting card is composed and sent with no generation
   latency — it is a lookup + text compose (ties F-012 NFR-012-01).
 - **NFR-013-02** — **Freshness/variety:** across opens the card visibly varies (time/activity/photo),

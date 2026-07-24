@@ -2,6 +2,34 @@
 
 ## Recent changes
 
+- **ISS-012 — the greeting / resume opener is now LLM-composed, not a hardcoded template.** Live
+  report: re-entering an active chat always sent the identical "Снова ты 😏 А я скучала… на чём мы
+  остановились?" line. Root cause: two static sources — the resume opener was a constant catalog
+  entry in `i18n.py`, and the selection greeting was `random.choice` over fixed template lists
+  (`presentation.compose_greeting`). Neither ever called the model, though F-013 calls itself
+  "in her voice". No requirement said the opener must be *generated* — variety via `random.choice`
+  satisfied NFR-013-02.
+  - **Docs (docs-first):** F-013 `FR-013-13` (opener is LLM-composed, fresh, context-aware — for
+    resume, grounded in the last exchange), `FR-013-14` (degrade to the template/static line on any
+    model failure — never silence, strip any F-020 signal), `FR-013-15` (one short message in her
+    language). ISS-012 logged; 11 TC cases added to the F-013 mirror spec.
+  - **Code:** `presentation.compose_opener(persona, kind, chat_client, fallback, ...)` — builds a
+    compact in-voice instruction (time-of-day, current F-006 activity, bond stage; on resume the
+    session's recent messages are prepended), calls the model, strips a stray `<<MEDIA:…>>` via
+    `media_intent.strip_signal`, returns the fresh text; any exception/not-ready/empty → fallback.
+    `compose_presentation` gained `chat_client=` (selection greeting); the `on_start_chat` resume
+    branch calls `_resume_opener()` which pulls the persona's active-session history and composes,
+    falling back to `views.resume_opener`. Live-verified: three resume opens → three distinct
+    greetings, each referencing the real prior thread ("Амели", "кофе у окна").
+  - **Tests:** `tests/test_iss_012_generated_opener.py` (12), executing `compose_opener` and the real
+    `on_start_chat` handler. Suite: **1048 passed, 109 skipped**.
+  - **Note (not a bug):** the same session also showed a photo request getting a deflection — that
+    was **correct pacing**, not broken intent detection. A direct probe confirmed the 35B model emits
+    `<<MEDIA:photo:sfw>>` for "скинь фото"/"кидай фотку"/"покажи как выглядишь" and `<<MEDIA:none>>`
+    for small talk. The Acquaintance-stage user had already received 2 photos within the 24h window
+    (cap=2), so the 3rd was paced (F-012 FR-012-06) with a model-generated "let's not make it an
+    endless stream" line.
+
 - **F-020 coverage closed + three defects it uncovered.** The feature's *code* was live since
   v0.59, but its test spec was only **31 of 86 TCs** backed by runnable tests — `FR-020-10`,
   `NFR-020-01/02/03/06` and all four user stories had **zero**, and the feature file still said

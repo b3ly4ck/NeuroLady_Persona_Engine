@@ -164,6 +164,94 @@ def _lang(persona: Persona) -> str:
     return persona.language if persona.language in _OPENERS else "en"
 
 
+_LANG_NAMES = {"ru": "Russian", "en": "English"}
+
+
+def _opener_instruction(
+    persona: Persona, kind: str, *, activity: str | None, period: str, stage: str | None,
+) -> str:
+    """The system instruction that makes the model WRITE the opener (FR-013-13/15).
+
+    Compact on purpose — it is prepended to the persona's own recent conversation on the resume
+    path, so she can ground "на чём мы остановились?" in what they were actually saying rather than
+    a generic line. No F-020 media-intent instruction is added here (a greeting never requests
+    media), and the shape is pinned to ONE short message in her language (FR-013-15).
+    """
+    lang = _LANG_NAMES.get(_lang(persona), "English")
+    moment = f"It is {period.replace('_', ' ')}."
+    if activity:
+        moment += f" Right now you are: {activity.strip().rstrip('.')}."
+    if stage:
+        moment += f" Your bond with him is at the '{stage}' stage."
+    if kind == "resume":
+        task = (
+            "He is RE-OPENING a chat the two of you already had going — you are NOT meeting for the "
+            "first time. Greet him back warmly, in your own voice, as someone who remembers him and "
+            "the conversation above. If there is a clear thread to pick back up, nod to it naturally; "
+            "otherwise just welcome him back. Do NOT re-introduce yourself."
+        )
+    else:
+        task = (
+            "He has just picked you and opened your chat for the first time in this moment. Greet him "
+            "in your own voice and make him feel you are a real person living this exact moment."
+        )
+    return (
+        f"You are {persona.name}. {moment} {task}\n"
+        f"Write ONE short opener message ({lang}), one or two sentences, in your natural texting "
+        f"style with your usual emoji. Output ONLY the message text — no quotes, no narration, no "
+        f"labels, nothing else."
+    )
+
+
+async def compose_opener(
+    persona: Persona,
+    *,
+    kind: str,
+    chat_client,
+    fallback: str,
+    activity: str | None = None,
+    now_local: datetime | None = None,
+    recent: "list | None" = None,
+    stage: str | None = None,
+) -> str:
+    """LLM-compose ONE fresh opener in her voice, or return `fallback` (FR-013-13/14/15, ISS-012).
+
+    `kind` is "selection" (first open) or "resume" (re-entering an active chat). `recent` is the
+    session's recent messages (resume only) so she can reference where they left off. ANY failure —
+    model down, exception, empty output — returns `fallback` (the F-013 template or the static
+    resume line), so the entry moment is never silent and never an error (FR-013-14). Whatever the
+    model returns is post-processed like a normal turn: a stray F-020 signal is stripped
+    (FR-020-04), so the sentinel can never leak into the greeting.
+    """
+    from services.bot.domain.life_engine import local_now  # noqa: F401 - kept for callers' parity
+    from services.bot.domain.media_intent import strip_signal
+    from services.bot.domain.messages import to_openai_messages
+
+    period = narrative_period((now_local or datetime.now(timezone.utc)).hour)
+    system = _opener_instruction(persona, kind, activity=activity, period=period, stage=stage)
+    messages: list[dict[str, str]] = [{"role": "system", "content": system}]
+    if recent:
+        # Prior turns give her the thread to pick back up. `to_openai_messages` maps stored
+        # Message rows to role/content; a plain list of dicts is passed through untouched.
+        try:
+            messages.extend(
+                recent if recent and isinstance(recent[0], dict) else to_openai_messages(recent)
+            )
+        except Exception:  # malformed history must never sink the greeting
+            pass
+    # A final nudge so the model produces the opener, not a continuation of the last user line.
+    messages.append({"role": "user", "content": "[he just opened the chat — greet him]"})
+
+    try:
+        if not await chat_client.is_ready():
+            return fallback
+        raw = await chat_client.complete(messages, temperature=0.9, max_tokens=200)
+    except Exception:
+        return fallback
+    text = strip_signal(raw or "").strip().strip('"').strip()
+    return text or fallback
+
+
 def compose_greeting(
     persona: Persona,
     activity: str | None,
@@ -289,13 +377,15 @@ async def compose_presentation(
     media_root: str | Path | None = None,
     now: datetime | None = None,
     seed: int | None = None,
+    chat_client=None,
 ) -> PresentationCard:
     """Compose the full live greeting card for a just-opened persona (FR-013-01/02/03/07/08).
 
-    Pure lookup + compose — reads her current F-006 activity and today's F-011 archive, then builds
-    the greeting text and picks a fitting SFW photo. **No** image generation is ever triggered
-    (FR-013-07 / NFR-013-01). Degrades gracefully to a text-only greeting when the archive is empty
-    (FR-013-08 / NFR-013-06).
+    Reads her current F-006 activity and today's F-011 archive, then composes the greeting text and
+    picks a fitting SFW photo. When `chat_client` is provided the greeting is **LLM-composed in her
+    voice** (FR-013-13); without it (or on model failure) it falls back to the template greeting.
+    **No** image generation is ever triggered (FR-013-07 / NFR-013-01), and it degrades gracefully to
+    a text-only greeting when the archive is empty (FR-013-08 / NFR-013-06).
     """
     from services.bot.domain.life_engine import local_now
     from services.bot.domain.life_engine_store import get_current_activity
@@ -306,7 +396,14 @@ async def compose_presentation(
     now_local = local_now(persona.timezone, now_utc)
 
     activity = await get_current_activity(db, persona.id, persona.timezone)
-    text = compose_greeting(persona, activity, now_local, seed=seed)
+    template = compose_greeting(persona, activity, now_local, seed=seed)
+    if chat_client is not None:
+        text = await compose_opener(
+            persona, kind="selection", chat_client=chat_client, fallback=template,
+            activity=activity, now_local=now_local,
+        )
+    else:
+        text = template
 
     assets = await latest_available_assets(db, persona.id, now_utc)
     chosen, photo_ref = select_welcome_photo(assets, now_local, activity, media_root, seed=seed)
