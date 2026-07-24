@@ -2,6 +2,23 @@
 
 ## Recent changes
 
+- **F-022 Operator Control Panel — specified (not implemented).** The operator asked for a full admin
+  dashboard to observe the running product (user roster, live conversation transcripts, personas,
+  archives, health, metrics) and act on it (per-user overrides, global tuning, persona/archive
+  management, safety moderation). Written docs-only per the request. Because NeuroLady is an adult
+  companion, the panel can read intimate private chats and set a user's 18+/consent state — so the
+  spec front-loads access control, RBAC, tamper-evident audit of every mutation, sensitive-read
+  logging, and bot/panel process isolation as first-class requirements, not add-ons. Files:
+  `developer files/features/F-022-operator-control-panel.md` (11 US / 10 UC / 21 FR / 8 NFR) and its
+  mirror `developer files/tests/F-022-operator-control-panel.md` (all TCs `planned`). D1: per-user +
+  global overrides move to a stored settings table the bot reads, superseding `.env` switches like
+  FR-012-20.
+
+- **FR-012-20 — operator on/off switch for photo pacing.** `MEDIA_PACING_ENABLED` env toggle;
+  `pacing_allows()` short-circuits to True when off; the conversation handler builds the delivery cfg
+  from Settings once at import. Product default stays ON; lifted to `false` in the dev-box `.env` for
+  live testing. This is the first parameter F-022 will own. tests/test_fr_012_20_pacing_toggle.py (3).
+
 - **ISS-012 — the greeting / resume opener is now LLM-composed, not a hardcoded template.** Live
   report: re-entering an active chat always sent the identical "Снова ты 😏 А я скучала… на чём мы
   остановились?" line. Root cause: two static sources — the resume opener was a constant catalog
