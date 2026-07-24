@@ -212,6 +212,13 @@ Feature: F-012 On-Demand Photo Delivery
   either writes. The losing insert must be **refused and handled** — a requested photo degrades in
   voice, an unprompted share simply does not happen — without poisoning the turn's transaction.
 
+- **FR-012-20** — **Pacing is operator-configurable (seeds the control panel, F-022).** The photo
+  frequency guard — the per-stage caps, the rolling window, and an explicit **on/off switch** — must
+  be tunable through config/env **without a code change**, so an operator can lift or retune how
+  often she shares. With pacing disabled, every otherwise-valid request delivers (no cap, no window).
+  Product defaults are unchanged; the override is environment-local. This is the first parameter the
+  future admin dashboard (F-022) exposes.
+
 ### Non-functional
 
 - **NFR-012-01** — **Instant delivery (CRITICAL):** photo delivery adds no generation latency — it is a

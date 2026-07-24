@@ -42,6 +42,18 @@ from services.bot.orchestrator import (
 log = logging.getLogger(__name__)
 router = Router(name="conversation")
 
+
+def _media_cfg() -> "MediaDeliveryConfig":
+    """The delivery config for this process, with the pacing on/off switch read from env once
+    (F-012 FR-012-20). Built at import — env doesn't change under a running bot."""
+    from services.bot.config import get_settings
+    from services.bot.domain.media_delivery import MediaDeliveryConfig
+
+    return MediaDeliveryConfig(pacing_enabled=get_settings().media_pacing_enabled)
+
+
+_MEDIA_CFG = _media_cfg()
+
 # Indirection so tests can stub out the deliberate pacing sleeps (F-003 pacing is real time).
 _sleep = asyncio.sleep
 
@@ -110,7 +122,7 @@ async def on_text(
             message, db,
             user_id=user.id, persona=persona, request_text=message.text, context={},
             chat_client=chat_client, gate=F014GateAdapter(db),
-            force_gate=intent.routes_to_gate,
+            force_gate=intent.routes_to_gate, cfg=_MEDIA_CFG,
         )
         await db.commit()
         return

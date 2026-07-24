@@ -73,6 +73,10 @@ class MediaDeliveryConfig:
         "Devoted": 25,
     })
     pacing_window_hours: float = 24.0
+    # FR-012-20: operator on/off switch for the frequency guard. True = normal caps; False lifts
+    # them entirely (every valid request delivers). Overridden from env in the bot wiring; the
+    # product default stays ON.
+    pacing_enabled: bool = True
     # Proactive share (FR-012-09): she only volunteers a photo once she's at least this bonded and
     # only when the moment genuinely fits (score at/above the floor).
     proactive_stage_floor: str = "Friend"
@@ -483,7 +487,13 @@ async def pacing_allows(
     cfg: MediaDeliveryConfig = DEFAULT_CONFIG,
     now: datetime | None = None,
 ) -> bool:
-    """True while the user is under the per-stage cap for the current window (FR-012-06)."""
+    """True while the user is under the per-stage cap for the current window (FR-012-06).
+
+    When pacing is disabled by config (FR-012-20 — operator override), every request passes: no cap,
+    no window lookup at all.
+    """
+    if not cfg.pacing_enabled:
+        return True
     now = now or _utcnow()
     used = await sends_in_window(db, user_id, cfg, now)
     return used < stage_cap(stage, cfg)

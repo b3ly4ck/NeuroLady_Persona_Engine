@@ -30,6 +30,10 @@ class Settings(BaseSettings):
     # cadence lives in LifeEngineConfig (tick_interval_s); override with LIFE_ENGINE_INTERVAL_S.
     life_engine_enabled: bool = True
     life_engine_interval_s: int = 900
+    # F-012 FR-012-20 — photo-frequency pacing on/off (operator override; product default is ON).
+    # Set MEDIA_PACING_ENABLED=false to lift the per-stage caps entirely (every valid photo request
+    # delivers). The future control panel (F-022) exposes this and finer knobs.
+    media_pacing_enabled: bool = True
     env: str = "dev"
     log_level: str = "INFO"
 

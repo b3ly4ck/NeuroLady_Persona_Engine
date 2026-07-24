@@ -116,6 +116,13 @@
 
 ---
 
+### FR-012-20 — Operator-configurable pacing (on/off)
+
+| Test ID | Level | Case | Description | Status |
+|---------|-------|------|-------------|--------|
+| TC-FR-012-20-01 | integration | happy | Pacing OFF delivers over the cap; ON still caps | implemented |
+| TC-FR-012-20-02 | unit | config | The switch is read from env; product default stays ON | implemented |
+
 ## Non-functional requirements
 
 ### NFR-012-01 — Instant delivery (CRITICAL)
